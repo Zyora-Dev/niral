@@ -94,6 +94,37 @@
     <p class="bench-note">Zero errors, every framework, every run. The bench is in the repo — run it yourself.</p>
   </section>
 
+  <section class="vps">
+    <h2>Your whole product on a $5 server.</h2>
+    <p class="section-sub">App, database, background jobs, realtime, deploys — one process, one tiny VPS. No managed services, no sidecars, no surprise bills.</p>
+    <div class="vps-grid">
+      <div class="vps-card v1">
+        <div class="vps-num">~200<i>MB</i></div>
+        <b>memory under load</b>
+        <span>measured at 100 concurrent connections — fits a 512 MB VPS with room to spare. Next.js needs ~450 MB for the same page.</span>
+        <div class="meter"><div class="meter-fill m-niral"></div></div>
+        <div class="meter"><div class="meter-fill m-next"></div></div>
+        <p class="meter-key"><em>niral</em> vs next.js — RSS after the same load test</p>
+      </div>
+      <div class="vps-card v2">
+        <div class="vps-num">0.2<i>s</i></div>
+        <b>builds on the server itself</b>
+        <span>no bundler, no OOM. Webpack/Vite builds famously crash small VPSes — niral builds a hashed release in a blink, on the box it runs on.</span>
+      </div>
+      <div class="vps-card v3">
+        <div class="vps-num">0</div>
+        <b>sidecar services</b>
+        <span>jobs queue, sessions and database ride on SQLite. No Redis, no Postgres, no workers to babysit — one process, one systemd unit.</span>
+      </div>
+      <div class="vps-card v4">
+        <div class="vps-num">1</div>
+        <b>command to production</b>
+        <span><code>niral deploy</code> generates the whole kit — provisioning script, systemd, nginx, atomic releases, graceful restarts. Your server, your rules.</span>
+      </div>
+    </div>
+    <p class="bench-note">2,200 req/s was measured on a laptop — a small VPS at a fraction of that still serves hundreds of thousands of views a day.</p>
+  </section>
+
   <section class="philosophy">
     <div class="phil">
       <b>Compiler, not runtime</b>
@@ -230,6 +261,35 @@
   .b-other { background: #2c3742; }
   .bar-val { color: #9aa3ad; font-size: .85rem; }
   .bench-note { text-align: center; color: #5f6b76; font-size: .84rem; margin-top: 1.6rem; }
+
+  /* small-server economics — animated cards */
+  .vps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+  .vps-card { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 16px; padding: 1.4rem 1.3rem 1.3rem; overflow: hidden; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+  .vps-card::before { content: ""; position: absolute; inset: 0; background: radial-gradient(140px 90px at 20% 0%, rgba(52, 211, 153, .10), transparent 70%); opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .vps-card:hover { transform: translateY(-4px); border-color: #34d39966; box-shadow: 0 14px 44px rgba(0, 0, 0, .35); }
+  .vps-card:hover::before { opacity: 1; }
+  .vps-num { font-size: 2.3rem; font-weight: 700; letter-spacing: -.03em; background: linear-gradient(120deg, #34d399, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1.1; }
+  .vps-num i { font-style: normal; font-size: 1.15rem; }
+  .vps-card b { display: block; color: #e8eaed; margin: .35rem 0 .35rem; }
+  .vps-card span { color: #9aa3ad; font-size: .86rem; display: block; }
+  .vps-card code { color: #7ee2b8; background: #0e1115; padding: .05rem .4rem; border-radius: 6px; font-size: .82rem; }
+  .meter { background: #0e1115; border: 1px solid #1b2027; border-radius: 999px; height: .5rem; margin-top: .7rem; overflow: hidden; }
+  .meter + .meter { margin-top: .4rem; }
+  .meter-fill { height: 100%; border-radius: 999px; width: 0; }
+  .m-niral { background: linear-gradient(90deg, #34d399, #6ee7b7); animation: fill-niral 1.1s .2s cubic-bezier(.2, .7, .3, 1) forwards; }
+  .m-next { background: #2c3742; animation: fill-next 1.1s .35s cubic-bezier(.2, .7, .3, 1) forwards; }
+  @keyframes fill-niral { to { width: 44%; } }
+  @keyframes fill-next { to { width: 100%; } }
+  .meter-key { color: #5f6b76; font-size: .74rem; margin: .5rem 0 0; }
+  .meter-key em { color: #34d399; font-style: normal; }
+  /* staggered scroll-in where the browser supports it — graceful no-op elsewhere */
+  @supports (animation-timeline: view()) {
+    .vps-card { animation: card-rise both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+    .v2 { animation-range: entry 8% entry 63%; }
+    .v3 { animation-range: entry 16% entry 71%; }
+    .v4 { animation-range: entry 24% entry 79%; }
+  }
+  @keyframes card-rise { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
 
   /* philosophy */
   .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }
