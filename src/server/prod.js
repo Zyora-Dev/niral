@@ -29,7 +29,10 @@ import { attachLive } from "./live.js";
 import { loadHooks, applyHooks, checkRequiredEnv } from "./hooks.js";
 import { makeNonce, baseSecurityHeaders, htmlSecurityHeaders, MAX_RPC_ARGS } from "./security.js";
 import { setSecureCookies } from "./session.js";
-import { logRequest, logError, healthPayload } from "./observe.js";
+import { logRequest, logError, healthPayload, makeLog } from "./observe.js";
+import { createShield } from "./shield.js";
+import { checkIntegrity } from "./integrity.js";
+import { sendMail } from "./mail.js";
 import { loadCatalogs, negotiate } from "./i18n.js";
 import { migrateAtBoot } from "./migrate.js";
 
@@ -57,6 +60,38 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
   const projectRoot = cwd ?? resolve(dist, "..");
   globalThis.__niralProjectRoot = pathToFileURL(projectRoot + "/").href; // projectImport() base
   if (secure ?? process.env.NIRAL_SECURE === "1") setSecureCookies(true);
+
+  /* ── Shield: in-process intrusion detection + response ── */
+  const shieldLog = makeShieldLog();
+  const shield = createShield({
+    projectRoot,
+    log: shieldLog,
+    alert: mailAlert(),
+  });
+  // release integrity self-check — re-hash the running release on a timer;
+  // tampering (defaced page, injected script, swapped server module) is logged
+  // + mailed. Off with NIRAL_SHIELD=off or NIRAL_INTEGRITY=off.
+  if (shield.enabled && process.env.NIRAL_INTEGRITY !== "off") {
+    const runIntegrity = () => {
+      try {
+        const r = checkIntegrity(releaseDir);
+        if (!r.ok) {
+          shieldLog.error("integrity FAILED — release tampered", { tampered: r.tampered.slice(0, 10) });
+          const alert = mailAlert();
+          alert?.({
+            subject: "niral shield: RELEASE TAMPERED",
+            body:
+              `The running release ${manifest.hash} no longer matches its build manifest.\n` +
+              r.tampered.slice(0, 20).map((t) => `  ${t.kind}: ${t.path}`).join("\n") +
+              `\n\nRe-deploy from a clean source or roll back: point dist/current at a previous release.`,
+          });
+        }
+      } catch { /* never crash the server over a check */ }
+    };
+    const iv = setInterval(runIntegrity, Number(process.env.NIRAL_INTEGRITY_MS) || 5 * 60_000);
+    iv.unref?.();
+    setTimeout(runIntegrity, 3000).unref?.(); // one check shortly after boot
+  }
 
   const componentCache = new Map(); // asset rel path → module (immutable per release)
   const serverCache = new Map();
@@ -171,6 +206,8 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
   const server = createServer((req, res) => {
     res.__req = req; // lets response helpers negotiate compression
     logRequest(req, res); // structured access log (NIRAL_ACCESS_LOG=off to drop)
+    // Shield learns from the final status of EVERY response (401/403/404 patterns)
+    if (shield.enabled) res.on("finish", () => shield.observe(req, res.statusCode));
     handle(req, res).catch((e) => {
       logError(e, req);
       if (!res.headersSent) send(res, 500, "text/plain", "internal error");
@@ -197,9 +234,16 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
     const reqUrl = new URL(req.url, "http://x");
     const urlPath = decodeURIComponent(reqUrl.pathname);
 
+    // Shield: inspect BEFORE routing — bans, probe/injection blocks, lockdown.
+    const verdict = shield.inspect(req);
+    if (verdict) {
+      if (verdict.__shieldBlocked && verdict.status === 404) return send(res, 404, "text/plain", "not found");
+      return sendJson(res, verdict.status, verdict.body, verdict.headers);
+    }
+
     // load-balancer probe — release + uptime, no secrets
     if (urlPath === "/@niral/health") {
-      return sendJson(res, 200, healthPayload({ release: manifest.hash }));
+      return sendJson(res, 200, { ...healthPayload({ release: manifest.hash }), shield: shield.status() });
     }
 
     // hooks.js middleware — auth guards, redirects, locals (framework/asset paths exempt)
@@ -590,8 +634,8 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
   };
 }
 
-function send(res, status, type, body) {
-  writeBody(res, status, { "content-type": type, "cache-control": "no-store", ...baseSecurityHeaders() }, body);
+function send(res, status, type, body, extraHeaders) {
+  writeBody(res, status, { "content-type": type, "cache-control": "no-store", ...baseSecurityHeaders(), ...extraHeaders }, body);
 }
 
 const COMPRESSIBLE = /text\/|javascript|json|svg/;
@@ -612,8 +656,32 @@ function writeBody(res, status, headers, body) {
   res.end(buf);
 }
 
-function sendJson(res, status, obj) {
-  send(res, status, "application/json", JSON.stringify(obj));
+function sendJson(res, status, obj, extraHeaders) {
+  send(res, status, "application/json", JSON.stringify(obj), extraHeaders);
+}
+
+/** Shield events log through the same observability pipeline, tagged "shield". */
+function makeShieldLog() {
+  return makeLog("shield");
+}
+
+/** If NIRAL_SMTP_URL + NIRAL_ALERT_TO are set, return an owner-alert function
+ *  the shield calls on bans / lockdown / tampering. Otherwise null (log-only). */
+function mailAlert() {
+  const to = process.env.NIRAL_ALERT_TO;
+  const smtpUrl = process.env.NIRAL_SMTP_URL;
+  if (!to || !smtpUrl) return null;
+  return async ({ subject, body }) => {
+    try {
+      await sendMail({
+        to,
+        from: process.env.NIRAL_MAIL_FROM ?? to,
+        subject,
+        text: body,
+        smtpUrl,
+      });
+    } catch { /* alert delivery must never break the guard */ }
+  };
 }
 
 function readBody(req, limit, raw = false) {

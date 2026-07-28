@@ -32,6 +32,7 @@ import { LANG_EXT } from "../server/polyglot.js";
 import { loadRecipe, runTailwindOnce } from "../add/tailwind.js";
 import { transcodeStatic } from "../add/imagetools.js";
 import { componentCss } from "../compiler/style.js";
+import { writeIntegrity } from "../server/integrity.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
@@ -232,6 +233,9 @@ export function build({ root = ".", out } = {}) {
       2
     )
   );
+
+  /* ── tamper-detection manifest: sha256 of every file in the release ── */
+  writeIntegrity(release);
 
   /* ── atomic flip: dist/current → releases/<hash> ── */
   const tmpLink = join(distDir, `.current.${process.pid}.${Date.now()}`);

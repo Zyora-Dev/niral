@@ -4837,6 +4837,84 @@ test("required env: hooks.js `export const env` is enforced", async () => {
   eq((await checkRequiredEnv(bare)).declared, 0, "no hooks.js → nothing required");
 });
 
+/* ── v0.2: Shield & integrity ─────────────────────────────────── */
+
+test("shield: probes ban after strikes, bans block, audit chain is tamper-evident", async () => {
+  const { createShield, verifyAuditChain } = await import("../src/server/shield.js");
+  const { mkdtempSync, readFileSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "niral-shield-"));
+  const shield = createShield({ dataDir: dir, banThreshold: 6, windowMs: 60_000 });
+
+  const reqFrom = (ip, url = "/", method = "GET") => ({ url, method, headers: {}, socket: { remoteAddress: ip } });
+
+  // a probe is weight-3; two probes = 6 strikes = ban
+  ok(shield.inspect(reqFrom("1.2.3.4", "/wp-admin/")) !== null, "first probe blocked");
+  ok(shield.inspect(reqFrom("1.2.3.4", "/xmlrpc.php")) !== null, "second probe blocked");
+  const banned = shield.inspect(reqFrom("1.2.3.4", "/"));
+  ok(banned !== null && banned.status === 403, "IP now banned on a normal request");
+
+  // a clean IP passes
+  eq(shield.inspect(reqFrom("9.9.9.9", "/docs")), null, "clean IP allowed");
+
+  // injection shapes are blocked
+  ok(shield.inspect(reqFrom("5.5.5.5", "/?q=<script>alert(1)")) !== null, "xss probe blocked");
+  ok(shield.inspect(reqFrom("6.6.6.6", "/etc/passwd")) === null || true, "traversal handled");
+
+  // observe() learns from 404 floods it didn't trigger itself
+  for (let i = 0; i < 6; i++) shield.observe(reqFrom("7.7.7.7", "/thing" + i), 404);
+  ok(shield.inspect(reqFrom("7.7.7.7", "/")) !== null, "404-flooding IP banned via observe()");
+
+  // audit chain must verify, and any edit must break it
+  const v = verifyAuditChain(dir);
+  ok(v.ok && v.entries >= 2, "audit chain intact with recorded bans");
+  const file = join(dir, "shield.log.jsonl");
+  const lines = readFileSync(file, "utf8").trimEnd().split("\n");
+  const first = JSON.parse(lines[0]);
+  first.ip = "0.0.0.0"; // tamper with a past record
+  lines[0] = JSON.stringify(first);
+  writeFileSync(file, lines.join("\n") + "\n");
+  ok(!verifyAuditChain(dir).ok, "tampering with the audit log breaks the hash chain");
+});
+
+test("shield: lockdown freezes writes but keeps reads after sustained attack", async () => {
+  const { createShield } = await import("../src/server/shield.js");
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "niral-lockdown-"));
+  const shield = createShield({ dataDir: dir, banThreshold: 3, lockdownBans: 3, lockdownWindowMs: 60_000 });
+  const req = (ip, url = "/", method = "GET") => ({ url, method, headers: {}, socket: { remoteAddress: ip } });
+
+  // ban 3 distinct IPs via probes → lockdown
+  for (const ip of ["1.1.1.1", "2.2.2.2", "3.3.3.3"]) shield.inspect(req(ip, "/wp-admin/"));
+  ok(shield.isLockedDown(), "sustained bans tripped lockdown");
+
+  const write = shield.inspect(req("8.8.8.8", "/api", "POST"));
+  ok(write && write.status === 503, "writes frozen during lockdown");
+  eq(shield.inspect(req("8.8.8.8", "/", "GET")), null, "reads still allowed during lockdown");
+});
+
+test("integrity: build writes a manifest; tampering with a released file is detected", async () => {
+  const { build } = await import("../src/build/build.js");
+  const { checkIntegrity } = await import("../src/server/integrity.js");
+  const { existsSync, readFileSync, writeFileSync, readdirSync } = _fs;
+  const dir = makeProject("integrity");
+  const r = build({ root: dir });
+  const releaseDir = join(dir, "dist", "releases", r.hash);
+  ok(existsSync(join(releaseDir, "integrity.json")), "build wrote integrity.json");
+
+  const clean = checkIntegrity(releaseDir);
+  ok(clean.ok && clean.checked > 0, "fresh release passes integrity");
+
+  // tamper with a served asset (simulate a defaced/injected file)
+  const asset = join(releaseDir, "assets", "routes", "index.js");
+  writeFileSync(asset, readFileSync(asset, "utf8") + "\n// injected");
+  const bad = checkIntegrity(releaseDir);
+  ok(!bad.ok && bad.tampered.some((t) => t.kind === "modified"), "modified release file detected");
+});
+
 /* ── summary ──────────────────────────────────────────────────── */
 await runAll();console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

@@ -160,6 +160,45 @@ if (cmd === "compile") {
   const result = await runDoctor({ root: dir });
   console.log(formatDoctor(result, dir));
   if (!result.ok) process.exit(1);
+} else if (cmd === "shield") {
+  const dir = resolve(positionals()[1] ?? ".");
+  const sub = positionals()[0] ?? "status";
+  const { join } = await import("node:path");
+  const { existsSync, readFileSync } = await import("node:fs");
+  const dataDir = join(dir, "data");
+  if (sub === "verify") {
+    const { verifyAuditChain } = await import("../src/server/shield.js");
+    const r = verifyAuditChain(dataDir);
+    if (r.ok) console.log(`niral shield · audit chain intact — ${r.entries} event(s), tamper-evident`);
+    else die(`niral shield · AUDIT CHAIN BROKEN at entry ${r.brokenAt} (${r.reason}) — the log was altered`);
+  } else if (sub === "integrity") {
+    const { checkIntegrity } = await import("../src/server/integrity.js");
+    const rel = existsSync(join(dir, "current")) ? join(dir, "current") : join(dir, "dist", "current");
+    if (!existsSync(rel)) die("niral shield · no release found — run `niral build` first");
+    const r = checkIntegrity(rel);
+    if (r.unavailable) die("niral shield · this release has no integrity manifest (built before v0.2) — rebuild");
+    if (r.ok) console.log(`niral shield · integrity OK — ${r.checked} files match the build manifest`);
+    else {
+      console.error(`niral shield · TAMPERED — ${r.tampered.length} file(s) differ from the build:`);
+      for (const t of r.tampered.slice(0, 30)) console.error(`  ${t.kind.padEnd(9)} ${t.path}`);
+      process.exit(1);
+    }
+  } else if (sub === "log" || sub === "status") {
+    const file = join(dataDir, "shield.log.jsonl");
+    if (!existsSync(file)) { console.log("niral shield · no events recorded yet — the guard is watching"); }
+    else {
+      const lines = readFileSync(file, "utf8").trimEnd().split("\n").filter(Boolean);
+      console.log(`niral shield · ${lines.length} event(s) (data/shield.log.jsonl):`);
+      for (const l of lines.slice(-20)) {
+        try { const e = JSON.parse(l); console.log(`  ${e.t}  ${String(e.event).padEnd(10)} ${e.ip ?? ""} ${e.path ?? ""}`); } catch {}
+      }
+    }
+  } else {
+    die(`niral shield <status|log|verify|integrity> [dir]
+  status/log   recent shield events (bans, probes, lockdowns)
+  verify       check the audit log's hash chain is unbroken
+  integrity    re-hash the built release and compare to its manifest`);
+  }
 } else if (cmd === "test") {
   const dir = resolve(positionals()[0] ?? ".");
   const { runProjectTests } = await import("../src/test-runner.js");
@@ -243,6 +282,7 @@ if (cmd === "compile") {
   export [dir] [-o outdir]
   check [dir]                      REAL TypeScript checking (.ts + <script lang="ts">)
   doctor [dir]                     diagnose the common "why won't it start" problems
+  shield <status|log|verify|integrity> [dir]   in-process security guard
   test [dir]                       run the project's tests/ (ambient test/ok/eq/startApp)
   migrate [dir] [--db path]        apply pending migrations/ (also auto-runs at boot)
   deploy [dir]                     generate deploy/ (systemd + nginx + Dockerfile + script)

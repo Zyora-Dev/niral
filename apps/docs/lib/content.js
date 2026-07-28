@@ -7,7 +7,7 @@ export const GROUPS = [
   { name: "Build", slugs: ["routing", "styling", "typescript"] },
   { name: "Server", slugs: ["server", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
-  { name: "Ship", slugs: ["deployment", "cli", "benchmarks"] },
+  { name: "Ship", slugs: ["deployment", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
@@ -786,6 +786,80 @@ hydrate; server features (RPC, actions) need \`niral start\`.
 | \`NIRAL_AI_URL/KEY/MODEL\` | AI endpoint |
 | \`NIRAL_SMTP_URL\`, \`NIRAL_MAIL_FROM\` | mail |
 | \`NIRAL_WORKERS\` | polyglot worker pool size |
+`,
+  },
+
+  security: {
+    title: "Security & Shield",
+    body: `
+Niral is **hardened by default** — and with the **Shield**, a niral app also
+watches itself, evicts attackers, and detects tampering. All in-process, no
+external service, no second machine.
+
+> Honest scope: this protects your app and narrows an attacker's options on the
+> box. It cannot stop a volumetric DDoS (that needs network-edge capacity) or
+> someone who already has root. Niral is *self-healing under attack* — never
+> *unhackable*, and we will never claim otherwise.
+
+## Hardened by default
+
+Every production response and request already carries:
+
+- **CSP with per-request nonces**, \`X-Frame-Options: DENY\`, \`nosniff\`, referrer policy
+- **Signed, HttpOnly, SameSite** sessions (+ \`Secure\` with \`NIRAL_SECURE=1\`)
+- **CSRF blocked structurally** — RPC is JSON-only and requires an \`x-niral-rpc\` header
+- **XSS** — templates auto-escape; **SQLi** — \`node:sqlite\` is parameterized
+- **Rate limiting**, body/upload/argument caps, path-traversal blocks, private-file 404s
+- Secrets that **cannot reach the browser** (reading \`process.env\` in client code is a compile error)
+
+## The Shield
+
+The Shield inspects every request *before routing* and responds in-process:
+
+- **Scanner bans** — a request for something a niral app never has (\`/wp-admin\`,
+  \`.php\`, \`/.env\`, \`/.git\`) is a scanner. A few of those and the IP is banned.
+- **Brute-force & flood detection** — repeated 401/403/404s from one IP raise
+  strikes; past the threshold, a temporary ban (fail2ban-style, in memory).
+- **Injection heuristics** — traversal, reflected-XSS and SQLi shapes in the URL
+  are blocked and counted.
+- **Lockdown** — a *sustained* attack freezes writes: POST/PUT/PATCH/DELETE get
+  \`503\`, the site stays up **read-only**, the attack surface closes.
+- **Tamper-evident audit log** — every event is hash-chained in
+  \`data/shield.log.jsonl\`; altering a past entry breaks the chain (\`niral shield verify\`).
+- **Owner alerts** — with \`NIRAL_SMTP_URL\` + \`NIRAL_ALERT_TO\` set, the first ban,
+  lockdown, and any tampering mail you (throttled — an attack can't flood your inbox).
+
+The Shield is on by default. Tune or disable it:
+
+\`\`\`sh
+NIRAL_SHIELD=off              # disable entirely
+NIRAL_SHIELD_STRIKES=6        # strikes before a ban (probes weigh 3)
+NIRAL_SHIELD_BAN_MS=900000    # ban duration (15 min)
+NIRAL_SHIELD_LOCKDOWN=8       # distinct bans in 5 min → lockdown
+NIRAL_TRUST_PROXY=1           # read client IP from X-Forwarded-For (behind nginx)
+\`\`\`
+
+## Release integrity — tamper detection
+
+A niral release is content-hashed, so tamper detection is nearly free. \`niral build\`
+writes \`integrity.json\` — a sha256 of every file in the release. The running
+server re-hashes itself on a timer; if a served file changed on disk (a defaced
+page, an injected script, a swapped server module), it's logged and mailed.
+
+\`\`\`sh
+niral shield integrity        # re-hash the current release vs its build manifest
+niral shield verify           # confirm the audit log's hash chain is unbroken
+niral shield log              # recent bans, probes and lockdowns
+\`\`\`
+
+Because deploys are atomic and the last releases are kept, recovering from a
+tampered release is a one-symlink rollback.
+
+## What no other framework ships
+
+Every serious framework hardens your app. Niral is the first that also **watches
+it, evicts attackers, and detects tampering** — because it's the only one that
+owns the server, the deploy, and the database in one zero-dependency codebase.
 `,
   },
 
