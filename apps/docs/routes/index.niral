@@ -13,7 +13,7 @@
     <div class="nav-links">
       <a href="/docs/getting-started">Docs</a>
       <a href="/docs/benchmarks">Benchmarks</a>
-      <a href="/docs/cli">CLI</a>
+      <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
       <a class="nav-cta" href="/docs/getting-started">Get started</a>
     </div>
   </nav>
@@ -133,9 +133,9 @@
       </div>
       <div class="footer-col">
         <b>Framework</b>
+        <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
         <a href="/docs/benchmarks">Benchmarks</a>
         <a href="/docs/cli">CLI reference</a>
-        <a href="/docs/auth">Auth</a>
         <a href="/docs/ai">AI & RAG</a>
       </div>
     </div>

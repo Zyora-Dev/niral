@@ -19,6 +19,15 @@ export const PAGES = {
 compiler, signals runtime, router, SSR, WebSockets, auth, jobs, mail and AI helpers are all
 built on the Node standard library. Node 22+ is the only requirement.
 
+## Install
+
+There is nothing to install — a git clone IS the framework:
+
+\`\`\`sh
+git clone https://github.com/Zyora-Dev/niral.git
+alias niral="node $PWD/niral/bin/niral.js"   # add to your shell profile
+\`\`\`
+
 ## Create an app
 
 \`\`\`sh
