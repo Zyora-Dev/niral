@@ -855,11 +855,49 @@ niral shield log              # recent bans, probes and lockdowns
 Because deploys are atomic and the last releases are kept, recovering from a
 tampered release is a one-symlink rollback.
 
+## Recover — snapshots, restore, rollback, eviction
+
+Detection is half the story. Niral also **revives** — all on the same box:
+
+\`\`\`sh
+niral snapshot                # back up every data/*.db right now
+niral snapshot list           # what's available (newest first)
+niral restore latest          # roll databases back to a snapshot (undoable —
+                              # the live state is snapshotted first)
+niral rollback                # flip dist/current to the previous release
+niral rollback --to <hash>    # …or a specific one
+niral rotate-secret           # new NIRAL_SECRET — every session dies at once
+\`\`\`
+
+**Snapshots are automatic** at the moments data is most at risk: hourly, before
+every migration, and before every deploy (the generated \`deploy.sh\` snapshots
+first). They use SQLite's \`VACUUM INTO\` — a consistent copy even while the app
+is writing. The newest 24 are kept; older ones prune.
+
+**Auto-rollback**: set \`NIRAL_AUTO_ROLLBACK=1\` and a tampered release reverts to
+the previous good one and restarts itself — the site heals without you awake.
+
+**Session eviction**: \`niral rotate-secret\` writes a fresh signing key, so every
+existing cookie stops verifying instantly — an attacker who stole a session is
+kicked out on the next request.
+
+> On-box backups protect against bad deploys, corruption and malicious writes.
+> They do NOT survive the machine being lost or root-wiped — push snapshots
+> off-box for that (roadmap: \`niral snapshot --remote\`).
+
+## Audit your setup
+
+\`\`\`sh
+niral doctor --security       # is the Shield on? proxy IP trusted? cookies
+                              # Secure? alerts wired? integrity + audit intact?
+\`\`\`
+
 ## What no other framework ships
 
 Every serious framework hardens your app. Niral is the first that also **watches
-it, evicts attackers, and detects tampering** — because it's the only one that
-owns the server, the deploy, and the database in one zero-dependency codebase.
+it, evicts attackers, restores it, and heals itself** — because it's the only
+one that owns the server, the deploy, and the database in one zero-dependency
+codebase.
 `,
   },
 

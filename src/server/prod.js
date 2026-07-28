@@ -69,28 +69,52 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
     alert: mailAlert(),
   });
   // release integrity self-check — re-hash the running release on a timer;
-  // tampering (defaced page, injected script, swapped server module) is logged
-  // + mailed. Off with NIRAL_SHIELD=off or NIRAL_INTEGRITY=off.
+  // tampering (defaced page, injected script, swapped server module) is logged,
+  // mailed, and — with NIRAL_AUTO_ROLLBACK=1 — the release is rolled back to the
+  // previous good one. Off with NIRAL_SHIELD=off or NIRAL_INTEGRITY=off.
   if (shield.enabled && process.env.NIRAL_INTEGRITY !== "off") {
     const runIntegrity = () => {
       try {
         const r = checkIntegrity(releaseDir);
         if (!r.ok) {
           shieldLog.error("integrity FAILED — release tampered", { tampered: r.tampered.slice(0, 10) });
-          const alert = mailAlert();
-          alert?.({
+          mailAlert()?.({
             subject: "niral shield: RELEASE TAMPERED",
             body:
               `The running release ${manifest.hash} no longer matches its build manifest.\n` +
               r.tampered.slice(0, 20).map((t) => `  ${t.kind}: ${t.path}`).join("\n") +
               `\n\nRe-deploy from a clean source or roll back: point dist/current at a previous release.`,
           });
+          if (process.env.NIRAL_AUTO_ROLLBACK === "1") {
+            import("./recover.js").then(({ rollbackRelease }) => {
+              try {
+                const { from, to } = rollbackRelease(resolve(dist));
+                shieldLog.error("AUTO-ROLLBACK — flipped to previous release, restarting", { from, to });
+                mailAlert()?.({ subject: "niral shield: auto-rolled back", body: `Tampered release ${from} → rolled back to ${to}. Restarting.` });
+                setTimeout(() => process.exit(1), 500); // systemd Restart=always serves the rolled-back release
+              } catch (e) {
+                shieldLog.error("auto-rollback failed", { error: String(e.message) });
+              }
+            });
+          }
         }
       } catch { /* never crash the server over a check */ }
     };
     const iv = setInterval(runIntegrity, Number(process.env.NIRAL_INTEGRITY_MS) || 5 * 60_000);
     iv.unref?.();
     setTimeout(runIntegrity, 3000).unref?.(); // one check shortly after boot
+  }
+
+  // automatic database snapshots — the "undo" for a bad deploy or malicious
+  // write. Timer + boot; pre-migration + pre-deploy snapshots happen elsewhere.
+  if (process.env.NIRAL_SNAPSHOT !== "off") {
+    import("./recover.js").then(({ snapshot }) => {
+      const snap = () => { try { snapshot(projectRoot, { reason: "auto" }); } catch { /* best-effort */ } };
+      const every = Number(process.env.NIRAL_SNAPSHOT_MS) || 60 * 60_000; // hourly
+      const iv = setInterval(snap, every);
+      iv.unref?.();
+      setTimeout(snap, 10_000).unref?.(); // one snapshot shortly after boot
+    }).catch(() => {});
   }
 
   const componentCache = new Map(); // asset rel path → module (immutable per release)

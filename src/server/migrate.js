@@ -40,9 +40,13 @@ export function runMigrations({ projectDir, dbPath = null }) {
 
   const db = openDb(projectDir, dbPath);
   const done = new Set(db.prepare("SELECT name FROM _migrations").all().map((r) => r.name));
+  const pending = files.filter((f) => !done.has(f));
+  // a schema change is the classic "oops" — snapshot the db BEFORE touching it
+  if (pending.length && process.env.NIRAL_SNAPSHOT !== "off") {
+    try { snapshotBeforeMigrate(projectDir); } catch { /* best-effort safety net */ }
+  }
   const applied = [];
-  for (const f of files) {
-    if (done.has(f)) continue;
+  for (const f of pending) {
     const sql = readFileSync(join(dir, f), "utf8");
     db.exec("BEGIN");
     try {
@@ -56,6 +60,11 @@ export function runMigrations({ projectDir, dbPath = null }) {
     applied.push(f);
   }
   return { applied };
+}
+
+function snapshotBeforeMigrate(projectDir) {
+  // lazy import avoids a cycle and keeps migrate usable standalone
+  import("./recover.js").then(({ snapshot }) => snapshot(projectDir, { reason: "pre-migrate" })).catch(() => {});
 }
 
 function openDb(projectDir, dbPath) {

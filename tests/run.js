@@ -4915,6 +4915,71 @@ test("integrity: build writes a manifest; tampering with a released file is dete
   ok(!bad.ok && bad.tampered.some((t) => t.kind === "modified"), "modified release file detected");
 });
 
+test("recover: snapshot → tamper → restore brings a database back", async () => {
+  const { snapshot, restore, listSnapshots } = await import("../src/server/recover.js");
+  const { mkdtempSync, mkdirSync } = _fs;
+  const { tmpdir } = _os;
+  const dir = mkdtempSync(join(tmpdir(), "niral-recover-"));
+  mkdirSync(join(dir, "data"), { recursive: true });
+  const { DatabaseSync } = await import("node:sqlite");
+  const dbPath = join(dir, "data", "app.db");
+  let db = new DatabaseSync(dbPath);
+  db.exec("CREATE TABLE t (v TEXT)");
+  db.prepare("INSERT INTO t VALUES (?)").run("good");
+  db.close();
+
+  const snap = snapshot(dir, { reason: "test" });
+  ok(snap.files.includes("app.db"), "app.db snapshotted");
+  eq(listSnapshots(dir).length, 1, "one snapshot listed");
+
+  // malicious/erroneous write
+  db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM t");
+  db.prepare("INSERT INTO t VALUES (?)").run("HACKED");
+  db.close();
+
+  const r = restore(dir, snap.label);
+  ok(r.restored.includes("app.db"), "app.db restored");
+  db = new DatabaseSync(dbPath, { readOnly: true });
+  const rows = db.prepare("SELECT v FROM t").all().map((x) => x.v);
+  db.close();
+  eq(rows, ["good"], "database rolled back to the snapshot; the malicious write is gone");
+  ok(listSnapshots(dir).some((s) => s.reason === "pre-restore"), "restore first snapshotted the live state (undoable)");
+});
+
+test("recover: rollbackRelease flips current to the previous release", async () => {
+  const { build } = await import("../src/build/build.js");
+  const { rollbackRelease } = await import("../src/server/recover.js");
+  const { writeFileSync, readlinkSync } = _fs;
+  const dir = makeProject("rollback");
+  const r1 = build({ root: dir });
+  writeFileSync(join(dir, "routes", "about.niral"), `<script mode="static">let x = $state("v2")</script><p>About {x}</p>`);
+  const r2 = build({ root: dir });
+  ok(r1.hash !== r2.hash, "two distinct releases");
+  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r2.hash), "current on r2");
+
+  const back = rollbackRelease(join(dir, "dist"));
+  eq(back.to, r1.hash, "rolled back to r1");
+  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r1.hash), "current now points at r1");
+});
+
+test("recover: rotate-secret invalidates existing sessions", async () => {
+  const { rotateSecret } = await import("../src/server/recover.js");
+  const { signSession, verifySession } = await import("../src/server/session.js");
+  const { mkdtempSync, readFileSync } = _fs;
+  const { tmpdir } = _os;
+  const dir = mkdtempSync(join(tmpdir(), "niral-rotate-"));
+  const envPath = join(dir, "app.env");
+  const oldSecret = "old-secret-value";
+  const cookie = signSession({ user: "alice" }, oldSecret);
+  ok(verifySession(cookie, oldSecret)?.user === "alice", "cookie valid under old secret");
+
+  const newSecret = rotateSecret(envPath);
+  ok(newSecret && newSecret !== oldSecret, "a fresh secret was written");
+  ok(readFileSync(envPath, "utf8").includes(`NIRAL_SECRET=${newSecret}`), "env file updated");
+  eq(verifySession(cookie, newSecret), null, "the old session no longer verifies — attacker evicted");
+});
+
 /* ── summary ──────────────────────────────────────────────────── */
 await runAll();console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

@@ -32,6 +32,9 @@ rsync -az --delete \\
   --exclude '.env' --exclude '*.env' --exclude 'app.env' \\
   ./ "\$SERVER:\$APP_DIR/"
 
+echo "→ snapshotting databases before deploy (instant undo if this goes wrong)"
+ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js snapshot \$APP_DIR" || true
+
 echo "→ building release on the server (atomic — a failed build changes nothing)"
 ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js build \$APP_DIR"
 

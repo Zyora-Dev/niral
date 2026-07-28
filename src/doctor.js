@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { loadHooks, checkRequiredEnv } from "./server/hooks.js";
 import { migrationStatus } from "./server/migrate.js";
 
-export async function runDoctor({ root }) {
+export async function runDoctor({ root, security = false } = {}) {
   const checks = [];
   const add = (level, name, detail = "") => checks.push({ level, name, detail });
 
@@ -98,6 +98,44 @@ export async function runDoctor({ root }) {
     }
   } else if (readdirSync(root).includes("dist")) {
     add("warn", "dist/ exists but no current release", "run `niral build`");
+  }
+
+  // deeper security audit — `niral doctor --security`
+  if (security) {
+    // Shield on?
+    if (process.env.NIRAL_SHIELD === "off") add("warn", "Shield is disabled (NIRAL_SHIELD=off)", "intrusion detection + bans are off");
+    else add("ok", "Shield enabled (intrusion detection + bans active in production)");
+
+    // behind a proxy without trust-proxy → bans would target the proxy's IP
+    if (process.env.NIRAL_TRUST_PROXY !== "1") {
+      add("warn", "NIRAL_TRUST_PROXY not set", "behind nginx/Cloudflare the Shield sees the proxy IP — set NIRAL_TRUST_PROXY=1 so bans hit the real client");
+    } else add("ok", "NIRAL_TRUST_PROXY=1 (Shield reads the real client IP)");
+
+    // secure cookies in production
+    if (process.env.NIRAL_SECURE !== "1") add("warn", "NIRAL_SECURE not set", "set NIRAL_SECURE=1 behind HTTPS so session cookies are Secure");
+    else add("ok", "NIRAL_SECURE=1 (session cookies marked Secure)");
+
+    // owner alerting
+    if (!process.env.NIRAL_ALERT_TO || !process.env.NIRAL_SMTP_URL) {
+      add("warn", "no security alerts configured", "set NIRAL_SMTP_URL + NIRAL_ALERT_TO to be mailed on bans / lockdown / tampering");
+    } else add("ok", "security alerts wired (mail on ban / lockdown / tampering)");
+
+    // integrity manifest present in the current release
+    if (existsSync(current) && !existsSync(join(current, "integrity.json"))) {
+      add("warn", "release has no integrity manifest", "rebuild with this version so tamper detection works");
+    } else if (existsSync(current)) add("ok", "release carries an integrity manifest (tamper detection on)");
+
+    // auto-rollback
+    if (process.env.NIRAL_AUTO_ROLLBACK !== "1") add("warn", "auto-rollback off", "set NIRAL_AUTO_ROLLBACK=1 to auto-revert a tampered release");
+    else add("ok", "NIRAL_AUTO_ROLLBACK=1 (tampered release auto-reverts)");
+
+    // audit chain intact
+    try {
+      const { verifyAuditChain } = await import("./server/shield.js");
+      const v = verifyAuditChain(join(root, "data"));
+      if (v.ok) add("ok", `Shield audit log intact (${v.entries} event(s), tamper-evident)`);
+      else add("fail", `Shield audit log BROKEN at entry ${v.brokenAt}`, "the security log was altered — investigate");
+    } catch { /* shield module unavailable */ }
   }
 
   return finish(checks);

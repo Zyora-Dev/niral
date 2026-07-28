@@ -17,7 +17,7 @@ import { compileClient, NiralError } from "../src/index.js";
 const [, , cmd, ...args] = process.argv;
 
 /** Flags that take a value — their value must never be mistaken for a positional arg. */
-const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db"]);
+const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db", "--to", "--env"]);
 
 /** Positional args (flag values excluded). `niral dev -p 5199` has none. */
 function positionals() {
@@ -157,12 +157,14 @@ if (cmd === "compile") {
 } else if (cmd === "doctor") {
   const dir = resolve(positionals()[0] ?? ".");
   const { runDoctor, formatDoctor } = await import("../src/doctor.js");
-  const result = await runDoctor({ root: dir });
+  const result = await runDoctor({ root: dir, security: args.includes("--security") });
   console.log(formatDoctor(result, dir));
   if (!result.ok) process.exit(1);
 } else if (cmd === "shield") {
-  const dir = resolve(positionals()[1] ?? ".");
-  const sub = positionals()[0] ?? "status";
+  const SUBS = new Set(["status", "log", "verify", "integrity"]);
+  const pos = positionals();
+  const sub = SUBS.has(pos[0]) ? pos[0] : "status";
+  const dir = resolve((SUBS.has(pos[0]) ? pos[1] : pos[0]) ?? ".");
   const { join } = await import("node:path");
   const { existsSync, readFileSync } = await import("node:fs");
   const dataDir = join(dir, "data");
@@ -199,6 +201,50 @@ if (cmd === "compile") {
   verify       check the audit log's hash chain is unbroken
   integrity    re-hash the built release and compare to its manifest`);
   }
+} else if (cmd === "snapshot") {
+  // `snapshot [dir]` or `snapshot list [dir]`
+  const pos = positionals();
+  const sub = pos[0] === "list" ? "list" : "create";
+  const dir = resolve((pos[0] === "list" ? pos[1] : pos[0]) ?? ".");
+  const { snapshot, listSnapshots } = await import("../src/server/recover.js");
+  if (sub === "list") {
+    const snaps = listSnapshots(dir);
+    if (!snaps.length) console.log("niral · no snapshots yet");
+    else for (const s of snaps) console.log(`  ${s.label.padEnd(42)} ${String(s.reason).padEnd(12)} ${s.files.join(", ")}`);
+  } else {
+    const r = snapshot(dir, { reason: "manual" });
+    console.log(`niral · snapshot ${r.label} — ${r.files.length ? r.files.join(", ") : "no databases found"}`);
+  }
+} else if (cmd === "restore") {
+  // `restore <label|latest> [dir]`
+  const pos = positionals();
+  const label = flag("--to") ?? pos[0] ?? "latest";
+  const dir = resolve((flag("--to") ? pos[0] : pos[1]) ?? ".");
+  const { restore } = await import("../src/server/recover.js");
+  try {
+    const r = restore(dir, label);
+    console.log(`niral · restored ${r.restored.join(", ") || "nothing"} from ${r.from} (previous state saved as a pre-restore snapshot)`);
+    console.log("        Restart the server to pick up the restored data.");
+  } catch (e) {
+    die(`niral · ${e.message}`);
+  }
+} else if (cmd === "rollback") {
+  const dir = resolve(positionals()[0] ?? ".");
+  const { rollbackRelease } = await import("../src/server/recover.js");
+  const dist = existsSync(join(dir, "current")) ? dir : join(dir, "dist");
+  try {
+    const r = rollbackRelease(dist, { toHash: flag("--to") ?? null });
+    console.log(`niral · rolled back ${r.from ?? "?"} → ${r.to} — restart the server (systemctl restart) to serve it`);
+  } catch (e) {
+    die(`niral · ${e.message}`);
+  }
+} else if (cmd === "rotate-secret") {
+  const dir = resolve(positionals()[0] ?? ".");
+  const envPath = flag("--env") ?? join(dir, "app.env");
+  const { rotateSecret } = await import("../src/server/recover.js");
+  rotateSecret(envPath);
+  console.log(`niral · NIRAL_SECRET rotated in ${envPath} — every session is now invalid.`);
+  console.log("        Restart the server (systemctl restart) to load it and evict all sessions.");
 } else if (cmd === "test") {
   const dir = resolve(positionals()[0] ?? ".");
   const { runProjectTests } = await import("../src/test-runner.js");
@@ -283,6 +329,10 @@ if (cmd === "compile") {
   check [dir]                      REAL TypeScript checking (.ts + <script lang="ts">)
   doctor [dir]                     diagnose the common "why won't it start" problems
   shield <status|log|verify|integrity> [dir]   in-process security guard
+  snapshot [list] [dir]            back up every data/*.db (auto: hourly + pre-migrate/deploy)
+  restore <label|latest> [dir]     restore databases from a snapshot
+  rollback [dir] [--to <hash>]     flip dist/current to the previous release
+  rotate-secret [dir] [--env f]    new NIRAL_SECRET — evicts every session
   test [dir]                       run the project's tests/ (ambient test/ok/eq/startApp)
   migrate [dir] [--db path]        apply pending migrations/ (also auto-runs at boot)
   deploy [dir]                     generate deploy/ (systemd + nginx + Dockerfile + script)
