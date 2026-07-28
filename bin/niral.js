@@ -17,7 +17,7 @@ import { compileClient, NiralError } from "../src/index.js";
 const [, , cmd, ...args] = process.argv;
 
 /** Flags that take a value — their value must never be mistaken for a positional arg. */
-const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db", "--to", "--env"]);
+const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db", "--to", "--env", "--url", "--restart-cmd"]);
 
 /** Positional args (flag values excluded). `niral dev -p 5199` has none. */
 function positionals() {
@@ -245,6 +245,24 @@ if (cmd === "compile") {
   rotateSecret(envPath);
   console.log(`niral · NIRAL_SECRET rotated in ${envPath} — every session is now invalid.`);
   console.log("        Restart the server (systemctl restart) to load it and evict all sessions.");
+} else if (cmd === "watchdog") {
+  const dir = resolve(positionals()[0] ?? ".");
+  const port = Number(flag("-p") ?? 8199);
+  const url = flag("--url") ?? `http://localhost:${port}`;
+  const dist = existsSync(join(dir, "current")) ? dir : join(dir, "dist");
+  const { createWatchdog } = await import("../src/server/watchdog.js");
+  const { sendMail } = await import("../src/server/mail.js");
+  const alertTo = process.env.NIRAL_ALERT_TO, smtpUrl = process.env.NIRAL_SMTP_URL;
+  const alert = alertTo && smtpUrl
+    ? async ({ subject, body }) => { try { await sendMail({ to: alertTo, from: process.env.NIRAL_MAIL_FROM ?? alertTo, subject, text: body, smtpUrl }); } catch {} }
+    : null;
+  const restartCmd = flag("--restart-cmd") ?? process.env.NIRAL_RESTART_CMD ?? null;
+  const wd = createWatchdog({ appUrl: url, dist, projectRoot: dir, alert, restartCmd });
+  console.log(`niral · watchdog guarding ${url} — ctrl-c to stop`);
+  const stop = wd.start();
+  process.on("SIGINT", () => { stop(); process.exit(0); });
+  process.on("SIGTERM", () => { stop(); process.exit(0); });
+  setInterval(() => {}, 1 << 30); // stay alive
 } else if (cmd === "test") {
   const dir = resolve(positionals()[0] ?? ".");
   const { runProjectTests } = await import("../src/test-runner.js");
@@ -329,6 +347,7 @@ if (cmd === "compile") {
   check [dir]                      REAL TypeScript checking (.ts + <script lang="ts">)
   doctor [dir]                     diagnose the common "why won't it start" problems
   shield <status|log|verify|integrity> [dir]   in-process security guard
+  watchdog [dir] [-p port]         independent guardian: health + integrity + audit
   snapshot [list] [dir]            back up every data/*.db (auto: hourly + pre-migrate/deploy)
   restore <label|latest> [dir]     restore databases from a snapshot
   rollback [dir] [--to <hash>]     flip dist/current to the previous release

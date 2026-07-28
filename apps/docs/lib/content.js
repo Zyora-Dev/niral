@@ -881,6 +881,25 @@ the previous good one and restarts itself — the site heals without you awake.
 existing cookie stops verifying instantly — an attacker who stole a session is
 kicked out on the next request.
 
+## The watchdog — an independent guardian
+
+The Shield runs inside the app. But an app can't report its own death, and a
+compromised app could silence its own checks. So Niral also ships a **watchdog**
+— a SEPARATE process (its own systemd unit) that guards the app from outside:
+
+- **probes \`/@niral/health\`** — down repeatedly → alerts you (and catches a
+  crash-loop systemd can't)
+- **re-hashes the release independently** — catches tampering even if the app's
+  own integrity check was disabled or the app process was compromised
+- **verifies the audit chain** from outside the app
+- with \`NIRAL_AUTO_ROLLBACK=1\`, **rolls back a tampered release and restarts** the
+  app unit
+
+If an attacker kills the app, the watchdog survives to act; if they kill the
+watchdog, systemd brings it back. The two processes guard each other and share
+no memory — only the files on disk. \`niral deploy\` generates the watchdog unit
+and \`setup.sh\` enables it automatically.
+
 > On-box backups protect against bad deploys, corruption and malicious writes.
 > They do NOT survive the machine being lost or root-wiped — push snapshots
 > off-box for that (roadmap: \`niral snapshot --remote\`).

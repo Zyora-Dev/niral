@@ -5,6 +5,7 @@
  *   setup.sh            ONE-TIME Linux server provisioning (node, systemd, nginx)
  *   deploy.sh           rsync app + framework to a server, build there, restart
  *   niral-app.service   systemd unit (auto-restart, env file, health-checked)
+ *   niral-watchdog.service  independent guardian (separate process from the app)
  *   nginx.conf          reverse proxy w/ WebSocket upgrade for live channels
  *   Dockerfile          container alternative (node:22-slim, build + start)
  *   app.env             environment template (NIRAL_SECRET etc.)
@@ -40,6 +41,7 @@ ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js build \$APP_DIR"
 
 echo "→ restarting"
 ssh "\$SERVER" "sudo systemctl restart ${name} && sleep 1 && systemctl is-active ${name}"
+ssh "\$SERVER" "sudo systemctl restart ${name}-watchdog" || true  # guardian picks up new framework code
 
 echo "→ health check"
 # node is the one tool GUARANTEED on a niral server — curl/wget may not exist
@@ -95,6 +97,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable "\$APP_NAME"
 echo "✓ systemd unit installed + enabled"
 
+# 4b. watchdog — the independent guardian (separate process from the app)
+sudo cp "\$HERE/niral-watchdog.service" "/etc/systemd/system/\$APP_NAME-watchdog.service"
+sudo systemctl daemon-reload
+sudo systemctl enable "\$APP_NAME-watchdog"
+echo "✓ watchdog installed + enabled (guards health, integrity, audit)"
+
 # 5. nginx reverse proxy (WebSocket upgrade for live channels)
 if ! command -v nginx >/dev/null 2>&1; then
   command -v apt-get >/dev/null 2>&1 || { echo "! nginx missing and apt-get unavailable — install nginx manually first"; exit 1; }
@@ -127,6 +135,29 @@ RestartSec=2
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/${name}/data /opt/${name}/dist
+
+[Install]
+WantedBy=multi-user.target
+`;
+
+const WATCHDOG_SERVICE = (name) => `# /etc/systemd/system/${name}-watchdog.service
+# The independent guardian — a SEPARATE process from the app, so if the app is
+# killed or compromised the watchdog survives to notice, alert and recover.
+# sudo systemctl daemon-reload && sudo systemctl enable --now ${name}-watchdog
+[Unit]
+Description=${name} watchdog (niral)
+After=network.target ${name}.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/${name}
+# NIRAL_RESTART_CMD lets the watchdog restart the app after an auto-rollback.
+Environment=NIRAL_RESTART_CMD=/usr/bin/systemctl restart ${name}
+ExecStart=/usr/bin/node /opt/niral/bin/niral.js watchdog /opt/${name} -p 8199
+EnvironmentFile=/opt/${name}/app.env
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
@@ -188,6 +219,7 @@ export function initDeploy({ root }) {
   writeFileSync(join(out, "deploy.sh"), DEPLOY_SH(name));
   chmodSync(join(out, "deploy.sh"), 0o755);
   writeFileSync(join(out, "niral-app.service"), SERVICE(name));
+  writeFileSync(join(out, "niral-watchdog.service"), WATCHDOG_SERVICE(name));
   writeFileSync(join(out, "nginx.conf"), NGINX(name));
   writeFileSync(join(out, "Dockerfile"), DOCKERFILE(name));
   writeFileSync(join(dir, "app.env"), APP_ENV, { flag: "wx" });

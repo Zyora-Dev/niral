@@ -4725,7 +4725,7 @@ test("niral deploy: generates the deployment kit (systemd + nginx + Dockerfile +
   const { tmpdir } = _os;
   const dir = mkdtempSync(join(tmpdir(), "niral-deploy-"));
   initDeploy({ root: dir });
-  for (const f of ["setup.sh", "deploy.sh", "niral-app.service", "nginx.conf", "Dockerfile"]) {
+  for (const f of ["setup.sh", "deploy.sh", "niral-app.service", "niral-watchdog.service", "nginx.conf", "Dockerfile"]) {
     ok(existsSync(join(dir, "deploy", f)), `deploy/${f} written`);
   }
   ok(statSync(join(dir, "deploy", "deploy.sh")).mode & 0o100, "deploy.sh is executable");
@@ -4733,6 +4733,7 @@ test("niral deploy: generates the deployment kit (systemd + nginx + Dockerfile +
   const setup = readFileSync(join(dir, "deploy", "setup.sh"), "utf8");
   ok(setup.includes("openssl rand -hex 32"), "setup GENERATES the production secret");
   ok(setup.includes("systemctl enable") && setup.includes("nginx -t"), "setup wires systemd + nginx");
+  ok(setup.includes("-watchdog"), "setup installs + enables the watchdog guardian");
   const sh = readFileSync(join(dir, "deploy", "deploy.sh"), "utf8");
   ok(sh.includes("--exclude 'data/'"), "deploys never clobber data/");
   ok(sh.includes("--exclude '*.env'") && sh.includes("--exclude 'app.env'"), "deploys NEVER sync env files — secrets live only on the server");
@@ -4978,6 +4979,44 @@ test("recover: rotate-secret invalidates existing sessions", async () => {
   ok(newSecret && newSecret !== oldSecret, "a fresh secret was written");
   ok(readFileSync(envPath, "utf8").includes(`NIRAL_SECRET=${newSecret}`), "env file updated");
   eq(verifySession(cookie, newSecret), null, "the old session no longer verifies — attacker evicted");
+});
+
+test("watchdog: independent guardian probes health, catches a downed app + tampered release", async () => {
+  const { build } = await import("../src/build/build.js");
+  const { createProdServer } = await import("../src/server/prod.js");
+  const { createWatchdog } = await import("../src/server/watchdog.js");
+  const { writeFileSync, readFileSync, realpathSync } = _fs;
+  const dir = makeProject("watchdog");
+  build({ root: dir });
+  const prod = createProdServer({ dist: join(dir, "dist"), port: 0 });
+  const port = await new Promise((r) => prod.listen(r));
+
+  const alerts = [];
+  const wd = createWatchdog({
+    appUrl: `http://localhost:${port}`,
+    dist: join(dir, "dist"),
+    projectRoot: dir,
+    alert: (a) => alerts.push(a),
+    log: { info() {}, warn() {}, error() {} },
+    downAlertAt: 2,
+  });
+
+  // healthy app → no alerts
+  await wd.tick();
+  eq(alerts.length, 0, "healthy app raises no alert");
+
+  // tamper the running release → integrity alert (independent of the app's own check)
+  const releaseDir = realpathSync(join(dir, "dist", "current"));
+  const asset = join(releaseDir, "assets", "routes", "index.js");
+  writeFileSync(asset, readFileSync(asset, "utf8") + "\n// injected by attacker");
+  await wd.tick();
+  ok(alerts.some((a) => a.subject.includes("TAMPERED")), "watchdog independently detected the tampered release");
+
+  // app goes down → after downAlertAt failures, a down alert
+  await new Promise((r) => prod.shutdown().then(r));
+  await wd.tick(); // down 1
+  await wd.tick(); // down 2 → alert
+  ok(alerts.some((a) => a.subject.includes("DOWN")), "watchdog noticed the app is down (the app can't report its own death)");
 });
 
 /* ── summary ──────────────────────────────────────────────────── */
