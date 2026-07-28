@@ -152,7 +152,7 @@ After=network.target ${name}.service
 Type=simple
 WorkingDirectory=/opt/${name}
 # NIRAL_RESTART_CMD lets the watchdog restart the app after an auto-rollback.
-Environment=NIRAL_RESTART_CMD=/usr/bin/systemctl restart ${name}
+Environment="NIRAL_RESTART_CMD=/usr/bin/systemctl restart ${name}"
 ExecStart=/usr/bin/node /opt/niral/bin/niral.js watchdog /opt/${name} -p 8199
 EnvironmentFile=/opt/${name}/app.env
 Restart=always
