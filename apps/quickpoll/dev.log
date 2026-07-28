@@ -1,0 +1,6 @@
+niral · dev server at http://localhost:5310 (hmr on)
+(node:97569) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+niral · reloading page
+{"t":"2026-07-27T17:07:07.609Z","level":"info","scope":"app","msg":"poll created","id":"4a2f9d39","by":"ada@quickpoll.dev"}
+niral · reloading page

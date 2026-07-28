@@ -1,0 +1,63 @@
+<server>
+  // Server-only code — never shipped to the browser.
+  const entries = []
+
+  // Runs during SSR — the page arrives with data already in it.
+  export async function load() {
+    return { initialEntries: [...entries], initialMine: session.get("signed") ?? 0 }
+  }
+
+  export async function addEntry(text) {
+    const clean = String(text).trim().slice(0, 140)
+    if (!clean) throw new Error("Write something first")
+    entries.push(clean)
+    session.set("signed", (session.get("signed") ?? 0) + 1)
+    return { entries: [...entries], mine: session.get("signed") }
+  }
+</server>
+
+<script>
+  let { initialEntries, initialMine } = $props
+  let entries = $state(initialEntries ?? [])
+  let mine = $state(initialMine ?? 0)
+  let draft = $state("")
+  let error = $state("")
+
+  async function sign() {
+    error = ""
+    try {
+      const r = await addEntry(draft)
+      entries = r.entries
+      mine = r.mine
+      draft = ""
+    } catch (e) {
+      error = e.message
+    }
+  }
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { color: #34d399; }
+  a { color: #34d399; }
+  button { background: #34d399; color: #000; border: 0; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; cursor: pointer; }
+  input { background: #161616; border: 1px solid #333; color: #eee; border-radius: 9px; padding: .5rem .8rem; width: 60%; }
+  li { padding: .25rem 0; }
+  .err { color: #f87171; }
+  .mine { color: #888; }
+</style>
+
+<h1>Guestbook</h1>
+<p>Entries live in a <b>&lt;server&gt;</b> block and arrive <b>already server-rendered</b> via load(). Your signature count rides a signed cookie.</p>
+
+<input id="draft" bind:value={draft} placeholder="Leave a note…" />
+<button id="sign" on:click={() => sign()}>Sign</button>
+{#if error !== ""}<p id="err" class="err">{error}</p>{/if}
+
+<p id="mine" class="mine">You have signed {mine} times this session.</p>
+<ul id="list">
+  {#for e of entries}
+    <li>{e}</li>
+  {/for}
+</ul>
+<p><a href="/">← Home</a></p>

@@ -1,0 +1,125 @@
+<server auth>
+export async function load() {
+  const { passkeysForUser, findUserById } = await projectImport("lib/users.js");
+  const me = findUserById(user().id);
+  return { passkeyCount: passkeysForUser(me.id).length, totpEnabled: !!me.totpSecret };
+}
+
+export async function logout() {
+  auth.logout();
+  return { redirect: "/" };
+}
+
+// ── passkey enrolment ──
+export async function enrollStart(origin) {
+  const { passkeysForUser } = await projectImport("lib/users.js");
+  const challenge = auth.passkeys.challenge();
+  session.set("wa_challenge", challenge);
+  const me = user();
+  return auth.passkeys.registrationOptions({
+    rpId: new URL(origin).hostname,
+    rpName: "My App",
+    user: { id: me.id, name: me.email ?? me.name, displayName: me.name },
+    challenge,
+    excludeCredentialIds: passkeysForUser(me.id),
+  });
+}
+
+export async function enrollFinish(payload) {
+  const { addPasskey } = await projectImport("lib/users.js");
+  const challenge = session.get("wa_challenge");
+  session.delete("wa_challenge");
+  if (!challenge) throw new Error("no enrolment in progress");
+  const cred = auth.passkeys.verifyRegistration({
+    response: payload.response,
+    challenge,
+    origin: payload.origin,
+    rpId: new URL(payload.origin).hostname,
+  });
+  addPasskey(user().id, cred);
+  return { ok: true };
+}
+
+// ── 2FA ──
+export async function totpStart() {
+  const secret = auth.totpSecret();
+  session.set("totp_pending", secret);
+  const me = user();
+  return { secret, uri: auth.totpUri(secret, me.email ?? me.name, "My App") };
+}
+
+export async function totpConfirm(code) {
+  const { setTotpSecret } = await projectImport("lib/users.js");
+  const secret = session.get("totp_pending");
+  if (!secret) throw new Error("no 2FA setup in progress");
+  if (!auth.totpVerify(secret, code)) return { error: "Wrong code — scan the QR and try again." };
+  setTotpSecret(user().id, secret);
+  session.delete("totp_pending");
+  return { ok: true };
+}
+</server>
+<script>
+  let { user, passkeyCount, totpEnabled } = $props
+  let keys = $state(passkeyCount)
+  let tfa = $state(totpEnabled)
+  let totp = $state(null)
+  let code = $state("")
+  let msg = $state("")
+
+  async function addKey() {
+    const opts = await enrollStart(location.origin)
+    const cred = await navigator.credentials.create({ publicKey: {
+      ...opts,
+      challenge: b64u(opts.challenge),
+      user: { ...opts.user, id: b64u(opts.user.id) },
+      excludeCredentials: opts.excludeCredentials.map((c) => ({ ...c, id: b64u(c.id) })),
+    }})
+    await enrollFinish({
+      origin: location.origin,
+      response: {
+        clientDataJSON: b64s(cred.response.clientDataJSON),
+        attestationObject: b64s(cred.response.attestationObject),
+      },
+    })
+    keys = keys + 1
+    msg = "Passkey added — next sign-in can use Face ID / Touch ID."
+  }
+  async function startTfa() { totp = await totpStart() }
+  async function confirmTfa() {
+    const r = await totpConfirm(code)
+    if (r.error) { msg = r.error; return }
+    tfa = true; totp = null; msg = "Two-factor enabled."
+  }
+  const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))
+  const b64s = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+</script>
+<head><title>Account</title></head>
+
+<h1>Hi {user.name}</h1>
+{#if msg}<p class="msg">{msg}</p>{/if}
+
+<section>
+  <h2>Passkeys ({keys})</h2>
+  <button on:click={addKey}>Add a passkey (Face ID / Touch ID)</button>
+</section>
+
+<section>
+  <h2>Two-factor authentication {#if tfa}✓ on{/if}</h2>
+  {#if !tfa}
+    {#if totp}
+      <p>Scan in your authenticator app: <a href={totp.uri}>{totp.uri}</a></p>
+      <p>Or enter the secret manually: <code>{totp.secret}</code></p>
+      <input bind:value={code} inputmode="numeric" placeholder="123456" />
+      <button on:click={confirmTfa}>Confirm</button>
+    {:else}
+      <button on:click={startTfa}>Enable 2FA</button>
+    {/if}
+  {/if}
+</section>
+
+<form method="post" action="?/logout"><button>Sign out</button></form>
+
+<style>
+  section { margin: 1.5rem 0 }
+  .msg { color: #071 }
+</style>

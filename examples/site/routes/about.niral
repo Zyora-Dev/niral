@@ -1,0 +1,14 @@
+<script mode="static">
+  let built = $state("with zero dependencies")
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { color: #34d399; }
+  a { color: #34d399; }
+</style>
+
+<h1>About</h1>
+<p id="pitch">Niral is a full-stack web framework built {built}.</p>
+<p>This page is <b>mode="static"</b> — pure server-rendered HTML, zero JavaScript shipped.</p>
+<p><a href="/">← Home</a></p>

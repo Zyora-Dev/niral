@@ -1,0 +1,78 @@
+<server lang="python">
+import math
+import random
+
+def load(params):
+    session.set("py_visits", session.get("py_visits", 0) + 1)
+    return {
+        "pi": round(math.pi, 6),
+        "visits": session.get("py_visits"),
+        "powers": [2 ** n for n in range(1, 9)],
+    }
+
+def roll(sides):
+    return {"value": random.randint(1, int(sides))}
+
+def stats(numbers):
+    if not numbers:
+        raise ValueError("Give me at least one number")
+    return {
+        "mean": sum(numbers) / len(numbers),
+        "maximum": max(numbers),
+        "minimum": min(numbers),
+    }
+</server>
+
+<script>
+  let { pi, visits, powers } = $props
+  let dice = $state(0)
+  let nums = $state("3, 1, 4, 1, 5")
+  let result = $state(null)
+  let error = $state("")
+
+  async function rollDice() {
+    const r = await roll(6)
+    dice = r.value
+  }
+
+  async function crunch() {
+    error = ""
+    try {
+      const list = nums.split(",").map(s => Number(s.trim())).filter(n => !Number.isNaN(n))
+      result = await stats(list)
+    } catch (e) {
+      error = e.message
+    }
+  }
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { color: #34d399; }
+  a { color: #34d399; }
+  code { color: #fbbf24; }
+  button { background: #34d399; color: #000; border: 0; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; cursor: pointer; margin-right: .5rem; }
+  input { background: #161616; border: 1px solid #333; color: #eee; border-radius: 9px; padding: .5rem .8rem; }
+  .err { color: #f87171; }
+</style>
+
+<h1>Python backend 🐍</h1>
+<p>This page's <b>&lt;server&gt;</b> block is written in <b>Python</b>. Same file, same <code>$props</code>, same RPC — a different language served it.</p>
+
+<p id="pi">π from Python's math module: <code>{pi}</code></p>
+<p id="visits">Python has counted <b>{visits}</b> visit(s) on your signed cookie.</p>
+<p id="powers">Powers of two: {#for p, i of powers}<code>{p}</code>{/for}</p>
+
+<button id="roll" on:click={() => rollDice()}>Roll a d6 in Python</button>
+{#if dice > 0}<span id="dice">→ you rolled {dice}</span>{/if}
+
+<p>
+  <input id="nums" bind:value={nums} />
+  <button id="crunch" on:click={() => crunch()}>Analyze in Python</button>
+</p>
+{#if error !== ""}<p id="err" class="err">{error}</p>{/if}
+{#if result !== null}
+  <p id="result">mean {result.mean} · max {result.maximum} · min {result.minimum}</p>
+{/if}
+
+<p><a href="/">← Home</a></p>

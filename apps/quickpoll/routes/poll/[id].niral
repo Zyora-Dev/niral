@@ -1,0 +1,102 @@
+<server>
+export async function load({ params }) {
+  const polls = await projectImport("lib/polls.js")
+  const poll = polls.getPoll(params.id)
+  if (!poll) return { poll: null }
+  const { counts, total } = polls.results(params.id)
+  const voter = session.get("voter")
+  return {
+    poll: { id: poll.id, question: poll.question, options: poll.options, is_open: poll.is_open },
+    counts,
+    total,
+    myVote: voter ? polls.myVote(params.id, voter) : null,
+  }
+}
+
+export async function castVote(pollId, optionIdx) {
+  let voter = session.get("voter")
+  if (!voter) {
+    voter = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+    session.set("voter", voter) // anonymous but stable — one vote per browser, revoting moves it
+  }
+  const polls = await projectImport("lib/polls.js")
+  const res = polls.vote(pollId, voter, optionIdx)
+  publish("poll:" + pollId, { counts: res.counts, total: res.total }) // every open tab updates LIVE
+  return { ...res, myVote: optionIdx }
+}
+</server>
+
+<script>
+  let { poll, counts, total, myVote } = $props
+  let tally = $state(counts ?? [])
+  let sum = $state(total ?? 0)
+  let mine = $state(myVote)
+  let open = $state(poll ? poll.is_open : false)
+  let err = $state("")
+
+  if (poll && typeof window !== "undefined") {
+    live("poll:" + poll.id, (msg) => {
+      if (msg.closed !== undefined) { open = !msg.closed; return }
+      tally = msg.counts
+      sum = msg.total
+    })
+  }
+
+  async function pick(i) {
+    err = ""
+    try {
+      const res = await castVote(poll.id, i)
+      tally = res.counts
+      sum = res.total
+      mine = res.myVote
+    } catch (e) {
+      err = e.message.replace(/^rpc \w+: /, "")
+    }
+  }
+  function pct(i) {
+    return sum === 0 ? 0 : Math.round((tally[i] / sum) * 100)
+  }
+</script>
+
+<head>
+  <title>QuickPoll</title>
+</head>
+
+<main>
+  {#if poll === null}
+    <h1>Poll not found</h1>
+    <p class="dim"><a href="/">← QuickPoll</a></p>
+  {:else}
+    <p class="dim"><a href="/">QuickPoll</a> · {sum} vote{sum === 1 ? "" : "s"} · updates live</p>
+    <h1>{poll.question}</h1>
+    {#if !open}<p class="closed" transition:fade>This poll is closed — results are final.</p>{/if}
+
+    <div class="options">
+      {#for opt, i of poll.options key i}
+        <button class={mine === i ? "opt picked" : "opt"} on:click={() => pick(i)} disabled={!open}>
+          <span class="label">{opt} {mine === i ? "✓" : ""}</span>
+          <span class="bar" style:width={pct(i) + "%"}></span>
+          <span class="nums">{tally[i]} · {pct(i)}%</span>
+        </button>
+      {/for}
+    </div>
+    {#if err}<p class="err" transition:fade>{err}</p>{/if}
+    {#if mine !== null && open}<p class="dim">You can change your vote — it moves, never duplicates.</p>{/if}
+  {/if}
+</main>
+
+<style>
+  main { max-width: 560px; margin: 3rem auto; font-family: system-ui, sans-serif; line-height: 1.5; padding: 0 1rem; }
+  h1 { margin: .2rem 0 1.2rem; }
+  .dim { color: #777; font-size: .9rem; }
+  .closed { color: #b45309; font-size: .95rem; }
+  .options { display: flex; flex-direction: column; gap: .6rem; }
+  .opt { position: relative; overflow: hidden; text-align: left; padding: .8rem 1rem; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; }
+  .opt:disabled { cursor: default; }
+  .opt.picked { border-color: #111; }
+  .label, .nums { position: relative; z-index: 1; }
+  .nums { color: #666; font-size: .88rem; }
+  .bar { position: absolute; inset: 0 auto 0 0; background: #e8f0fe; transition: width .45s cubic-bezier(.2,.8,.2,1); z-index: 0; }
+  .picked .bar { background: #dbeafe; }
+  .err { color: #c0392b; }
+</style>

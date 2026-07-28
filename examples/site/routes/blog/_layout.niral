@@ -1,0 +1,6 @@
+<style>
+  .blog-crumb { background: #121a16; border: 1px solid #1f3a2e; border-radius: 10px; padding: .5rem .9rem; color: #34d399; font-size: .85rem; margin-bottom: 1.4rem; }
+</style>
+
+<div class="blog-crumb" id="blog-crumb">📝 Blog — nested layout (routes/blog/_layout.niral)</div>
+<slot />

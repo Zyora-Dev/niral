@@ -1,0 +1,17 @@
+# build artifacts
+dist/
+.niral/
+
+# runtime data — sqlite databases, sessions, jobs (never commit user data)
+data/
+
+# bench-only dependencies (the framework itself has none)
+node_modules/
+
+# secrets NEVER enter git
+.env
+*.env
+app.env
+
+# OS noise
+.DS_Store

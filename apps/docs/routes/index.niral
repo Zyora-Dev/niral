@@ -1,0 +1,263 @@
+<script mode="static">
+  const demo = "&lt;server&gt;\n<span class='k'>export async function</span> <span class='f'>load</span>() {\n  <span class='k'>return</span> { items: <span class='k'>await</span> db.all() }          <span class='c'>// SSR data — never ships</span>\n}\n<span class='k'>export async function</span> <span class='f'>add</span>(text) {\n  <span class='f'>publish</span>(\"todos\", { text })                <span class='c'>// realtime to every tab</span>\n}\n&lt;/server&gt;\n\n&lt;script&gt;\n  <span class='k'>let</span> { items } = <span class='r'>$props</span>\n  <span class='k'>let</span> list = <span class='r'>$state</span>(items)\n  <span class='f'>live</span>(\"todos\", (t) =&gt; list = [...list, t])\n&lt;/script&gt;\n\n{#for t of list key t.id}\n  &lt;li transition:fade&gt;{t.text}&lt;/li&gt;\n{/for}"
+</script>
+
+<head>
+  <title>நிரல் · Niral — the zero-dependency full-stack framework</title>
+  <meta name="description" content="Niral: compiler-first full-stack web framework. Svelte-class performance, Rails-class features, zero dependencies. By ZyoraLabs." />
+</head>
+
+<main>
+  <nav class="nav">
+    <a class="mark" href="/"><span class="mark-glyph">நி</span><span class="mark-name">niral</span></a>
+    <div class="nav-links">
+      <a href="/docs/getting-started">Docs</a>
+      <a href="/docs/benchmarks">Benchmarks</a>
+      <a href="/docs/cli">CLI</a>
+      <a class="nav-cta" href="/docs/getting-started">Get started</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="glow"></div>
+    <p class="badge">v0.1 · zero dependencies · reproducible benchmarks</p>
+    <p class="tamil">நிரல்</p>
+    <h1>The full-stack framework<br />with <em>zero</em> dependencies.</h1>
+    <p class="sub">
+      Compiler-first components. Fine-grained reactivity. SSR at Svelte speed —
+      served <b>7.5× faster than Next.js</b>. Auth, jobs, realtime, AI and
+      deploys built in, not bolted on. <b>node_modules not required.</b>
+    </p>
+    <div class="cta">
+      <code class="install"><span class="prompt">$</span> niral create my-app</code>
+      <a class="btn" href="/docs/getting-started">Get started →</a>
+    </div>
+    <p class="hero-note">One command. SSR, hydration, a server RPC and tests — running in seconds.</p>
+  </section>
+
+  <section class="numbers">
+    <div class="num"><b>2,200<i>/s</i></b><span>requests served, dynamic SSR — 7.5× Next.js, 3.8× SvelteKit</span></div>
+    <div class="num"><b>6.6<i>ms</i></b><span>hydration for 1000 rows — ties Svelte, 3× faster than React</span></div>
+    <div class="num"><b>0.2<i>s</i></b><span>production builds — atomic releases, one-symlink rollback</span></div>
+    <div class="num"><b>0</b><span>dependencies — the entire framework is Node stdlib</span></div>
+  </section>
+
+  <section class="code-demo">
+    <h2>One file. Whole feature.</h2>
+    <p class="section-sub">Data loading, a server function, realtime fan-out and an animated list — this is the complete source.</p>
+    <div class="window">
+      <div class="window-bar">
+        <span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span>
+        <span class="window-title">routes/todos.niral</span>
+      </div>
+      <pre><code>{@html demo}</code></pre>
+    </div>
+  </section>
+
+  <section class="pipeline">
+    <h2>From idea to production, one tool.</h2>
+    <div class="steps">
+      <div class="step"><code>niral create</code><span>scaffolded app with SSR, RPC & tests</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><code>niral dev</code><span>HMR, error overlays, live channels</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><code>niral test</code><span>boots your real app, CI-ready</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><code>niral deploy</code><span>systemd + nginx + atomic releases</span></div>
+    </div>
+    <p class="pipeline-note">Plus <a href="/docs/cli">doctor · migrate · check · export</a> — and graceful drains on every restart, so a deploy never drops a request.</p>
+  </section>
+
+  <section class="grid-section">
+    <h2>Batteries included. Actually included.</h2>
+    <p class="section-sub">Everything below ships in the framework or scaffolds into code you own — never an npm install.</p>
+    <div class="grid">
+      <a class="card" href="/docs/server"><b>Server functions</b><span>RPC with compile-time stubs, streaming responses, form actions that work without JS.</span></a>
+      <a class="card" href="/docs/auth"><b>Auth built in</b><span>Passkeys, TOTP 2FA, OAuth, route guards — scaffolded into your project, zero deps.</span></a>
+      <a class="card" href="/docs/realtime"><b>Realtime</b><span>Live channels on framework-owned WebSockets, with session-aware guards.</span></a>
+      <a class="card" href="/docs/ai"><b>AI-native</b><span>ai.chat / stream / embed against any OpenAI-compatible endpoint. RAG included. Fully-local option.</span></a>
+      <a class="card" href="/docs/jobs"><b>Jobs & cron</b><span>Durable queue that survives deploys. Retries, backoff, dead-letters — no Redis.</span></a>
+      <a class="card" href="/docs/server"><b>Polyglot backends</b><span>Write server blocks in Python, Ruby or Go — same file, same sessions, same RPC.</span></a>
+      <a class="card" href="/docs/typescript"><b>Real TypeScript</b><span>niral check drives the actual TS compiler — diagnostics map to your .niral lines.</span></a>
+      <a class="card" href="/docs/deployment"><b>Atomic deploys</b><span>Hashed releases, one-symlink rollback, security headers and CSP nonces by default.</span></a>
+    </div>
+  </section>
+
+  <section class="bench">
+    <h2>Measured, not marketed.</h2>
+    <p class="section-sub">Production servers, real HTTP, dynamic SSR on every request — the same 1000-row page, 100 connections. <a href="/docs/benchmarks">Full methodology →</a></p>
+    <div class="bars">
+      <div class="bar-row"><span class="bar-label">niral</span><div class="bar-track"><div class="bar b-niral" style="width: 100%"></div></div><span class="bar-val">2,200 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">sveltekit</span><div class="bar-track"><div class="bar b-other" style="width: 26%"></div></div><span class="bar-val">580 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">next.js</span><div class="bar-track"><div class="bar b-other" style="width: 13%"></div></div><span class="bar-val">290 req/s</span></div>
+    </div>
+    <p class="bench-note">Zero errors, every framework, every run. The bench is in the repo — run it yourself.</p>
+  </section>
+
+  <section class="philosophy">
+    <div class="phil">
+      <b>Compiler, not runtime</b>
+      <span>Components compile to direct DOM instructions and string-concat SSR. No virtual DOM, no diffing — the work happens once, at build time.</span>
+    </div>
+    <div class="phil">
+      <b>Nothing to trust but your own repo</b>
+      <span>Zero dependencies means no supply chain, no audits, no upstream breakage. Every line that runs is a line you can read.</span>
+    </div>
+    <div class="phil">
+      <b>Secrets can't escape</b>
+      <span>Reading env vars in client code is a compile error. Env files never build, never serve, never commit, never sync on deploy.</span>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <p class="tamil-sm">நிரல் · "program" in Tamil</p>
+    <h2>Start with one command.</h2>
+    <div class="cta">
+      <code class="install"><span class="prompt">$</span> niral create my-app</code>
+      <a class="btn" href="/docs/getting-started">Read the docs →</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <p class="footer-mark"><span class="mark-glyph">நி</span> niral</p>
+        <p class="footer-tag">The zero-dependency full-stack framework.<br />Built in India. Made for everyone.</p>
+      </div>
+      <div class="footer-col">
+        <b>Learn</b>
+        <a href="/docs/getting-started">Getting started</a>
+        <a href="/docs/components">Components</a>
+        <a href="/docs/server">Server functions</a>
+        <a href="/docs/deployment">Deployment</a>
+      </div>
+      <div class="footer-col">
+        <b>Framework</b>
+        <a href="/docs/benchmarks">Benchmarks</a>
+        <a href="/docs/cli">CLI reference</a>
+        <a href="/docs/auth">Auth</a>
+        <a href="/docs/ai">AI & RAG</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 · Powered by <a class="zyora" href="https://zyoralabs.com">ZyoraLabs</a></span>
+      <span class="footer-dot">·</span>
+      <span>நிரல் — every line readable, every claim reproducible</span>
+    </div>
+  </footer>
+</main>
+
+<style>
+  :global(body) { margin: 0; background: #0b0d10; color: #e8eaed; }
+  main { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.6; }
+  section { max-width: 920px; margin: 0 auto; padding: 3.4rem 1.4rem; }
+  h2 { font-size: 1.7rem; letter-spacing: -.015em; text-align: center; margin: 0 0 .5rem; }
+  .section-sub { text-align: center; color: #9aa3ad; max-width: 560px; margin: 0 auto 2rem; font-size: .97rem; }
+  .section-sub a { color: #34d399; text-decoration: none; }
+
+  /* nav */
+  .nav { max-width: 980px; margin: 0 auto; padding: 1.1rem 1.4rem; display: flex; justify-content: space-between; align-items: center; }
+  .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
+  .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
+  .mark-name { color: #e8eaed; font-weight: 650; letter-spacing: .01em; }
+  .nav-links { display: flex; align-items: center; gap: 1.3rem; }
+  .nav-links a { color: #9aa3ad; text-decoration: none; font-size: .92rem; transition: color .15s; }
+  .nav-links a:hover { color: #e8eaed; }
+  .nav-cta { background: #14181d; border: 1px solid #262c33; border-radius: 9px; padding: .42rem .9rem; color: #7ee2b8 !important; }
+  .nav-cta:hover { border-color: #34d399; }
+
+  /* hero */
+  .hero { text-align: center; padding-top: 4.6rem; position: relative; }
+  .glow { position: absolute; inset: -8rem 0 auto; height: 26rem; background: radial-gradient(ellipse 60% 55% at 50% 20%, rgba(52, 211, 153, .13), transparent 70%); pointer-events: none; }
+  .badge { display: inline-block; background: #11151a; border: 1px solid #232930; border-radius: 999px; padding: .3rem .95rem; font-size: .78rem; color: #9aa3ad; letter-spacing: .03em; margin: 0 0 1.4rem; }
+  .tamil { font-size: 2.7rem; margin: 0; background: linear-gradient(120deg, #34d399, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .05em; }
+  h1 { font-size: 3.1rem; line-height: 1.12; margin: .6rem 0 1.1rem; letter-spacing: -.025em; }
+  h1 em { font-style: normal; background: linear-gradient(120deg, #34d399, #0ea5e9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: #9aa3ad; max-width: 640px; margin: 0 auto 2.1rem; font-size: 1.08rem; }
+  .sub b { color: #cdd3da; }
+  .cta { display: flex; gap: .9rem; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .install { background: #14181d; border: 1px solid #262c33; border-radius: 11px; padding: .74rem 1.15rem; font-size: .95rem; color: #7ee2b8; }
+  .prompt { color: #5f6b76; margin-right: .5rem; }
+  .btn { background: #34d399; color: #04120b; padding: .74rem 1.35rem; border-radius: 11px; font-weight: 650; text-decoration: none; transition: transform .12s, box-shadow .12s; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(52, 211, 153, .25); }
+  .hero-note { color: #5f6b76; font-size: .84rem; margin-top: 1.2rem; }
+
+  /* stat tiles */
+  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+  .num { background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.35rem 1.2rem; text-align: center; transition: border-color .15s, transform .15s; }
+  .num:hover { border-color: #2c3742; transform: translateY(-2px); }
+  .num b { display: block; font-size: 2rem; color: #34d399; letter-spacing: -.02em; }
+  .num b i { font-style: normal; font-size: 1.05rem; color: #6ee7b7; }
+  .num span { color: #9aa3ad; font-size: .85rem; display: block; margin-top: .3rem; }
+
+  /* code window */
+  .window { background: #0e1115; border: 1px solid #232930; border-radius: 15px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .35); }
+  .window-bar { display: flex; align-items: center; gap: .42rem; padding: .68rem 1rem; border-bottom: 1px solid #1b2027; background: #11151a; }
+  .dot { width: .68rem; height: .68rem; border-radius: 50%; }
+  .d1 { background: #f6726f; } .d2 { background: #f5bd4f; } .d3 { background: #55ca62; }
+  .window-title { margin-left: .6rem; color: #5f6b76; font-size: .8rem; font-family: ui-monospace, monospace; }
+  pre { margin: 0; padding: 1.25rem 1.4rem; overflow-x: auto; font-size: .88rem; line-height: 1.6; }
+  code { color: #d7dde3; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  pre :global(.c) { color: #5f6b76; font-style: italic; }
+  pre :global(.k) { color: #7aa2f7; }
+  pre :global(.f) { color: #e0af68; }
+  pre :global(.r) { color: #34d399; font-weight: 500; }
+
+  /* pipeline */
+  .steps { display: flex; align-items: stretch; justify-content: center; gap: .7rem; flex-wrap: wrap; margin-top: 1.6rem; }
+  .step { background: #11151a; border: 1px solid #232930; border-radius: 13px; padding: .95rem 1.1rem; min-width: 165px; text-align: center; }
+  .step code { display: block; color: #7ee2b8; font-size: .9rem; margin-bottom: .25rem; }
+  .step span { color: #9aa3ad; font-size: .78rem; }
+  .arrow { align-self: center; color: #34d399; font-size: 1.1rem; }
+  .pipeline-note { text-align: center; color: #9aa3ad; font-size: .88rem; margin-top: 1.5rem; }
+  .pipeline-note a { color: #34d399; text-decoration: none; }
+
+  /* feature grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+  .card { background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.2rem 1.25rem; text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; }
+  .card:hover { border-color: #34d399; transform: translateY(-2px); }
+  .card b { display: block; margin-bottom: .3rem; color: #e8eaed; }
+  .card span { color: #9aa3ad; font-size: .88rem; }
+
+  /* benchmark bars */
+  .bars { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: .85rem; }
+  .bar-row { display: grid; grid-template-columns: 88px 1fr 110px; align-items: center; gap: .9rem; }
+  .bar-label { color: #cdd3da; font-size: .88rem; text-align: right; }
+  .bar-track { background: #11151a; border: 1px solid #1b2027; border-radius: 999px; height: 1.05rem; overflow: hidden; }
+  .bar { height: 100%; border-radius: 999px; }
+  .b-niral { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+  .b-other { background: #2c3742; }
+  .bar-val { color: #9aa3ad; font-size: .85rem; }
+  .bench-note { text-align: center; color: #5f6b76; font-size: .84rem; margin-top: 1.6rem; }
+
+  /* philosophy */
+  .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }
+  .phil b { display: block; color: #e8eaed; margin-bottom: .4rem; font-size: 1.02rem; }
+  .phil span { color: #9aa3ad; font-size: .9rem; }
+
+  /* final cta */
+  .final-cta { text-align: center; }
+  .tamil-sm { color: #34d399; font-size: .95rem; margin: 0 0 .4rem; letter-spacing: .04em; }
+  .final-cta h2 { margin-bottom: 1.6rem; }
+
+  /* footer */
+  .footer { border-top: 1px solid #1b2027; background: #0a0c0f; margin-top: 2rem; }
+  .footer-inner { max-width: 920px; margin: 0 auto; padding: 3rem 1.4rem 2rem; display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2rem; }
+  .footer-mark { display: flex; align-items: center; gap: .55rem; font-weight: 650; margin: 0 0 .7rem; }
+  .footer-tag { color: #9aa3ad; font-size: .88rem; margin: 0; }
+  .footer-col { display: flex; flex-direction: column; gap: .45rem; }
+  .footer-col b { color: #cdd3da; font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .3rem; }
+  .footer-col a { color: #9aa3ad; text-decoration: none; font-size: .9rem; transition: color .15s; }
+  .footer-col a:hover { color: #34d399; }
+  .footer-bottom { max-width: 920px; margin: 0 auto; padding: 1.2rem 1.4rem 2rem; border-top: 1px solid #14181d; color: #5f6b76; font-size: .84rem; display: flex; gap: .6rem; flex-wrap: wrap; }
+  .zyora { color: #34d399; text-decoration: none; font-weight: 600; }
+  .zyora:hover { text-decoration: underline; }
+  .footer-dot { color: #2c3742; }
+
+  @media (max-width: 720px) {
+    h1 { font-size: 2.3rem; }
+    .footer-inner { grid-template-columns: 1fr; gap: 1.6rem; }
+    .arrow { display: none; }
+    .nav-links { gap: .9rem; }
+  }
+</style>

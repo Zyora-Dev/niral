@@ -1,0 +1,17 @@
+<script>
+  let { slug } = $props
+  let likes = $state(0)
+  let title = $derived(slug.split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" "))
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { color: #34d399; }
+  a { color: #34d399; }
+  button { background: #34d399; color: #000; border: 0; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; cursor: pointer; }
+</style>
+
+<h1 id="title">{title}</h1>
+<p>Route param <code id="slug">{slug}</code> flowed from the URL into <code>$props</code> — on the server AND the client.</p>
+<button id="like" on:click={() => likes++}>♥ {likes}</button>
+<p><a href="/">← Home</a></p>

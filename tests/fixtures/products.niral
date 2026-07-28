@@ -1,0 +1,52 @@
+<server>
+  // Runs only on the server — stripped from the client bundle.
+  export async function load({ params }) {
+    const products = [
+      { id: 1, name: "Keyboard", price: 1499 },
+      { id: 2, name: "Mouse", price: 799 },
+    ]
+    return { products }
+  }
+
+  export async function addToCart(id) {
+    // pretend session work — note the "</server>" inside this string must not confuse the parser
+    const marker = "</server>"
+    return { count: 1, marker }
+  }
+</server>
+
+<script>
+  let { products } = $props
+  let query = $state("")
+  let filtered = $derived(products.filter(p => p.name.toLowerCase().includes(query.toLowerCase())))
+
+  async function buy(p) {
+    const r = await addToCart(p.id)
+    console.log(`cart count: ${r.count}`)
+  }
+</script>
+
+<style>
+  .card { padding: 1rem; border-radius: 12px; }
+</style>
+
+<h1>Products</h1>
+<!-- search box -->
+<input bind:value={query} placeholder="Search products..." />
+
+{#if filtered.length === 0}
+  <p class="empty">No products match "{query}"</p>
+{:else if query !== ""}
+  <p>Found {filtered.length} result(s)</p>
+{:else}
+  <p>All products</p>
+{/if}
+
+{#for p, i of filtered}
+  <div class="card" data-index={i}>
+    <h3>{p.name}</h3>
+    <button on:click={() => buy(p)} disabled={p.price > 1000}>Buy · ₹{p.price}</button>
+  </div>
+{/for}
+
+<img src="/logo.png" alt="logo">

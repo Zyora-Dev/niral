@@ -1,0 +1,26 @@
+<script>
+  let year = $state(new Date().getFullYear())
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 640px; margin: 0 auto 3rem; padding: 0 1rem; }
+  .site-bar { display: flex; align-items: center; gap: 1.2rem; padding: .9rem 0; border-bottom: 1px solid #1e1e1e; margin-bottom: 2rem; }
+  .brand { font-weight: 800; color: #34d399; text-decoration: none; font-size: 1.05rem; }
+  .site-bar a { color: #bbb; text-decoration: none; font-size: .92rem; }
+  .site-bar a:hover { color: #34d399; }
+  .site-foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #1e1e1e; color: #666; font-size: .85rem; }
+</style>
+
+<header class="site-bar">
+  <a class="brand" href="/">நிரல் Niral</a>
+  <a href="/about">About</a>
+  <a href="/blog/hello-niral">Blog</a>
+  <a href="/guestbook">Guestbook</a>
+  <a href="/pylab">Python 🐍</a>
+</header>
+
+<slot />
+
+<footer class="site-foot">
+  Built with Niral — zero dependencies, compiler-first. © {year} ZyoraLabs.
+</footer>

@@ -1,0 +1,107 @@
+<server>
+export async function load({ params }) {
+  const { PAGES, GROUPS } = await projectImport("lib/content.js")
+  const { md } = await projectImport("lib/md.js")
+  const page = PAGES[params.slug]
+  if (!page) return { title: "Not found", html: "<p>No such page — pick a topic from the sidebar.</p>", prev: null, next: null, toc: [] }
+  const html = md(page.body)
+  // "On this page" — the h2s the renderer just emitted (they carry ids)
+  const toc = [...html.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/g)].map((m) => ({ id: m[1], text: m[2].replace(/<[^>]+>/g, "") }))
+  const order = GROUPS.flatMap((g) => g.slugs)
+  const i = order.indexOf(params.slug)
+  const ref = (s) => (s ? { slug: s, title: PAGES[s].title } : null)
+  return { title: page.title, html, prev: ref(order[i - 1]), next: ref(order[i + 1]), toc }
+}
+</server>
+
+<script>
+  let { title, html, prev, next, toc } = $props
+
+  // copy buttons on code blocks — injected AFTER mount (never during hydration)
+  if (typeof window !== "undefined") {
+    queueMicrotask(() => {
+      for (const pre of document.querySelectorAll("article pre")) {
+        if (pre.querySelector(".copy")) continue
+        const btn = document.createElement("button")
+        btn.className = "copy"
+        btn.textContent = "copy"
+        btn.addEventListener("click", async () => {
+          const text = pre.querySelector("code").textContent
+          try {
+            await navigator.clipboard.writeText(text)
+          } catch {
+            // clipboard API needs a secure context — fall back to a selection copy
+            const ta = document.createElement("textarea")
+            ta.value = text
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand("copy")
+            ta.remove()
+          }
+          btn.textContent = "copied ✓"
+          setTimeout(() => (btn.textContent = "copy"), 1200)
+        })
+        pre.appendChild(btn)
+      }
+    })
+  }
+</script>
+
+<head>
+  <title>{title} · நிரல் docs</title>
+</head>
+
+<div class="page">
+  <article>
+    <h1>{title}</h1>
+    {@html html}
+    <nav class="pager">
+      {#if prev}<a class="prev" href={"/docs/" + prev.slug}>← {prev.title}</a>{:else}<span></span>{/if}
+      {#if next}<a class="next" href={"/docs/" + next.slug}>{next.title} →</a>{/if}
+    </nav>
+  </article>
+
+  {#if toc.length > 1}
+    <aside class="toc">
+      <p>On this page</p>
+      {#for h of toc key h.id}
+        <a href={"#" + h.id}>{h.text}</a>
+      {/for}
+    </aside>
+  {/if}
+</div>
+
+<style>
+  .page { display: grid; grid-template-columns: minmax(0, 720px) 1fr; gap: 2.5rem; }
+  .toc { position: sticky; top: 2.4rem; align-self: start; font-size: .82rem; min-width: 150px; }
+  .toc p { color: #5b6672; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; margin: 0 0 .5rem; }
+  .toc a { display: block; color: #79838e; text-decoration: none; padding: .18rem 0 .18rem .7rem; border-left: 2px solid #191e24; transition: color .12s, border-color .12s; }
+  .toc a:hover { color: #6ee7b7; border-color: #34d399; }
+  @media (max-width: 1000px) { .toc { display: none; } .page { grid-template-columns: 1fr; } }
+
+  article { max-width: 720px; line-height: 1.7; font-size: .96rem; }
+  article :global(h1) { font-size: 2rem; letter-spacing: -.025em; margin-top: 0; font-weight: 700; }
+  article :global(h2) { margin-top: 2.2rem; font-size: 1.35rem; border-bottom: 1px solid #1d2229; padding-bottom: .35rem; }
+  article :global(h3) { margin-top: 1.6rem; font-size: 1.08rem; }
+  article :global(p) { color: #c3cad2; }
+  article :global(li) { color: #c3cad2; margin: .25rem 0; }
+  article :global(a) { color: #34d399; }
+  article :global(code) { background: #14181d; border: 1px solid #232930; border-radius: 6px; padding: .1rem .35rem; font-size: .86em; color: #7ee2b8; }
+  article :global(pre) { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.5; }
+  article :global(pre code) { background: none; border: 0; padding: 0; color: #d7dde3; font-size: .86rem; }
+  article :global(.copy) { position: absolute; top: .55rem; right: .6rem; background: #1a2027; border: 1px solid #2a313a; color: #79838e; font-size: .7rem; padding: .22rem .55rem; border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity .15s; font-family: inherit; }
+  article :global(pre:hover .copy) { opacity: 1; }
+  article :global(.copy:hover) { color: #6ee7b7; border-color: #34d39955; }
+  article :global(.tok-c) { color: #566270; font-style: italic; }
+  article :global(.tok-s) { color: #98d3b2; }
+  article :global(.tok-k) { color: #82aaff; }
+  article :global(.tok-n) { color: #eabc7a; }
+  article :global(.tok-t) { color: #f28fad; }
+  article :global(.tok-r) { color: #34d399; font-weight: 500; }
+  article :global(table) { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+  article :global(th) { text-align: left; color: #9aa3ad; font-weight: 600; border-bottom: 1px solid #2a313a; padding: .45rem .6rem; }
+  article :global(td) { border-bottom: 1px solid #1d2229; padding: .45rem .6rem; color: #c3cad2; }
+  article :global(b) { color: #e8eaed; }
+  .pager { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #1d2229; }
+  .pager a { color: #34d399; text-decoration: none; }
+</style>

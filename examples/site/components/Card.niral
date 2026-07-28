@@ -1,0 +1,8 @@
+<script>
+  let { title, tone } = $props
+</script>
+
+<div class={tone === "accent" ? "card card-accent" : "card"}>
+  {#if title}<h3 class="card-title">{title}</h3>{/if}
+  <slot />
+</div>

@@ -1,0 +1,33 @@
+<script>
+  import Card from "../components/Card.niral"
+
+  let visits = $state(0)
+  let name = $state("")
+  let greeting = $derived(name.trim() === "" ? "friend" : name.trim())
+</script>
+
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #eee; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { color: #34d399; }
+  nav a { color: #34d399; margin-right: 1rem; }
+  .card { border: 1px solid #262626; border-radius: 14px; padding: 1.2rem 1.4rem; margin: 1.2rem 0; }
+  .card-accent { border-color: #34d399; }
+  .card-title { margin: 0 0 .6rem; color: #34d399; }
+  button { background: #34d399; color: #000; border: 0; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; cursor: pointer; }
+  input { background: #161616; border: 1px solid #333; color: #eee; border-radius: 9px; padding: .5rem .8rem; }
+</style>
+
+<h1>Niral Site</h1>
+<p class="sub">The nav above and footer below come from <code>routes/_layout.niral</code> — every page gets them for free.</p>
+
+<Card title="Say hello" tone="accent">
+  <p id="greet">Hello, {greeting}! This page was <b>server-rendered</b> and then hydrated.</p>
+  <input id="name" bind:value={name} placeholder="Your name" />
+</Card>
+
+<Card title="Reactivity">
+  <button id="visit" on:click={() => visits++}>Clicked {visits} times</button>
+  {#if visits > 2}
+    <p id="fan">You really like this button.</p>
+  {/if}
+</Card>

@@ -1,0 +1,9 @@
+dist/
+data/
+.niral/
+node_modules/
+
+# secrets NEVER enter git
+.env
+*.env
+app.env

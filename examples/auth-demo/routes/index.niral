@@ -1,0 +1,3 @@
+<script>let { user } = $props</script>
+<h1>Home</h1>
+{#if user}<p id="who">Signed in as {user.name}</p>{:else}<p><a href="/auth/login">Sign in</a></p>{/if}

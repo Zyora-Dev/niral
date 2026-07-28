@@ -1,0 +1,12 @@
+{
+  "name": "niral-hydration-bench",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible hydration head-to-head: Niral vs React vs Svelte. Competitor deps live HERE — the framework itself has none.",
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "svelte": "^5.0.0",
+    "esbuild": "^0.24.0"
+  }
+}

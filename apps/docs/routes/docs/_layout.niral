@@ -1,0 +1,206 @@
+<server>
+export async function load({ params }) {
+  const { GROUPS, PAGES } = await projectImport("lib/content.js")
+  return {
+    current: params.slug ?? "",
+    nav: GROUPS.map((g) => ({ name: g.name, items: g.slugs.map((s) => ({ slug: s, title: PAGES[s].title })) })),
+  }
+}
+
+// full-text search over every doc page — title > heading > body, with a snippet
+export async function searchDocs(q) {
+  const query = String(q ?? "").trim().toLowerCase()
+  if (query.length < 2) return []
+  const { PAGES } = await projectImport("lib/content.js")
+  const { plainText } = await projectImport("lib/md.js")
+  const hits = []
+  for (const [slug, page] of Object.entries(PAGES)) {
+    const title = page.title.toLowerCase()
+    const headings = [...page.body.matchAll(/^#{1,4}\s+(.*)$/gm)].map((m) => m[1])
+    const text = plainText(page.body)
+    const lower = text.toLowerCase()
+    let score = 0
+    if (title.includes(query)) score += 100
+    const heading = headings.find((h) => h.toLowerCase().includes(query))
+    if (heading) score += 40
+    const at = lower.indexOf(query)
+    if (at !== -1) score += 10
+    if (!score) continue
+    const from = Math.max(0, at === -1 ? 0 : at - 40)
+    const snippet = (from > 0 ? "…" : "") + text.slice(from, from + 110).trim() + "…"
+    hits.push({ slug, title: page.title, heading: heading ?? null, snippet, score })
+  }
+  return hits.sort((a, b) => b.score - a.score).slice(0, 8)
+}
+</server>
+
+<script>
+  let { nav, current } = $props
+  let q = $state("")
+  let results = $state([])
+  let searching = $state(false)
+  let timer = null
+
+  function onSearch(value) {
+    q = value
+    clearTimeout(timer)
+    if (value.trim().length < 2) { results = []; searching = false; return }
+    searching = true
+    timer = setTimeout(async () => {
+      try { results = await searchDocs(value) } catch { results = [] }
+      searching = false
+    }, 150)
+  }
+  function clearSearch() { q = ""; results = []; searching = false }
+</script>
+
+<div class="wrap">
+  <aside>
+    <a class="brand" href="/">
+      <span class="mark">நி</span>
+      <span class="name">niral <em>docs</em></span>
+    </a>
+
+    <div class="search">
+      <input value={q} on:input={(e) => onSearch(e.target.value)} placeholder="Search docs…" />
+      {#if q.trim().length >= 2}
+        <div class="results" transition:fade>
+          {#if searching}
+            <p class="hint">searching…</p>
+          {:else if results.length === 0}
+            <p class="hint">no matches for “{q}”</p>
+          {:else}
+            {#for r of results key r.slug}
+              <a class="result" href={"/docs/" + r.slug} on:click={clearSearch}>
+                <b>{r.title}</b>{#if r.heading}<span class="sec"> › {r.heading}</span>{/if}
+                <span class="snippet">{r.snippet}</span>
+              </a>
+            {/for}
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <nav>
+      {#for g of nav key g.name}
+        <p class="group">{g.name}</p>
+        {#for item of g.items key item.slug}
+          <a class={item.slug === current ? "navlink active" : "navlink"} href={"/docs/" + item.slug}>
+            <span class="tick"></span>{item.title}
+          </a>
+        {/for}
+      {/for}
+    </nav>
+
+    <div class="aside-foot">
+      <a href="/">← home</a>
+      <span class="v">v0.1 · zero deps</span>
+    </div>
+  </aside>
+
+  <div class="content">
+    <slot />
+  </div>
+</div>
+
+<style>
+  :global(body) { margin: 0; background: #0b0d10; color: #e8eaed; }
+  :global(::selection) { background: #34d39933; }
+  .wrap {
+    display: grid; grid-template-columns: 250px 1fr;
+    max-width: 1100px; margin: 0 auto; min-height: 100vh;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  aside {
+    display: flex; flex-direction: column;
+    border-right: 1px solid #191e24;
+    padding: 1.5rem 1rem 1.2rem;
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; box-sizing: border-box; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: #232930 transparent;
+  }
+  nav { flex: 1; }
+
+  .brand {
+    display: flex; align-items: center; gap: .6rem;
+    text-decoration: none; margin: 0 .4rem 1.6rem;
+  }
+  .mark {
+    display: grid; place-items: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #10b981, #34d399);
+    color: #04120b; font-weight: 700; font-size: .95rem;
+  }
+  .name { color: #e8eaed; font-weight: 650; letter-spacing: -.01em; }
+  .name em { color: #6b7681; font-style: normal; font-weight: 450; }
+
+  .search { position: relative; margin: 0 .1rem 1rem; }
+  .search input {
+    width: 100%; box-sizing: border-box;
+    background: #12161b; border: 1px solid #232930; border-radius: 9px;
+    padding: .5rem .7rem; color: #e8eaed; font-size: .86rem; font-family: inherit;
+    outline: none; transition: border-color .15s;
+  }
+  .search input:focus { border-color: #34d39966; }
+  .search input::placeholder { color: #5b6672; }
+  .results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: -40px; z-index: 20;
+    background: #12161b; border: 1px solid #2a313a; border-radius: 12px;
+    box-shadow: 0 12px 40px #0009; overflow: hidden; max-height: 60vh; overflow-y: auto;
+  }
+  .hint { color: #6b7681; font-size: .82rem; padding: .7rem .9rem; margin: 0; }
+  .result {
+    display: block; padding: .6rem .9rem; text-decoration: none;
+    border-bottom: 1px solid #191e24;
+  }
+  .result:last-child { border-bottom: 0; }
+  .result:hover { background: #10b98111; }
+  .result b { color: #e8eaed; font-size: .87rem; font-weight: 600; }
+  .result .sec { color: #34d399; font-size: .8rem; }
+  .result .snippet { display: block; color: #79838e; font-size: .78rem; margin-top: .15rem; line-height: 1.45; }
+
+  .group {
+    color: #5b6672; font-size: .68rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .14em;
+    margin: 1.5rem .55rem .45rem;
+  }
+  .navlink {
+    position: relative;
+    display: flex; align-items: center; gap: .55rem;
+    color: #9aa3ad; text-decoration: none;
+    padding: .36rem .55rem; margin: 1px 0;
+    border-radius: 8px; font-size: .9rem; font-weight: 450;
+    transition: color .12s, background .12s;
+  }
+  .tick {
+    width: 4px; height: 4px; border-radius: 99px;
+    background: #2a313a; transition: all .15s; flex: none;
+  }
+  .navlink:hover { background: #12161b; color: #dfe4e9; }
+  .navlink:hover .tick { background: #4b5560; }
+  .navlink.active {
+    background: #10b98114; color: #6ee7b7; font-weight: 550;
+  }
+  .navlink.active .tick {
+    background: #34d399; height: 16px; width: 3px; border-radius: 3px;
+    box-shadow: 0 0 10px #34d39966;
+  }
+
+  .aside-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 1.4rem .55rem 0; padding-top: 1rem;
+    border-top: 1px solid #191e24; font-size: .78rem;
+  }
+  .aside-foot a { color: #9aa3ad; text-decoration: none; }
+  .aside-foot a:hover { color: #34d399; }
+  .v { color: #5b6672; }
+
+  .content { padding: 2.4rem 2.6rem 4.5rem; min-width: 0; }
+
+  @media (max-width: 760px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid #191e24; }
+    .content { padding: 1.6rem 1.2rem 3rem; }
+  }
+</style>

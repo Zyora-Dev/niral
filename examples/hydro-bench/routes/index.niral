@@ -1,0 +1,19 @@
+<server>
+export async function load() {
+  return { items: Array.from({ length: 1000 }, (_, i) => ({ id: i, text: "row item number " + i, done: i % 3 === 0 })) }
+}
+</server>
+<script>
+  let { items } = $props
+  let list = $state(items)
+  let clicks = $state(0)
+  if (typeof window !== "undefined") {
+    queueMicrotask(() => { window.__hydrated = performance.now() })
+  }
+</script>
+<h1 on:click={() => clicks++}>Rows {list.length} · clicks {clicks}</h1>
+<ul>
+  {#for t of list key t.id}
+    <li class:done={t.done}>{t.id}: {t.text}</li>
+  {/for}
+</ul>

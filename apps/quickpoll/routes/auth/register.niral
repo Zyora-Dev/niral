@@ -1,0 +1,30 @@
+<server>
+export async function register(form) {
+  const { createUser, findUserByEmail } = await projectImport("lib/users.js");
+  const email = String(form.email ?? "").toLowerCase().trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "That email doesn't look right." };
+  if (!form.name?.trim()) return { error: "Name is required." };
+  if (String(form.password ?? "").length < 8) return { error: "Passwords need at least 8 characters." };
+  if (findUserByEmail(email)) return { error: "An account with that email already exists." };
+  const u = createUser({ email, name: form.name.trim(), passwordHash: auth.hashPassword(String(form.password)) });
+  auth.login(u);
+  return { redirect: "/auth/account" };
+}
+</server>
+<script>let { form } = $props</script>
+<head><title>Create account</title></head>
+
+<h1>Create account</h1>
+{#if form?.error}<p class="error">{form.error}</p>{/if}
+<form method="post" action="?/register">
+  <label>Name <input name="name" required /></label>
+  <label>Email <input name="email" type="email" required /></label>
+  <label>Password <input name="password" type="password" minlength="8" required /></label>
+  <button>Create account</button>
+</form>
+<p><a href="/auth/login">Already have an account?</a></p>
+
+<style>
+  .error { color: #c00 }
+  label { display: block; margin: 0.5rem 0 }
+</style>

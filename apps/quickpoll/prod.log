@@ -1,0 +1,13 @@
+niral · serving release fd7a22004690 at http://localhost:5311
+{"t":"2026-07-27T17:08:13.006Z","level":"info","msg":"request","req":"a2e80855","method":"GET","path":"/","status":303,"ms":4.1}
+{"t":"2026-07-27T17:08:13.017Z","level":"info","msg":"request","req":"da145c9a","method":"GET","path":"/@niral/health","status":200,"ms":0.8}
+(node:1775) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"t":"2026-07-27T17:08:13.036Z","level":"info","msg":"request","req":"41fe1072","method":"GET","path":"/poll/4a2f9d39","status":200,"ms":10.3}
+{"t":"2026-07-27T17:08:29.157Z","level":"info","msg":"request","req":"bf4b5649","method":"GET","path":"/","status":200,"ms":7.8}
+{"t":"2026-07-27T17:08:29.176Z","level":"info","msg":"request","req":"24d9efb4","method":"GET","path":"/assets/fd7a22004690/@niral/runtime/router.js","status":200,"ms":1.4}
+{"t":"2026-07-27T17:08:29.180Z","level":"info","msg":"request","req":"1bf24700","method":"GET","path":"/assets/fd7a22004690/@niral/runtime/index.js","status":200,"ms":3.2}
+{"t":"2026-07-27T17:08:29.187Z","level":"info","msg":"request","req":"d8a293cf","method":"GET","path":"/assets/fd7a22004690/routes/index.js","status":200,"ms":5.6}
+{"t":"2026-07-27T17:08:29.195Z","level":"warn","msg":"request","req":"89c8a495","method":"GET","path":"/favicon.ico","status":404,"ms":0.8}
+{"t":"2026-07-27T17:08:29.211Z","level":"info","msg":"request","req":"c33c0d24","method":"GET","path":"/poll/4a2f9d39","status":200,"ms":1}
+{"t":"2026-07-27T17:08:29.219Z","level":"info","msg":"request","req":"112ab0b7","method":"GET","path":"/assets/fd7a22004690/routes/poll/[id].js","status":200,"ms":2.2}

@@ -1,0 +1,46 @@
+{
+  "name": "niral-vscode",
+  "displayName": "Niral (நிரல்)",
+  "description": "Language support for the Niral framework — syntax highlighting, diagnostics, completions and hover docs for .niral components.",
+  "version": "0.1.0",
+  "publisher": "zyoralabs",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Programming Languages"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "niral",
+        "aliases": ["Niral", "niral"],
+        "extensions": [".niral"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "niral",
+        "scopeName": "source.niral",
+        "path": "./syntaxes/niral.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.javascript": "javascript",
+          "meta.embedded.block.python": "python",
+          "meta.embedded.block.ruby": "ruby",
+          "meta.embedded.block.go": "go",
+          "meta.embedded.block.css": "css",
+          "meta.embedded.expression.javascript": "javascript"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Niral",
+      "properties": {
+        "niral.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the niral CLI (bin/niral.js). Leave empty to auto-detect from node_modules or a sibling checkout."
+        }
+      }
+    }
+  }
+}

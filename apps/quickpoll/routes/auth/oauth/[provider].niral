@@ -1,0 +1,57 @@
+<server>
+// /auth/oauth/[provider] — GET = start (redirect out), ?/callback comes back.
+// Configure providers with env vars: NIRAL_OAUTH_GOOGLE_ID / _SECRET, etc.
+export async function load({ params }) {
+  return { provider: params.provider };
+}
+
+export async function start(form) {
+  const redirectUri = form.origin + "/auth/oauth/" + form.provider;
+  const { url, state, verifier } = auth.oauth.start(form.provider, { redirectUri });
+  session.set("oauth", { state, verifier, redirectUri, provider: form.provider });
+  return { redirect: url };
+}
+
+export async function finish(payload) {
+  const { findOrCreateOauthUser } = await projectImport("lib/users.js");
+  const saved = session.get("oauth");
+  session.delete("oauth");
+  if (!saved || saved.provider !== payload.provider) throw new Error("no sign-in in progress");
+  const profile = await auth.oauth.callback(payload.provider, { code: payload.code, state: payload.state }, {
+    state: saved.state,
+    verifier: saved.verifier,
+    redirectUri: saved.redirectUri,
+  });
+  auth.login(findOrCreateOauthUser(profile));
+  return { ok: true };
+}
+</server>
+<script>
+  let { provider } = $props
+  let msg = $state("Completing sign-in…")
+
+  // the provider redirected back with ?code&state — finish over RPC, then go home
+  const q = new URLSearchParams(location.search)
+  if (q.get("code")) {
+    finish({ provider, code: q.get("code"), state: q.get("state") })
+      .then(() => { location.href = "/" })
+      .catch((e) => { msg = "Sign-in failed: " + e.message })
+  } else {
+    msg = "Redirecting…"
+    // kick off the flow via the form action (it 303s to the provider)
+    const f = document.createElement("form")
+    f.method = "post"
+    f.action = "/auth/oauth/" + encodeURIComponent(provider) + "?/start"
+    const add = (n, v) => {
+      const i = document.createElement("input")
+      i.type = "hidden"; i.name = n; i.value = v
+      f.appendChild(i)
+    }
+    add("provider", provider)
+    add("origin", location.origin)
+    document.body.appendChild(f)
+    f.submit()
+  }
+</script>
+<head><title>Signing in…</title></head>
+<p>{msg}</p>

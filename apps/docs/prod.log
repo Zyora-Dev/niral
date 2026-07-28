@@ -1,0 +1,4 @@
+niral · serving release 6b6e4c446364 at http://localhost:5321
+{"t":"2026-07-27T17:18:59.555Z","level":"info","msg":"request","req":"bfdc4c8e","method":"GET","path":"/","status":200,"ms":6.3}
+{"t":"2026-07-27T17:18:59.571Z","level":"info","msg":"request","req":"f90c1d7d","method":"GET","path":"/docs/getting-started","status":200,"ms":7.1}
+{"t":"2026-07-27T17:18:59.581Z","level":"info","msg":"request","req":"b27f1fe9","method":"GET","path":"/docs/benchmarks","status":200,"ms":1.1}

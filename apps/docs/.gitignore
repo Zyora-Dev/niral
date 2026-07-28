@@ -1,0 +1,8 @@
+dist/
+data/
+.niral/
+
+# secrets NEVER enter git
+.env
+*.env
+app.env

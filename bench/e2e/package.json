@@ -1,0 +1,17 @@
+{
+  "name": "niral-bench-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end production-server benchmark: niral vs Next.js vs SvelteKit. Bench-only deps — the framework itself stays zero-dep.",
+  "dependencies": {
+    "@sveltejs/adapter-node": "^5",
+    "@sveltejs/kit": "^2",
+    "@sveltejs/vite-plugin-svelte": "^5",
+    "autocannon": "^8",
+    "next": "^16",
+    "react": "^19",
+    "react-dom": "^19",
+    "svelte": "^5",
+    "vite": "^6"
+  }
+}

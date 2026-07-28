@@ -1,0 +1,117 @@
+<server>
+// Login: password (+ optional 2FA) and passkeys. Rate limited.
+const attempts = new Map(); // ip-less simple limiter: email → { n, t }
+function tooMany(key) {
+  const now = Date.now();
+  const a = attempts.get(key) ?? { n: 0, t: now };
+  if (now - a.t > 15 * 60_000) { a.n = 0; a.t = now; }
+  a.n++;
+  attempts.set(key, a);
+  return a.n > 10; // 10 tries / 15 min / account
+}
+
+export async function login(form) {
+  const { findUserByEmail } = await projectImport("lib/users.js");
+  const email = String(form.email ?? "");
+  if (tooMany(email)) return { error: "Too many attempts — try again in 15 minutes." };
+  const u = findUserByEmail(email);
+  // timing-safe posture: verify against a dummy hash when the user is unknown
+  const ok = u?.passwordHash
+    ? auth.verifyPassword(String(form.password ?? ""), u.passwordHash)
+    : (auth.verifyPassword("nope", "scrypt$32768$8$1$AAAA$AAAA"), false);
+  if (!ok) return { error: "Wrong email or password." };
+  if (u.totpSecret) {
+    if (!form.code) return { needsCode: true, email };
+    if (!auth.totpVerify(u.totpSecret, form.code)) return { error: "Wrong authenticator code.", needsCode: true, email };
+  }
+  auth.login(u);
+  return { redirect: form.next && String(form.next).startsWith("/") ? form.next : "/" };
+}
+
+export async function load() {
+  return { providers: auth.oauth.providers() }; // configured via NIRAL_OAUTH_* env
+}
+
+// ── passkey login (two RPC steps) ──
+export async function passkeyStart(email, origin) {
+  const { findUserByEmail, passkeysForUser } = await projectImport("lib/users.js");
+  const challenge = auth.passkeys.challenge();
+  session.set("wa_challenge", challenge);
+  const u = email ? findUserByEmail(email) : null;
+  return auth.passkeys.authenticationOptions({
+    rpId: new URL(origin).hostname,
+    challenge,
+    allowCredentialIds: u ? passkeysForUser(u.id) : [],
+  });
+}
+
+export async function passkeyFinish(payload) {
+  const { findPasskey, findUserById, updatePasskeyCounter } = await projectImport("lib/users.js");
+  const challenge = session.get("wa_challenge");
+  session.delete("wa_challenge");
+  if (!challenge) throw new Error("no passkey ceremony in progress");
+  const cred = findPasskey(payload.credentialId);
+  if (!cred) throw new Error("unknown passkey");
+  const { counter } = auth.passkeys.verifyAuthentication({
+    response: payload.response,
+    challenge,
+    origin: payload.origin,
+    rpId: new URL(payload.origin).hostname,
+    credential: cred,
+  });
+  updatePasskeyCounter(cred.credentialId, counter);
+  auth.login(findUserById(cred.userId));
+  return { ok: true };
+}
+</server>
+<script>
+  let { form, next, providers = [] } = $props
+  let email = $state(form?.email ?? "")
+
+  async function withPasskey() {
+    const opts = await passkeyStart(email, location.origin)
+    const cred = await navigator.credentials.get({ publicKey: {
+      ...opts,
+      challenge: b64u(opts.challenge),
+      allowCredentials: opts.allowCredentials.map((c) => ({ ...c, id: b64u(c.id) })),
+    }})
+    await passkeyFinish({
+      credentialId: b64s(cred.rawId),
+      origin: location.origin,
+      response: {
+        clientDataJSON: b64s(cred.response.clientDataJSON),
+        authenticatorData: b64s(cred.response.authenticatorData),
+        signature: b64s(cred.response.signature),
+      },
+    })
+    location.href = next && next.startsWith("/") ? next : "/"
+  }
+  const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))
+  const b64s = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+</script>
+<head><title>Sign in</title></head>
+
+<h1>Sign in</h1>
+{#if form?.error}<p class="error">{form.error}</p>{/if}
+
+<form method="post" action="?/login">
+  <input type="hidden" name="next" value={next ?? "/"} />
+  <label>Email <input name="email" type="email" bind:value={email} required /></label>
+  <label>Password <input name="password" type="password" required /></label>
+  {#if form?.needsCode}
+    <label>Authenticator code <input name="code" inputmode="numeric" autocomplete="one-time-code" /></label>
+  {/if}
+  <button>Sign in</button>
+</form>
+
+<button class="passkey" on:click={withPasskey}>Sign in with a passkey</button>
+{#for p of providers}
+  <p><a href={"/auth/oauth/" + p}>Continue with {p}</a></p>
+{/for}
+<p><a href="/auth/register">Create an account</a></p>
+
+<style>
+  .error { color: #c00 }
+  label { display: block; margin: 0.5rem 0 }
+  .passkey { margin-top: 1rem }
+</style>

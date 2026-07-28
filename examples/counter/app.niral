@@ -1,0 +1,47 @@
+<script>
+  let count = $state(0)
+  let doubled = $derived(count * 2)
+  let todos = $state([])
+  let draft = $state("")
+  let nextId = $state(1)
+
+  function addTodo() {
+    if (draft.trim() === "") return
+    todos = [...todos, { id: nextId, text: draft, done: false }]
+    nextId = nextId + 1
+    draft = ""
+  }
+
+  function toggle(id) {
+    todos = todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
+  }
+</script>
+
+<h1>Niral · நிரல்</h1>
+<p class="sub">Zero-dependency reactivity, compiled — no virtual DOM.</p>
+
+<section>
+  <h2>Counter</h2>
+  <button id="inc" on:click={() => count++}>Count: {count}</button>
+  <p>Doubled: <b id="doubled">{doubled}</b></p>
+  {#if count > 5}
+    <p id="big" class="big">That's a big number! 🎉</p>
+  {:else if count > 0}
+    <p id="warm">Warming up…</p>
+  {:else}
+    <p id="zero">Click the button to start.</p>
+  {/if}
+</section>
+
+<section>
+  <h2>Todos</h2>
+  <input id="draft" bind:value={draft} placeholder="What needs doing?" />
+  <button id="add" on:click={() => addTodo()}>Add</button>
+  <p id="stats">{todos.length} total · {todos.filter(t => t.done).length} done</p>
+  {#for t of todos key t.id}
+    <div class="todo">
+      <input type="checkbox" checked={t.done} on:click={() => toggle(t.id)} />
+      <span class={t.done ? "done" : ""}>{t.text}</span>
+    </div>
+  {/for}
+</section>

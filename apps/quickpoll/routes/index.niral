@@ -1,0 +1,107 @@
+<server auth>
+export async function load() {
+  const polls = await projectImport("lib/polls.js")
+  return { polls: polls.listPollsBy(user().email) }
+}
+
+export const create = withSchema(
+  { question: v.string({ min: 4, max: 140 }), options: v.array(v.string({ min: 1, max: 60 }), { min: 2, max: 8 }) },
+  async ({ question, options }) => {
+    const polls = await projectImport("lib/polls.js")
+    const id = polls.createPoll({ question, options, createdBy: user().email })
+    log.info("poll created", { id, by: user().email })
+    return { id }
+  }
+)
+
+export async function toggle(id, open) {
+  const polls = await projectImport("lib/polls.js")
+  polls.setOpen(id, user().email, open)
+  publish("poll:" + id, { closed: !open })
+  return true
+}
+</server>
+
+<script>
+  let { polls, user } = $props
+  let mine = $state(polls)
+  let question = $state("")
+  let options = $state(["", ""])
+  let error = $state("")
+  let creating = $state(false)
+
+  function setOption(i, val) {
+    options = options.map((o, idx) => (idx === i ? val : o))
+  }
+  async function make() {
+    error = ""
+    creating = true
+    try {
+      const { id } = await create({ question, options: options.filter((o) => o.trim()) })
+      location.href = "/poll/" + id
+    } catch (e) {
+      error = e.message.replace(/^rpc \w+: /, "")
+      creating = false
+    }
+  }
+  async function flip(p) {
+    await toggle(p.id, !p.is_open)
+    mine = mine.map((x) => (x.id === p.id ? { ...x, is_open: !p.is_open } : x))
+  }
+</script>
+
+<head>
+  <title>QuickPoll · dashboard</title>
+</head>
+
+<main>
+  <header>
+    <h1>QuickPoll</h1>
+    <p class="dim">signed in as {user.email} · <a href="/auth/account">account</a></p>
+  </header>
+
+  <section class="card">
+    <h2>New poll</h2>
+    <input bind:value={question} placeholder="What should we ask?" maxlength="140" />
+    {#for o, i of options}
+      <input value={o} on:input={(e) => setOption(i, e.target.value)} placeholder={"Option " + (i + 1)} />
+    {/for}
+    <div class="row">
+      <button class="ghost" on:click={() => options = [...options, ""]} disabled={options.length >= 8}>+ option</button>
+      <button on:click={make} disabled={creating}>{creating ? "creating…" : "Create poll"}</button>
+    </div>
+    {#if error}<p class="err" transition:fade>{error}</p>{/if}
+  </section>
+
+  <section>
+    <h2>My polls</h2>
+    {#if mine.length === 0}
+      <p class="dim">No polls yet — create one above, share the link, watch votes land live.</p>
+    {/if}
+    <ul>
+      {#for p of mine key p.id}
+        <li class="card poll-row" transition:fade>
+          <a href={"/poll/" + p.id}><b>{p.question}</b></a>
+          <span class="dim">{p.total} vote{p.total === 1 ? "" : "s"} · {p.options.length} options</span>
+          <button class="ghost" on:click={() => flip(p)}>{p.is_open ? "Close" : "Reopen"}</button>
+        </li>
+      {/for}
+    </ul>
+  </section>
+</main>
+
+<style>
+  main { max-width: 620px; margin: 2.5rem auto; font-family: system-ui, sans-serif; line-height: 1.55; padding: 0 1rem; }
+  h1 { margin-bottom: 0; }
+  .dim { color: #777; font-size: .9rem; }
+  .card { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1rem 1.2rem; margin: 1rem 0; }
+  input { display: block; width: 100%; box-sizing: border-box; padding: .55rem .8rem; margin: .4rem 0; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+  .row { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .5rem; }
+  button { padding: .5rem 1.1rem; border: 0; border-radius: 8px; background: #111; color: #fff; cursor: pointer; font-size: .95rem; }
+  button.ghost { background: transparent; color: #555; border: 1px solid #ccc; }
+  button:disabled { opacity: .5; }
+  .err { color: #c0392b; font-size: .9rem; }
+  .poll-row { display: flex; align-items: center; gap: .8rem; justify-content: space-between; }
+  ul { list-style: none; padding: 0; }
+  a { color: inherit; }
+</style>

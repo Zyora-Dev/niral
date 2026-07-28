@@ -1,0 +1,198 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Niral",
+  "scopeName": "source.niral",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#server-python" },
+    { "include": "#server-ruby" },
+    { "include": "#server-go" },
+    { "include": "#server-js" },
+    { "include": "#script" },
+    { "include": "#style" },
+    { "include": "#block" },
+    { "include": "#mustache" },
+    { "include": "#tag" }
+  ],
+  "repository": {
+    "comment": {
+      "begin": "<!--",
+      "end": "-->",
+      "name": "comment.block.html"
+    },
+    "server-python": {
+      "begin": "(<)(server)(?=[^>]*lang=\"python\")([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(server)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.python",
+      "patterns": [{ "include": "source.python" }]
+    },
+    "server-ruby": {
+      "begin": "(<)(server)(?=[^>]*lang=\"ruby\")([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(server)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.ruby",
+      "patterns": [{ "include": "source.ruby" }]
+    },
+    "server-go": {
+      "begin": "(<)(server)(?=[^>]*lang=\"go\")([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(server)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.go",
+      "patterns": [{ "include": "source.go" }]
+    },
+    "server-js": {
+      "begin": "(<)(server)([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(server)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.server.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.javascript",
+      "patterns": [{ "include": "source.js" }]
+    },
+    "script": {
+      "begin": "(<)(script)([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(script)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.javascript",
+      "patterns": [
+        { "match": "\\$(state|derived|props)\\b", "name": "support.function.rune.niral" },
+        { "include": "source.js" }
+      ]
+    },
+    "style": {
+      "begin": "(<)(style)([^>]*)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.style.niral" },
+        "3": { "patterns": [{ "include": "#tag-attrs" }] },
+        "4": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "end": "(</)(style)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.style.niral" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "contentName": "meta.embedded.block.css",
+      "patterns": [{ "include": "source.css" }]
+    },
+    "block": {
+      "patterns": [
+        {
+          "begin": "(\\{)(#if|#for|#await|:else if|:else|:then|:catch|@html)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.block.niral" },
+            "2": { "name": "keyword.control.niral" }
+          },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.definition.block.niral" } },
+          "patterns": [
+            { "match": "\\b(of|key)\\b", "name": "keyword.control.niral" },
+            { "include": "#expr" }
+          ]
+        },
+        {
+          "match": "(\\{)(/if|/for|/await)(\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.block.niral" },
+            "2": { "name": "keyword.control.niral" },
+            "3": { "name": "punctuation.definition.block.niral" }
+          }
+        }
+      ]
+    },
+    "mustache": {
+      "begin": "\\{",
+      "end": "\\}",
+      "name": "meta.embedded.expression.javascript",
+      "captures": { "0": { "name": "punctuation.definition.expression.niral" } },
+      "patterns": [{ "include": "#expr" }]
+    },
+    "expr": {
+      "patterns": [
+        { "match": "\\$(state|derived|props)\\b", "name": "support.function.rune.niral" },
+        { "include": "source.js" }
+      ]
+    },
+    "tag": {
+      "begin": "(</?)([A-Za-z][\\w.-]*)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.html" }
+      },
+      "end": "(/?>)",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.html" } },
+      "patterns": [{ "include": "#tag-attrs" }]
+    },
+    "tag-attrs": {
+      "patterns": [
+        {
+          "match": "\\b(bind|on|class|style|use):([\\w-]+)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.niral" },
+            "2": { "name": "entity.other.attribute-name.html" }
+          }
+        },
+        { "match": "\\b[A-Za-z_][\\w-]*(?==)", "name": "entity.other.attribute-name.html" },
+        { "match": "\\b(stream|global)\\b", "name": "entity.other.attribute-name.html" },
+        {
+          "begin": "=\\{",
+          "end": "\\}",
+          "name": "meta.embedded.expression.javascript",
+          "patterns": [{ "include": "#expr" }]
+        },
+        { "begin": "=\"", "end": "\"", "name": "string.quoted.double.html" },
+        { "begin": "='", "end": "'", "name": "string.quoted.single.html" }
+      ]
+    }
+  }
+}

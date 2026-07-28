@@ -1,0 +1,6 @@
+node_modules/
+apps/niral/dist/
+apps/niral/.niral/
+apps/next/.next/
+apps/sveltekit/build/
+apps/sveltekit/.svelte-kit/
