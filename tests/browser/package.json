@@ -1,0 +1,12 @@
+{
+  "name": "niral-browser-tests",
+  "private": true,
+  "type": "module",
+  "description": "Real-browser smoke tests — boot a niral app, drive it in headless Chromium, assert hydration + reactivity + client nav actually work. Dev-only; the framework stays zero-dependency.",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.48"
+  }
+}
