@@ -17,16 +17,21 @@ served 7.5× faster than Next.js. Auth, jobs, realtime, AI and deploys built in.
 ## Quick start
 
 ```sh
-git clone https://github.com/Zyora-Dev/niral.git
-node niral/bin/niral.js create my-app
+npx create-niral my-app
 cd my-app
-node ../niral/bin/niral.js dev        # → http://localhost:5199
+niral dev                             # → http://localhost:5199
 ```
 
-Tip: alias it once — `alias niral="node /path/to/niral/bin/niral.js"` — then it's just `niral dev`.
+No npm? `curl -fsSL https://niral.zyora.club/install.sh | bash` — or go direct:
+
+```sh
+git clone https://github.com/Zyora-Dev/niral.git
+node niral/bin/niral.js create my-app
+```
 
 There is nothing to install. The framework is Node 22+ stdlib, end to end:
 parser, compiler, reactivity, SSR, WebSockets, sessions, crypto, SQLite.
+No account, no cloud, no telemetry — everything runs on your machine.
 
 ## One file, whole feature
 

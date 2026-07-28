@@ -29,10 +29,10 @@
       deploys built in, not bolted on. <b>node_modules not required.</b>
     </p>
     <div class="cta">
-      <code class="install"><span class="prompt">$</span> niral create my-app</code>
+      <code class="install"><span class="prompt">$</span> npx create-niral my-app</code>
       <a class="btn" href="/docs/getting-started">Get started →</a>
     </div>
-    <p class="hero-note">One command. SSR, hydration, a server RPC and tests — running in seconds.</p>
+    <p class="hero-note">One command — SSR, hydration, a server RPC and tests, running in seconds.<br />No npm? <code class="alt">curl -fsSL https://niral.zyora.club/install.sh | bash</code></p>
   </section>
 
   <section class="numbers">
@@ -113,7 +113,7 @@
     <p class="tamil-sm">நிரல் · "program" in Tamil</p>
     <h2>Start with one command.</h2>
     <div class="cta">
-      <code class="install"><span class="prompt">$</span> niral create my-app</code>
+      <code class="install"><span class="prompt">$</span> npx create-niral my-app</code>
       <a class="btn" href="/docs/getting-started">Read the docs →</a>
     </div>
   </section>
@@ -180,7 +180,8 @@
   .prompt { color: #5f6b76; margin-right: .5rem; }
   .btn { background: #34d399; color: #04120b; padding: .74rem 1.35rem; border-radius: 11px; font-weight: 650; text-decoration: none; transition: transform .12s, box-shadow .12s; }
   .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(52, 211, 153, .25); }
-  .hero-note { color: #5f6b76; font-size: .84rem; margin-top: 1.2rem; }
+  .hero-note { color: #5f6b76; font-size: .84rem; margin-top: 1.2rem; line-height: 2; }
+  .hero-note :global(code.alt), .hero-note code.alt { background: #11151a; border: 1px solid #1b2027; border-radius: 7px; padding: .15rem .55rem; color: #9aa3ad; font-size: .78rem; }
 
   /* stat tiles */
   .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }

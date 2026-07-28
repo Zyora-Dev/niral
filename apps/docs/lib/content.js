@@ -21,12 +21,28 @@ built on the Node standard library. Node 22+ is the only requirement.
 
 ## Install
 
-There is nothing to install — a git clone IS the framework:
+The fastest way — one command, like you'd expect:
+
+\`\`\`sh
+npx create-niral my-app
+\`\`\`
+
+That downloads the framework once to \`~/.niral\` (about 1 MB — it has zero
+dependencies) and installs a \`niral\` command. No npm? Use the installer:
+
+\`\`\`sh
+curl -fsSL https://niral.zyora.club/install.sh | bash
+\`\`\`
+
+Or go direct — a git clone IS the framework:
 
 \`\`\`sh
 git clone https://github.com/Zyora-Dev/niral.git
 alias niral="node $PWD/niral/bin/niral.js"   # add to your shell profile
 \`\`\`
+
+Either way, nothing runs on anyone else's servers — no account, no cloud,
+no telemetry. Your app is yours.
 
 ## Create an app
 
