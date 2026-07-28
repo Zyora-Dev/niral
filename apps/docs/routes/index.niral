@@ -9,18 +9,20 @@
 
 <main>
   <nav class="nav">
-    <a class="mark" href="/"><span class="mark-glyph">நி</span><span class="mark-name">niral</span></a>
-    <div class="nav-links">
-      <a href="/docs/getting-started">Docs</a>
-      <a href="/docs/benchmarks">Benchmarks</a>
-      <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
-      <a class="nav-cta" href="/docs/getting-started">Get started</a>
+    <div class="nav-inner">
+      <a class="mark" href="/"><span class="mark-glyph">நி</span><span class="mark-name">niral</span></a>
+      <div class="nav-links">
+        <a href="/docs/getting-started">Docs</a>
+        <a href="/docs/benchmarks">Benchmarks</a>
+        <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
+        <a class="nav-cta" href="/docs/getting-started">Get started</a>
+      </div>
     </div>
   </nav>
 
   <section class="hero">
     <div class="glow"></div>
-    <p class="badge">v0.1 · zero dependencies · reproducible benchmarks</p>
+    <p class="badge"><span class="pulse"></span>v0.1 · zero dependencies · reproducible benchmarks</p>
     <p class="tamil">நிரல்</p>
     <h1>The full-stack framework<br />with <em>zero</em> dependencies.</h1>
     <p class="sub">
@@ -29,11 +31,18 @@
       deploys built in, not bolted on. <b>node_modules not required.</b>
     </p>
     <div class="cta">
-      <code class="install"><span class="prompt">$</span> npx create-niral my-app</code>
+      <code class="install"><span class="prompt">$</span> npx create-niral my-app<span class="caret">▍</span></code>
       <a class="btn" href="/docs/getting-started">Get started →</a>
     </div>
     <p class="hero-note">One command — SSR, hydration, a server RPC and tests, running in seconds.<br />No npm? <code class="alt">curl -fsSL https://niral.zyora.club/install.sh | bash</code></p>
   </section>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span>SSR</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
+      <span>SSR</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
+    </div>
+  </div>
 
   <section class="numbers">
     <div class="num"><b>2,200<i>/s</i></b><span>requests served, dynamic SSR — 7.5× Next.js, 3.8× SvelteKit</span></div>
@@ -43,18 +52,23 @@
   </section>
 
   <section class="code-demo">
+    <p class="eyebrow">The model</p>
     <h2>One file. Whole feature.</h2>
     <p class="section-sub">Data loading, a server function, realtime fan-out and an animated list — this is the complete source.</p>
-    <div class="window">
-      <div class="window-bar">
-        <span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span>
-        <span class="window-title">routes/todos.niral</span>
+    <div class="window-wrap">
+      <div class="window-halo"></div>
+      <div class="window">
+        <div class="window-bar">
+          <span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span>
+          <span class="window-title">routes/todos.niral</span>
+        </div>
+        <pre><code>{@html demo}</code></pre>
       </div>
-      <pre><code>{@html demo}</code></pre>
     </div>
   </section>
 
   <section class="pipeline">
+    <p class="eyebrow">Workflow</p>
     <h2>From idea to production, one tool.</h2>
     <div class="steps">
       <div class="step"><code>niral create</code><span>scaffolded app with SSR, RPC & tests</span></div>
@@ -69,13 +83,14 @@
   </section>
 
   <section class="grid-section">
+    <p class="eyebrow">Capabilities</p>
     <h2>Batteries included. Actually included.</h2>
     <p class="section-sub">Everything below ships in the framework or scaffolds into code you own — never an npm install.</p>
     <div class="grid">
-      <a class="card" href="/docs/server"><b>Server functions</b><span>RPC with compile-time stubs, streaming responses, form actions that work without JS.</span></a>
+      <a class="card span2" href="/docs/server"><b>Server functions</b><span>RPC with compile-time stubs, streaming responses, form actions that work without JS — and the function body structurally never reaches the browser.</span></a>
       <a class="card" href="/docs/auth"><b>Auth built in</b><span>Passkeys, TOTP 2FA, OAuth, route guards — scaffolded into your project, zero deps.</span></a>
       <a class="card" href="/docs/realtime"><b>Realtime</b><span>Live channels on framework-owned WebSockets, with session-aware guards.</span></a>
-      <a class="card" href="/docs/ai"><b>AI-native</b><span>ai.chat / stream / embed against any OpenAI-compatible endpoint. RAG included. Fully-local option.</span></a>
+      <a class="card span2" href="/docs/ai"><b>AI-native</b><span>ai.chat / stream / embed against any OpenAI-compatible endpoint. RAG included — and a fully-local llama.cpp option, one command away.</span></a>
       <a class="card" href="/docs/jobs"><b>Jobs & cron</b><span>Durable queue that survives deploys. Retries, backoff, dead-letters — no Redis.</span></a>
       <a class="card" href="/docs/server"><b>Polyglot backends</b><span>Write server blocks in Python, Ruby or Go — same file, same sessions, same RPC.</span></a>
       <a class="card" href="/docs/typescript"><b>Real TypeScript</b><span>niral check drives the actual TS compiler — diagnostics map to your .niral lines.</span></a>
@@ -84,6 +99,7 @@
   </section>
 
   <section class="bench">
+    <p class="eyebrow">Performance</p>
     <h2>Measured, not marketed.</h2>
     <p class="section-sub">Production servers, real HTTP, dynamic SSR on every request — the same 1000-row page, 100 connections. <a href="/docs/benchmarks">Full methodology →</a></p>
     <div class="bars">
@@ -95,6 +111,7 @@
   </section>
 
   <section class="vps">
+    <p class="eyebrow">Economics</p>
     <h2>Your whole product on a $5 server.</h2>
     <p class="section-sub">App, database, background jobs, realtime, deploys — one process, one tiny VPS. No managed services, no sidecars, no surprise bills.</p>
     <div class="vps-grid">
@@ -127,14 +144,17 @@
 
   <section class="philosophy">
     <div class="phil">
+      <i>01</i>
       <b>Compiler, not runtime</b>
       <span>Components compile to direct DOM instructions and string-concat SSR. No virtual DOM, no diffing — the work happens once, at build time.</span>
     </div>
     <div class="phil">
+      <i>02</i>
       <b>Nothing to trust but your own repo</b>
       <span>Zero dependencies means no supply chain, no audits, no upstream breakage. Every line that runs is a line you can read.</span>
     </div>
     <div class="phil">
+      <i>03</i>
       <b>Secrets can't escape</b>
       <span>Reading env vars in client code is a compile error. Env files never build, never serve, never commit, never sync on deploy.</span>
     </div>
@@ -179,40 +199,66 @@
 </main>
 
 <style>
-  :global(body) { margin: 0; background: #0b0d10; color: #e8eaed; }
+  :global(html) { scroll-behavior: smooth; }
+  :global(body) { margin: 0; background: #0a0c10; color: #e8eaed; background-image: radial-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px); background-size: 28px 28px; }
+  :global(::selection) { background: #34d39933; }
   main { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.6; }
-  section { max-width: 920px; margin: 0 auto; padding: 3.4rem 1.4rem; }
-  h2 { font-size: 1.7rem; letter-spacing: -.015em; text-align: center; margin: 0 0 .5rem; }
+  section { max-width: 920px; margin: 0 auto; padding: 3.6rem 1.4rem; }
+  h2 { font-size: 1.75rem; letter-spacing: -.018em; text-align: center; margin: 0 0 .5rem; }
   .section-sub { text-align: center; color: #9aa3ad; max-width: 560px; margin: 0 auto 2rem; font-size: .97rem; }
   .section-sub a { color: #34d399; text-decoration: none; }
+  .eyebrow { text-align: center; color: #34d399; font-size: .74rem; font-weight: 650; text-transform: uppercase; letter-spacing: .16em; margin: 0 0 .6rem; }
 
-  /* nav */
-  .nav { max-width: 980px; margin: 0 auto; padding: 1.1rem 1.4rem; display: flex; justify-content: space-between; align-items: center; }
+  /* nav — sticky glass */
+  .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(10, 12, 16, .72); border-bottom: 1px solid rgba(255, 255, 255, .05); }
+  .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; }
   .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
   .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
   .mark-name { color: #e8eaed; font-weight: 650; letter-spacing: .01em; }
   .nav-links { display: flex; align-items: center; gap: 1.3rem; }
   .nav-links a { color: #9aa3ad; text-decoration: none; font-size: .92rem; transition: color .15s; }
   .nav-links a:hover { color: #e8eaed; }
-  .nav-cta { background: #14181d; border: 1px solid #262c33; border-radius: 9px; padding: .42rem .9rem; color: #7ee2b8 !important; }
-  .nav-cta:hover { border-color: #34d399; }
+  .nav-cta { background: #14181d; border: 1px solid #262c33; border-radius: 9px; padding: .42rem .9rem; color: #7ee2b8 !important; transition: border-color .15s, box-shadow .15s; }
+  .nav-cta:hover { border-color: #34d399; box-shadow: 0 0 18px rgba(52, 211, 153, .18); }
 
   /* hero */
-  .hero { text-align: center; padding-top: 4.6rem; position: relative; }
-  .glow { position: absolute; inset: -8rem 0 auto; height: 26rem; background: radial-gradient(ellipse 60% 55% at 50% 20%, rgba(52, 211, 153, .13), transparent 70%); pointer-events: none; }
-  .badge { display: inline-block; background: #11151a; border: 1px solid #232930; border-radius: 999px; padding: .3rem .95rem; font-size: .78rem; color: #9aa3ad; letter-spacing: .03em; margin: 0 0 1.4rem; }
-  .tamil { font-size: 2.7rem; margin: 0; background: linear-gradient(120deg, #34d399, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .05em; }
-  h1 { font-size: 3.1rem; line-height: 1.12; margin: .6rem 0 1.1rem; letter-spacing: -.025em; }
+  .hero { text-align: center; padding-top: 4.4rem; position: relative; }
+  .hero > * { animation: rise .7s cubic-bezier(.2, .7, .3, 1) both; }
+  .hero > *:nth-child(2) { animation-delay: .05s; }
+  .hero > *:nth-child(3) { animation-delay: .12s; }
+  .hero > *:nth-child(4) { animation-delay: .2s; }
+  .hero > *:nth-child(5) { animation-delay: .28s; }
+  .hero > *:nth-child(6) { animation-delay: .38s; }
+  .hero > *:nth-child(7) { animation-delay: .48s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  .glow { position: absolute; inset: -8rem 0 auto; height: 28rem; background: radial-gradient(ellipse 62% 55% at 50% 20%, rgba(52, 211, 153, .14), transparent 70%); pointer-events: none; animation: none; }
+  .badge { display: inline-flex; align-items: center; gap: .5rem; background: #11151a; border: 1px solid #232930; border-radius: 999px; padding: .32rem .95rem; font-size: .78rem; color: #9aa3ad; letter-spacing: .03em; margin: 0 0 1.4rem; }
+  .pulse { width: .48rem; height: .48rem; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); animation: pulse 2.2s ease-out infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
+  .tamil { font-size: 2.8rem; margin: 0; background: linear-gradient(120deg, #34d399, #6ee7b7, #0ea5e9, #34d399); background-size: 280% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .05em; animation: rise .7s cubic-bezier(.2, .7, .3, 1) both, sheen 9s linear infinite; }
+  @keyframes sheen { to { background-position: 280% 0; } }
+  h1 { font-size: 3.2rem; line-height: 1.1; margin: .6rem 0 1.1rem; letter-spacing: -.028em; }
   h1 em { font-style: normal; background: linear-gradient(120deg, #34d399, #0ea5e9); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .sub { color: #9aa3ad; max-width: 640px; margin: 0 auto 2.1rem; font-size: 1.08rem; }
   .sub b { color: #cdd3da; }
   .cta { display: flex; gap: .9rem; justify-content: center; align-items: center; flex-wrap: wrap; }
-  .install { background: #14181d; border: 1px solid #262c33; border-radius: 11px; padding: .74rem 1.15rem; font-size: .95rem; color: #7ee2b8; }
+  .install { background: #14181d; border: 1px solid #262c33; border-radius: 11px; padding: .74rem 1.15rem; font-size: .95rem; color: #7ee2b8; box-shadow: 0 0 0 1px rgba(52, 211, 153, .0), 0 10px 30px rgba(0, 0, 0, .25); }
   .prompt { color: #5f6b76; margin-right: .5rem; }
-  .btn { background: #34d399; color: #04120b; padding: .74rem 1.35rem; border-radius: 11px; font-weight: 650; text-decoration: none; transition: transform .12s, box-shadow .12s; }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(52, 211, 153, .25); }
+  .caret { color: #34d399; margin-left: .18rem; animation: blink 1.15s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .btn { position: relative; overflow: hidden; background: #34d399; color: #04120b; padding: .74rem 1.35rem; border-radius: 11px; font-weight: 650; text-decoration: none; transition: transform .12s, box-shadow .12s; }
+  .btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .45) 50%, transparent 60%); transform: translateX(-130%); transition: transform .55s ease; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(52, 211, 153, .3); }
+  .btn:hover::after { transform: translateX(130%); }
   .hero-note { color: #5f6b76; font-size: .84rem; margin-top: 1.2rem; line-height: 2; }
   .hero-note :global(code.alt), .hero-note code.alt { background: #11151a; border: 1px solid #1b2027; border-radius: 7px; padding: .15rem .55rem; color: #9aa3ad; font-size: .78rem; }
+
+  /* capability marquee */
+  .marquee { overflow: hidden; padding: 1.1rem 0 .4rem; -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+  .marquee-track { display: flex; align-items: center; gap: 2rem; width: max-content; animation: marquee 34s linear infinite; }
+  .marquee-track span { color: #5f6b76; font-size: .86rem; letter-spacing: .04em; white-space: nowrap; }
+  .marquee-track span:nth-child(even) { color: #234135; font-size: .6rem; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
 
   /* stat tiles */
   .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
@@ -223,7 +269,10 @@
   .num span { color: #9aa3ad; font-size: .85rem; display: block; margin-top: .3rem; }
 
   /* code window */
-  .window { background: #0e1115; border: 1px solid #232930; border-radius: 15px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .35); }
+  .window-wrap { position: relative; }
+  .window-halo { position: absolute; inset: -1.6rem -2.2rem; background: radial-gradient(ellipse 60% 70% at 50% 45%, rgba(52, 211, 153, .09), transparent 70%); filter: blur(6px); pointer-events: none; }
+  .window { position: relative; background: #0e1115; border: 1px solid #232930; border-radius: 15px; overflow: hidden; box-shadow: 0 24px 70px rgba(0, 0, 0, .45); transition: transform .25s ease, border-color .25s ease; }
+  .window:hover { transform: translateY(-3px); border-color: #2c3742; }
   .window-bar { display: flex; align-items: center; gap: .42rem; padding: .68rem 1rem; border-bottom: 1px solid #1b2027; background: #11151a; }
   .dot { width: .68rem; height: .68rem; border-radius: 50%; }
   .d1 { background: #f6726f; } .d2 { background: #f5bd4f; } .d3 { background: #55ca62; }
@@ -244,12 +293,17 @@
   .pipeline-note { text-align: center; color: #9aa3ad; font-size: .88rem; margin-top: 1.5rem; }
   .pipeline-note a { color: #34d399; text-decoration: none; }
 
-  /* feature grid */
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
-  .card { background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.2rem 1.25rem; text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; }
-  .card:hover { border-color: #34d399; transform: translateY(-2px); }
+  /* feature bento */
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .card { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.2rem 1.25rem; text-decoration: none; color: inherit; transition: border-color .18s, transform .18s, box-shadow .18s; overflow: hidden; }
+  .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #34d399, #0ea5e9); transform: scaleX(0); transform-origin: left; transition: transform .3s ease; }
+  .card:hover { border-color: #2c3742; transform: translateY(-3px); box-shadow: 0 14px 40px rgba(0, 0, 0, .3); }
+  .card:hover::before { transform: scaleX(1); }
+  .card.span2 { grid-column: span 2; background: linear-gradient(180deg, #121820, #11151a); }
   .card b { display: block; margin-bottom: .3rem; color: #e8eaed; }
   .card span { color: #9aa3ad; font-size: .88rem; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } .card.span2 { grid-column: span 2; } }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } .card.span2 { grid-column: auto; } }
 
   /* benchmark bars */
   .bars { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: .85rem; }
@@ -257,7 +311,9 @@
   .bar-label { color: #cdd3da; font-size: .88rem; text-align: right; }
   .bar-track { background: #11151a; border: 1px solid #1b2027; border-radius: 999px; height: 1.05rem; overflow: hidden; }
   .bar { height: 100%; border-radius: 999px; }
-  .b-niral { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+  .b-niral { position: relative; overflow: hidden; background: linear-gradient(90deg, #34d399, #6ee7b7); }
+  .b-niral::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%); transform: translateX(-120%); animation: shimmer 2.8s ease-in-out infinite; }
+  @keyframes shimmer { 40%, 100% { transform: translateX(120%); } }
   .b-other { background: #2c3742; }
   .bar-val { color: #9aa3ad; font-size: .85rem; }
   .bench-note { text-align: center; color: #5f6b76; font-size: .84rem; margin-top: 1.6rem; }
@@ -293,6 +349,7 @@
 
   /* philosophy */
   .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }
+  .phil i { display: block; font-style: normal; color: #234135; font-weight: 700; font-size: 1.6rem; letter-spacing: .02em; margin-bottom: .35rem; }
   .phil b { display: block; color: #e8eaed; margin-bottom: .4rem; font-size: 1.02rem; }
   .phil span { color: #9aa3ad; font-size: .9rem; }
 
@@ -302,7 +359,8 @@
   .final-cta h2 { margin-bottom: 1.6rem; }
 
   /* footer */
-  .footer { border-top: 1px solid #1b2027; background: #0a0c0f; margin-top: 2rem; }
+  .footer { position: relative; overflow: hidden; border-top: 1px solid #1b2027; background: #090b0e; margin-top: 2rem; }
+  .footer::before { content: "நிரல்"; position: absolute; left: 50%; bottom: -4.5rem; transform: translateX(-50%); font-size: 12rem; font-weight: 700; color: rgba(52, 211, 153, .04); letter-spacing: .04em; pointer-events: none; white-space: nowrap; }
   .footer-inner { max-width: 920px; margin: 0 auto; padding: 3rem 1.4rem 2rem; display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2rem; }
   .footer-mark { display: flex; align-items: center; gap: .55rem; font-weight: 650; margin: 0 0 .7rem; }
   .footer-tag { color: #9aa3ad; font-size: .88rem; margin: 0; }
@@ -320,5 +378,8 @@
     .footer-inner { grid-template-columns: 1fr; gap: 1.6rem; }
     .arrow { display: none; }
     .nav-links { gap: .9rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01s !important; animation-iteration-count: 1 !important; transition-duration: .01s !important; }
   }
 </style>
