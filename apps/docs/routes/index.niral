@@ -22,7 +22,7 @@
 
   <section class="hero">
     <div class="glow"></div>
-    <p class="badge"><span class="pulse"></span>v0.1 · zero dependencies · reproducible benchmarks</p>
+    <p class="badge"><span class="pulse"></span>zero dependencies · one $5 box to a fleet</p>
     <img class="hero-logo" src="/n.png" alt="Niral" width="104" height="104" />
     <h1>The full-stack framework<br />with <em>zero</em> dependencies.</h1>
     <p class="sub">
@@ -39,8 +39,8 @@
 
   <div class="marquee" aria-hidden="true">
     <div class="marquee-track">
-      <span>SSR</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
-      <span>SSR</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
+      <span>SSR</span><span>◆</span><span>Postgres</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Clustering</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
+      <span>SSR</span><span>◆</span><span>Postgres</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Clustering</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
     </div>
   </div>
 
@@ -91,10 +91,12 @@
       <a class="card" href="/docs/auth"><b>Auth built in</b><span>Passkeys, TOTP 2FA, OAuth, route guards — scaffolded into your project, zero deps.</span></a>
       <a class="card" href="/docs/realtime"><b>Realtime</b><span>Live channels on framework-owned WebSockets, with session-aware guards.</span></a>
       <a class="card span2" href="/docs/ai"><b>AI-native</b><span>ai.chat / stream / embed against any OpenAI-compatible endpoint. RAG included — and a fully-local llama.cpp option, one command away.</span></a>
-      <a class="card" href="/docs/jobs"><b>Jobs & cron</b><span>Durable queue that survives deploys. Retries, backoff, dead-letters — no Redis.</span></a>
+      <a class="card" href="/docs/jobs"><b>Jobs & cron</b><span>Durable queue that survives deploys. Retries, backoff, dead-letters — no Redis. Share it across a cluster with one env var.</span></a>
       <a class="card" href="/docs/server"><b>Polyglot backends</b><span>Write server blocks in Python, Ruby or Go — same file, same sessions, same RPC.</span></a>
       <a class="card" href="/docs/typescript"><b>Real TypeScript</b><span>niral check drives the actual TS compiler — diagnostics map to your .niral lines.</span></a>
       <a class="card" href="/docs/deployment"><b>Atomic deploys</b><span>Hashed releases, one-symlink rollback, security headers and CSP nonces by default.</span></a>
+      <a class="card span2" href="/docs/scaling"><b>Scales to a fleet</b><span>Start on one $5 box with SQLite. Add Postgres — managed or self-hosted, TLS built in, zero-dep driver. Then go multi-server: stateless nodes, realtime over LISTEN/NOTIFY, a shared job queue. Every tier opt-in, still zero dependencies.</span></a>
+      <a class="card" href="/docs/server"><b>Postgres, no <code>pg</code></b><span>A pure-Node Postgres client — SCRAM auth, TLS, pooling, SQLi-safe params. Connect to Neon, Supabase or RDS without installing a thing.</span></a>
     </div>
   </section>
 
@@ -133,7 +135,7 @@
       <div class="vps-card v3">
         <div class="vps-num">0</div>
         <b>sidecar services</b>
-        <span>jobs queue, sessions and database ride on SQLite. No Redis, no Postgres, no workers to babysit — one process, one systemd unit.</span>
+        <span>Jobs, sessions and database ride on SQLite by default — no Redis, no workers to babysit. Reach for Postgres only when you outgrow one box.</span>
       </div>
       <div class="vps-card v4">
         <div class="vps-num">1</div>
@@ -142,6 +144,35 @@
       </div>
     </div>
     <p class="bench-note">2,200 req/s was measured on a laptop — a small VPS at a fraction of that still serves hundreds of thousands of views a day.</p>
+  </section>
+
+  <section class="scale">
+    <p class="eyebrow">Scale</p>
+    <h2>One box today. A fleet when you're ready.</h2>
+    <p class="section-sub">Same app, same code — Niral grows with you. Each tier is one env var, never a rewrite, and always zero&#8209;dependency.</p>
+    <div class="tiers">
+      <div class="tier">
+        <span class="tier-step">Start</span>
+        <b>One process · SQLite</b>
+        <span class="tier-desc">A $5 box runs everything — app, database, jobs, realtime. Most products never need more.</span>
+        <code class="tier-cmd">niral deploy</code>
+      </div>
+      <div class="tier-join"><span>→</span></div>
+      <div class="tier">
+        <span class="tier-step">Grow</span>
+        <b>Add Postgres</b>
+        <span class="tier-desc">Heavier data? Point at managed Postgres — Neon, Supabase, RDS — or your own. TLS built in, no <code>pg</code>.</span>
+        <code class="tier-cmd">NIRAL_DATABASE_URL=…</code>
+      </div>
+      <div class="tier-join"><span>→</span></div>
+      <div class="tier">
+        <span class="tier-step">Fleet</span>
+        <b>Go multi-server</b>
+        <span class="tier-desc">Stateless nodes behind a load balancer. Realtime fans out over LISTEN/NOTIFY, jobs share one queue. No Redis.</span>
+        <code class="tier-cmd">NIRAL_CLUSTER=1</code>
+      </div>
+    </div>
+    <p class="bench-note">Opt-in at every step — you never switch frameworks, you flip a switch when you outgrow the last tier. <a href="/docs/scaling">How scaling works →</a></p>
   </section>
 
   <section class="philosophy">
@@ -188,6 +219,7 @@
         <b>Framework</b>
         <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
         <a href="/docs/benchmarks">Benchmarks</a>
+        <a href="/docs/scaling">Scaling</a>
         <a href="/docs/cli">CLI reference</a>
         <a href="/docs/ai">AI & RAG</a>
       </div>
@@ -350,6 +382,26 @@
     .v4 { animation-range: entry 24% entry 79%; }
   }
   @keyframes card-rise { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
+
+  /* scale — growth tiers */
+  .tiers { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: .6rem; }
+  .tier { position: relative; background: linear-gradient(180deg, #121820, #11151a); border: 1px solid #232930; border-radius: 16px; padding: 1.3rem 1.2rem; overflow: hidden; transition: transform .18s, border-color .18s, box-shadow .18s; }
+  .tier::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #34d399, #0ea5e9); transform: scaleX(0); transform-origin: left; transition: transform .3s ease; }
+  .tier:hover { transform: translateY(-4px); border-color: #34d39966; box-shadow: 0 16px 44px rgba(0, 0, 0, .35); }
+  .tier:hover::before { transform: scaleX(1); }
+  .tier-step { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #04120b; background: linear-gradient(120deg, #34d399, #6ee7b7); padding: .2rem .6rem; border-radius: 999px; margin-bottom: .75rem; }
+  .tier b { display: block; color: #e8eaed; font-size: 1.05rem; margin-bottom: .4rem; }
+  .tier-desc { color: #9aa3ad; font-size: .87rem; display: block; margin-bottom: 1rem; }
+  .tier-desc code, .card code { color: #7ee2b8; background: #0e1115; padding: .02rem .32rem; border-radius: 5px; font-size: .82em; }
+  .tier-cmd { display: block; color: #7ee2b8; background: #0e1115; border: 1px solid #1b2027; padding: .5rem .65rem; border-radius: 9px; font-size: .8rem; font-family: ui-monospace, "SF Mono", monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tier-join { display: flex; align-items: center; justify-content: center; color: #34d399aa; font-size: 1.35rem; }
+  @supports (animation-timeline: view()) {
+    .tier { animation: card-rise both; animation-timeline: view(); animation-range: entry 2% entry 60%; }
+  }
+  @media (max-width: 720px) {
+    .tiers { grid-template-columns: 1fr; }
+    .tier-join { transform: rotate(90deg); padding: .15rem 0; }
+  }
 
   /* philosophy */
   .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }

@@ -5,7 +5,7 @@
 export const GROUPS = [
   { name: "Start", slugs: ["getting-started", "components", "reactivity"] },
   { name: "Build", slugs: ["routing", "styling", "typescript"] },
-  { name: "Server", slugs: ["server", "auth", "validation", "realtime"] },
+  { name: "Server", slugs: ["server", "database", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
   { name: "Ship", slugs: ["deployment", "scaling", "security", "cli", "benchmarks"] },
 ];
@@ -462,43 +462,134 @@ Sessions live in a signed HttpOnly cookie by default. Set
 \`NIRAL_SESSION_STORE=db\` and the data moves into \`data/sessions.db\` — the
 cookie shrinks to a signed id, and the 4KB limit disappears.
 
-## Databases — SQLite by default, Postgres when you need it
+## Databases
 
-SQLite (\`node:sqlite\`) is built in and is the default — one file, zero setup,
-perfect for a marketing site, a tool, or most SaaS apps. It survives deploys
-(\`data/\` lives outside releases) and \`niral snapshot\` backs it up.
-
-When an app outgrows one box — heavy concurrent writes, multiple servers, big
-data — reach for **Postgres**. Niral speaks the Postgres wire protocol directly
-(SCRAM-SHA-256 auth, TLS, parameterized queries, a connection pool) with **its
-own pure-Node driver — no \`pg\`, no npm, still zero dependencies.**
-
-You don't install Postgres either — point at a **managed database** (Neon,
-Supabase, AWS RDS, GCP Cloud SQL, Railway, …). They hand you a URL; set one env
-var and use the ambient \`sql\` in any \`<server>\` block:
-
-\`\`\`sh
-# managed Postgres — install nothing, just paste the URL (TLS is built in)
-NIRAL_DATABASE_URL=postgres://user:pass@ep-cool-name.neon.tech/db?sslmode=require
-
-# or your own box on a private network
-NIRAL_DATABASE_URL=postgres://user:pass@localhost:5432/mydb
-\`\`\`
+SQLite is built in and is the **default** — one file, zero setup, survives
+deploys. Outgrowing one box? Niral ships its own **pure-Node Postgres** driver
+(no \`pg\`, TLS included) — set \`NIRAL_DATABASE_URL\` and use the ambient \`sql\`
+in any \`<server>\` block:
 
 \`\`\`html
 <server>
 export async function load() {
-  // $1, $2 params are SQLi-safe — the value is data, never SQL
   const { rows } = await sql.query("select * from posts where author = $1", [id])
   return { posts: rows }
 }
 </server>
 \`\`\`
 
-\`sql.query(text, params)\` returns \`{ rows, fields }\`; types come back decoded
-(int → number, bool → boolean, json/jsonb → object). TLS modes follow libpq:
-\`sslmode=require\` encrypts, \`verify-full\` also validates the certificate,
-\`disable\` (or no \`sslmode\`) stays plaintext for localhost / private networks.
+Full guide: [Databases — SQLite & Postgres](/docs/database).
+`,
+  },
+
+  database: {
+    title: "Databases",
+    body: `
+Niral has a database in the box. **SQLite is the default** — and for most
+apps, the finish line. When you outgrow one machine, the **same code** talks to
+Postgres instead. No ORM to learn, no driver to install.
+
+## SQLite — the default
+
+\`node:sqlite\` ships with Node, so there's nothing to set up. Your data lives in
+\`data/app.db\`, which sits **outside** the release folder — so it survives every
+deploy — and \`niral snapshot\` backs it up.
+
+The fastest start is a recipe — it scaffolds a complete, working database-backed
+route you own:
+
+\`\`\`sh
+niral add sqlite
+\`\`\`
+
+Or open a database yourself in any \`<server>\` block with Node's built-in driver:
+
+\`\`\`html
+<server>
+import { DatabaseSync } from "node:sqlite"
+const db = new DatabaseSync("data/app.db")
+db.exec("CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY, title TEXT)")
+
+export async function load() {
+  return { posts: db.prepare("SELECT * FROM posts ORDER BY id DESC").all() }
+}
+export async function add(title) {
+  db.prepare("INSERT INTO posts (title) VALUES (?)").run(title)
+}
+</server>
+\`\`\`
+
+One file, one process, zero services — a \$5 box runs the whole thing. Most
+products never need more.
+
+## Postgres — when you need it
+
+Heavy concurrent writes, multiple servers, or big data? Point at Postgres. Niral
+speaks the Postgres wire protocol **directly** — SCRAM-SHA-256 auth, TLS,
+parameterized queries and a connection pool — with its **own pure-Node driver.
+No \`pg\`, no npm, still zero dependencies.**
+
+You don't install Postgres either: use a **managed database** (Neon, Supabase,
+AWS RDS, GCP Cloud SQL, Railway, …). They hand you a URL — set one env var:
+
+\`\`\`sh
+# managed — install nothing, TLS is built in
+NIRAL_DATABASE_URL=postgres://user:pass@ep-cool-name.neon.tech/db?sslmode=require
+
+# or your own box on a private network
+NIRAL_DATABASE_URL=postgres://user:pass@localhost:5432/mydb
+\`\`\`
+
+Now the ambient \`sql\` works in any \`<server>\` block:
+
+\`\`\`html
+<server>
+export async function load({ params }) {
+  // $1, $2 params are SQLi-safe — the value is data, never SQL
+  const { rows } = await sql.query(
+    "select id, title from posts where author = $1 order by created_at desc",
+    [params.author]
+  )
+  return { posts: rows }
+}
+
+export async function publish(title, body) {
+  const { rows } = await sql.query(
+    "insert into posts (title, body) values ($1, $2) returning id",
+    [title, body]
+  )
+  return rows[0].id
+}
+</server>
+\`\`\`
+
+\`sql.query(text, params)\` returns \`{ rows, fields }\`. Types come back decoded —
+\`int → number\`, \`bool → boolean\`, \`json/jsonb → object\`. A pool is managed for
+you; just \`await sql.query(...)\`.
+
+## TLS modes
+
+TLS follows libpq semantics via the connection string:
+
+| \`sslmode\` | behaviour |
+| --- | --- |
+| *(none)* / \`disable\` | plaintext — localhost or a private network |
+| \`require\` | encrypt the connection (managed providers) |
+| \`verify-full\` | encrypt **and** validate the server certificate |
+
+## Safety
+
+Always pass values as **parameters** (\`$1\`, \`?\`), never string-concatenate
+them into SQL. Parameters are sent separately from the query text, so an
+injection payload arrives as plain data — it can never become SQL. This is the
+same rule for SQLite and Postgres.
+
+## Scaling out
+
+Running Postgres across **multiple servers**? See [Scaling to many
+servers](/docs/scaling) — the same database also powers Niral's realtime
+backplane and its shared background-job queue, so a whole cluster coordinates
+through one Postgres with no extra moving parts.
 `,
   },
 
