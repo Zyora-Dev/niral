@@ -45,10 +45,11 @@ const VALIDATE_URL = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url
 const OBSERVE_URL = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "observe.js")).href;
 const AI_URL = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "ai.js")).href;
 const RAG_URL = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "rag.js")).href;
+const POSTGRES_URL = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "postgres.js")).href;
 
 /** The ambient `auth` every JS <server> block gets — login/logout ride the
  *  session facade, crypto helpers are pure. Same shape in dev and releases. */
-export function authPrelude(authUrl, webauthnUrl, mailUrl = MAIL_URL, oauthUrl = OAUTH_URL, validateUrl = VALIDATE_URL, observeUrl = OBSERVE_URL, aiUrl = AI_URL, ragUrl = RAG_URL) {
+export function authPrelude(authUrl, webauthnUrl, mailUrl = MAIL_URL, oauthUrl = OAUTH_URL, validateUrl = VALIDATE_URL, observeUrl = OBSERVE_URL, aiUrl = AI_URL, ragUrl = RAG_URL, pgUrl = POSTGRES_URL) {
   return (
     `import * as __auth from ${JSON.stringify(authUrl)};\n` +
     `import * as __wa from ${JSON.stringify(webauthnUrl)};\n` +
@@ -58,8 +59,10 @@ export function authPrelude(authUrl, webauthnUrl, mailUrl = MAIL_URL, oauthUrl =
     `import { log } from ${JSON.stringify(observeUrl)};\n` +
     `import { ai } from ${JSON.stringify(aiUrl)};\n` +
     `import { rag } from ${JSON.stringify(ragUrl)};\n` +
+    `import { pgPool as __pgPool } from ${JSON.stringify(pgUrl)};\n` +
     `const projectImport = (p) => import(new URL(p, globalThis.__niralProjectRoot).href);\n` +
     `const mail = __mail.sendMail;\n` +
+    `const sql = (() => { let __p = null; const __pool = () => { const u = process.env.NIRAL_DATABASE_URL; if (!u) throw new Error("sql: set NIRAL_DATABASE_URL=postgres://user:pass@host/db to use Postgres"); return (__p ??= __pgPool(u)); }; return { query: (t, p) => __pool().query(t, p) }; })();\n` +
     `const enqueue = (...a) => { if (!globalThis.__niralEnqueue) throw new Error("enqueue: create a jobs.js at the project root first"); return globalThis.__niralEnqueue(...a); };\n` +
     `const env = (k, d) => process.env[k] ?? d;\n` +
     `const auth = {\n` +

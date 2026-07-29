@@ -5019,6 +5019,33 @@ test("watchdog: independent guardian probes health, catches a downed app + tampe
   ok(alerts.some((a) => a.subject.includes("DOWN")), "watchdog noticed the app is down (the app can't report its own death)");
 });
 
+test("postgres: pure-Node driver — url parsing always, live SCRAM query when NIRAL_TEST_PG_URL is set", async () => {
+  const { parseUrl, pgConnect } = await import("../src/server/postgres.js");
+  // pure parsing — always runs, no server needed
+  const u = parseUrl("postgres://alice:s3cret@db.example.com:6432/shop");
+  eq(u.host, "db.example.com", "host parsed");
+  eq(u.port, 6432, "port parsed");
+  eq(u.user, "alice", "user parsed");
+  eq(u.password, "s3cret", "password parsed");
+  eq(u.database, "shop", "database parsed");
+
+  // live driver test — only when a test Postgres is provided (keeps CI green offline)
+  const url = process.env.NIRAL_TEST_PG_URL;
+  if (!url) { ok(true, "live PG test skipped (set NIRAL_TEST_PG_URL to run it)"); return; }
+  const db = await pgConnect(url);
+  await db.query("DROP TABLE IF EXISTS niral_selftest");
+  await db.query("CREATE TABLE niral_selftest (id serial primary key, name text, n int, ok bool, meta jsonb)");
+  await db.query("INSERT INTO niral_selftest (name, n, ok, meta) VALUES ($1,$2,$3,$4)", ["x", 7, true, { a: 1 }]);
+  const r = await db.query("SELECT * FROM niral_selftest WHERE n > $1", [3]);
+  eq(r.rows[0].n, 7, "int decoded");
+  eq(r.rows[0].ok, true, "bool decoded");
+  eq(r.rows[0].meta.a, 1, "jsonb decoded");
+  const evil = await db.query("SELECT * FROM niral_selftest WHERE name = $1", ["x'; DROP TABLE niral_selftest; --"]);
+  eq(evil.rows.length, 0, "parameterized query is SQLi-safe — the injection is data, not SQL");
+  await db.query("DROP TABLE niral_selftest");
+  await db.end();
+});
+
 /* ── summary ──────────────────────────────────────────────────── */
 await runAll();console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

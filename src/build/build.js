@@ -143,7 +143,7 @@ export function build({ root = ".", out } = {}) {
           `import { session } from ${JSON.stringify(ctxRel)};\n` +
           `const publish = (__ch, __data) => globalThis.__niralPublish?.(__ch, __data);\n` +
           `const user = () => session.get("user") ?? null;\n` +
-          authPrelude(nRel("auth.js"), nRel("webauthn.js"), nRel("mail.js"), nRel("oauth.js"), nRel("validate.js"), nRel("observe.js"), nRel("ai.js"), nRel("rag.js")) +
+          authPrelude(nRel("auth.js"), nRel("webauthn.js"), nRel("mail.js"), nRel("oauth.js"), nRel("validate.js"), nRel("observe.js"), nRel("ai.js"), nRel("rag.js"), nRel("postgres.js")) +
           ast.server.code;
         ext = "server.js";
       } else {
@@ -212,6 +212,7 @@ export function build({ root = ".", out } = {}) {
   cpSync(join(FRAMEWORK_DIR, "server", "observe.js"), join(release, "server", "@niral", "observe.js"));
   cpSync(join(FRAMEWORK_DIR, "server", "ai.js"), join(release, "server", "@niral", "ai.js"));
   cpSync(join(FRAMEWORK_DIR, "server", "rag.js"), join(release, "server", "@niral", "rag.js"));
+  cpSync(join(FRAMEWORK_DIR, "server", "postgres.js"), join(release, "server", "@niral", "postgres.js"));
   cpSync(join(FRAMEWORK_DIR, "shared", "validate.js"), join(release, "server", "@niral", "validate.js"));
   for (const lang of usedLangs) {
     cpSync(join(FRAMEWORK_DIR, "langs", lang, `runner.${LANG_EXT[lang] ?? lang}`), join(release, "server", "@niral", `runner-${lang}.${LANG_EXT[lang] ?? lang}`));
