@@ -195,6 +195,50 @@ test("home renders and the server answers", async () => {
 })
 `;
 
+// Recommends the Niral VS Code extension — VS Code prompts to install it on open,
+// giving .niral syntax highlighting + the language server (diagnostics, completions).
+const VSCODE_EXTENSIONS = `{
+  "recommendations": ["zyoralabs.niral-vscode"]
+}
+`;
+
+// App-level guide so AI agents (Copilot, Claude, …) understand this is a Niral app.
+const APP_AGENTS = `# AGENTS.md — this is a Niral app
+
+Built with **Niral** (https://niral.zyora.club) — a zero-dependency, compiler-first
+full-stack framework (Node ≥ 22). Guidance for AI agents editing this project.
+
+## Rules
+- **\`<server>\` blocks run only on the server** and never ship to the browser — put
+  secrets, DB access and business logic there.
+- **Client code cannot read \`process.env\`** (it's a compile error). Env is server-only.
+- **\`data/\` is private** — SQLite / jobs / sessions live there, never served or shipped.
+- Zero runtime dependencies — use Node built-ins; don't \`npm install\` app deps.
+
+## \`.niral\` components (one file: \`<server>\`, \`<script>\`, \`<style>\`, markup)
+- Reactivity runes: \`$state\`, \`$props\`, \`$derived\` (fine-grained, no virtual DOM).
+- Control flow: \`{#if}\` / \`{:else}\`, \`{#for x of list key x.id}\`. Events \`on:click\`,
+  binding \`bind:value\`, transitions \`transition:fade\`.
+- \`<script mode="static">\` = a zero-JS SSR page.
+
+## \`<server>\` block
+- \`export async function load({ params, locals }) {}\` — SSR data for the page.
+- Any other exported function is a typed RPC — the client calls it by name.
+- Ambients (no import): \`session\` (.get/.set), \`user()\`, \`publish(channel, data)\`
+  (client subscribes with \`live(channel, cb)\`), \`enqueue(name, data, opts)\`,
+  \`sql.query(text, params)\` (Postgres when \`NIRAL_DATABASE_URL\` is set — ALWAYS pass
+  values as \`$1, $2\` params, never string-concatenate), \`ai.*\`, \`mail(...)\`.
+- Form actions: \`<form method="post" action="?/save">\` → server \`save(fields)\` (works without JS).
+
+## Routing — files in \`routes/\`
+- \`index.niral\` → \`/\`, \`post/[slug].niral\` → dynamic (\`params.slug\`), \`_layout.niral\`
+  wraps pages (render children with \`<slot/>\`), \`_404.niral\` / \`_error.niral\` for errors.
+
+## Verify with the CLI (the source of truth — don't guess)
+\`niral dev\` · \`niral check\` (runs the real TypeScript compiler) · \`niral build\` · \`niral test\`.
+Add features: \`niral add auth|tailwind|sqlite|chat\`.
+`;
+
 export function createApp({ name, dir, template = "minimal" }) {
   const root = resolve(dir ?? name);
   const appName = name ?? basename(root);
@@ -209,6 +253,9 @@ export function createApp({ name, dir, template = "minimal" }) {
   // every project gets these
   writeFileSync(join(root, ".gitignore"), GITIGNORE);
   writeFileSync(join(root, "README.md"), README(appName));
+  writeFileSync(join(root, "AGENTS.md"), APP_AGENTS);
+  mkdirSync(join(root, ".vscode"), { recursive: true });
+  writeFileSync(join(root, ".vscode", "extensions.json"), VSCODE_EXTENSIONS);
 
   if (template === "minimal") {
     mkdirSync(join(root, "routes"), { recursive: true });
