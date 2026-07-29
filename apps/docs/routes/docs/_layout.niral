@@ -57,7 +57,7 @@ export async function searchDocs(q) {
 <div class="wrap">
   <aside>
     <a class="brand" href="/">
-      <span class="mark">நி</span>
+      <img class="mark" src="/n.png" alt="Niral" width="34" height="34" />
       <span class="name">niral <em>docs</em></span>
     </a>
 
@@ -94,7 +94,7 @@ export async function searchDocs(q) {
 
     <div class="aside-foot">
       <a href="/">← home</a>
-      <span class="v">v0.1 · zero deps</span>
+      <span class="v">zero dependencies</span>
     </div>
   </aside>
 
@@ -127,10 +127,7 @@ export async function searchDocs(q) {
     text-decoration: none; margin: 0 .4rem 1.6rem;
   }
   .mark {
-    display: grid; place-items: center;
-    width: 34px; height: 34px; border-radius: 10px;
-    background: linear-gradient(135deg, #10b981, #34d399);
-    color: #04120b; font-weight: 700; font-size: .95rem;
+    display: block; width: 34px; height: 34px; border-radius: 10px;
   }
   .name { color: #e8eaed; font-weight: 650; letter-spacing: -.01em; }
   .name em { color: #6b7681; font-style: normal; font-weight: 450; }

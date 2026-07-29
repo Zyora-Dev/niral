@@ -96,7 +96,6 @@
       <a class="card" href="/docs/typescript"><b>Real TypeScript</b><span>niral check drives the actual TS compiler — diagnostics map to your .niral lines.</span></a>
       <a class="card" href="/docs/deployment"><b>Atomic deploys</b><span>Hashed releases, one-symlink rollback, security headers and CSP nonces by default.</span></a>
       <a class="card span2" href="/docs/scaling"><b>Scales to a fleet</b><span>Start on one $5 box with SQLite. Add Postgres — managed or self-hosted, TLS built in, zero-dep driver. Then go multi-server: stateless nodes, realtime over LISTEN/NOTIFY, a shared job queue. Every tier opt-in, still zero dependencies.</span></a>
-      <a class="card" href="/docs/server"><b>Postgres, no <code>pg</code></b><span>A pure-Node Postgres client — SCRAM auth, TLS, pooling, SQLi-safe params. Connect to Neon, Supabase or RDS without installing a thing.</span></a>
     </div>
   </section>
 
@@ -321,13 +320,14 @@
   pre :global(.r) { color: #34d399; font-weight: 500; }
 
   /* pipeline */
-  .steps { display: flex; align-items: stretch; justify-content: center; gap: .7rem; flex-wrap: wrap; margin-top: 1.6rem; }
-  .step { background: #11151a; border: 1px solid #232930; border-radius: 13px; padding: .95rem 1.1rem; min-width: 165px; text-align: center; }
+  .steps { display: flex; align-items: stretch; justify-content: center; gap: .5rem; margin-top: 1.6rem; }
+  .step { flex: 1 1 0; min-width: 0; background: #11151a; border: 1px solid #232930; border-radius: 13px; padding: .95rem 1rem; text-align: center; }
   .step code { display: block; color: #7ee2b8; font-size: .9rem; margin-bottom: .25rem; }
   .step span { color: #9aa3ad; font-size: .78rem; }
-  .arrow { align-self: center; color: #34d399; font-size: 1.1rem; }
+  .arrow { flex: 0 0 auto; align-self: center; color: #34d399; font-size: 1.1rem; }
   .pipeline-note { text-align: center; color: #9aa3ad; font-size: .88rem; margin-top: 1.5rem; }
   .pipeline-note a { color: #34d399; text-decoration: none; }
+  @media (max-width: 640px) { .steps { flex-direction: column; } .arrow { transform: rotate(90deg); } }
 
   /* feature bento */
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
@@ -355,7 +355,8 @@
   .bench-note { text-align: center; color: #5f6b76; font-size: .84rem; margin-top: 1.6rem; }
 
   /* small-server economics — animated cards */
-  .vps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+  .vps-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  @media (max-width: 560px) { .vps-grid { grid-template-columns: 1fr; } }
   .vps-card { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 16px; padding: 1.4rem 1.3rem 1.3rem; overflow: hidden; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
   .vps-card::before { content: ""; position: absolute; inset: 0; background: radial-gradient(140px 90px at 20% 0%, rgba(52, 211, 153, .10), transparent 70%); opacity: 0; transition: opacity .25s; pointer-events: none; }
   .vps-card:hover { transform: translateY(-4px); border-color: #34d39966; box-shadow: 0 14px 44px rgba(0, 0, 0, .35); }

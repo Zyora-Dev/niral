@@ -48,7 +48,7 @@ export async function load({ params }) {
 </script>
 
 <head>
-  <title>{title} · நிரல் docs</title>
+  <title>{title} · Niral docs</title>
 </head>
 
 <div class="page">
