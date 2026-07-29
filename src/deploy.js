@@ -265,6 +265,8 @@ NIRAL_SECURE=1
 # Real-time channels fan out across every instance via Postgres LISTEN/NOTIFY.
 # NIRAL_CLUSTER=1
 # NIRAL_DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+# Share the background-job queue across nodes too (any node enqueues + works it):
+# NIRAL_JOBS_STORE=pg
 `;
 
 export function initDeploy({ root }) {

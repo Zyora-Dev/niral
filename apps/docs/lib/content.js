@@ -684,9 +684,14 @@ there is nothing to coordinate.
 
 ## Background jobs
 
-Run the queue + cron on **one** dedicated worker (\`niral jobs\`) and set
-\`NIRAL_JOBS=off\` on the web instances, so scheduled work fires once, not once
-per node. See [Jobs](/docs/jobs).
+Two options across a cluster:
+
+- **Shared Postgres queue (symmetric).** Set \`NIRAL_JOBS_STORE=pg\` on every
+  node — any node enqueues, any node works the queue (claimed with \`FOR UPDATE
+  SKIP LOCKED\`), and cron fires once via a Postgres advisory-lock leader. No
+  special box. See [Jobs](/docs/jobs).
+- **Dedicated worker.** Or run the queue + cron on **one** \`niral jobs\` process
+  and set \`NIRAL_JOBS=off\` on the web instances.
 
 ## Health checks
 
@@ -776,6 +781,25 @@ await enqueue("sendWelcome", { email }, { delay: 5000, maxAttempts: 5 })
 - One sleeping timer — zero cost on the request path
 - Scale out with \`niral jobs\` as a dedicated worker process (\`NIRAL_JOBS=off\`
   on the web servers)
+
+## Shared queue across servers
+
+SQLite is the default (one box). Running a [cluster](/docs/scaling)? Set
+\`NIRAL_JOBS_STORE=pg\` (+ \`NIRAL_DATABASE_URL\`) and the queue moves into
+**Postgres** — the same zero-dep driver, no Redis:
+
+\`\`\`sh
+NIRAL_JOBS_STORE=pg
+NIRAL_DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+\`\`\`
+
+Now **any** node can \`enqueue()\` and **any** worker picks the job up — claimed
+atomically with \`SELECT … FOR UPDATE SKIP LOCKED\` so a job never runs twice.
+Cron fires **once** across the whole cluster (one node wins a Postgres advisory
+lock and owns the schedule; if it dies, another takes over). A job abandoned by
+a crashed worker is reclaimed automatically. Same \`jobs.js\`, same \`enqueue()\` —
+just a bigger queue. Tip: \`await enqueue(...)\` so the row is committed before
+your response returns.
 `,
   },
 

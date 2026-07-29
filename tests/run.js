@@ -3849,6 +3849,60 @@ test("jobs: durable queue — runs, retries with backoff, dead-letters, survives
   }
 });
 
+test("jobs: shared Postgres queue — claim-once across nodes (NIRAL_JOBS_STORE=pg)", async () => {
+  const url = process.env.NIRAL_TEST_PG_URL;
+  if (!url) { ok(true, "pg jobs test skipped (set NIRAL_TEST_PG_URL to run it)"); return; }
+  const { createJobRunner } = await import("../src/server/jobs.js");
+  const { pgConnect } = await import("../src/server/postgres.js");
+  const { mkdtempSync, writeFileSync, readFileSync, existsSync } = _fs;
+  const { tmpdir } = _os;
+  const dir = mkdtempSync(join(tmpdir(), "niral-pgjobs-"));
+  writeFileSync(
+    join(dir, "jobs.js"),
+    `import { writeFileSync, readFileSync, existsSync } from "node:fs";
+     import { join } from "node:path";
+     export const jobs = {
+       async tag({ n }) {
+         await new Promise((r) => setTimeout(r, 40)); // let both nodes compete for work
+         const f = join(${JSON.stringify(dir)}, "ran.json");
+         const cur = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
+         cur[n] = (cur[n] ?? 0) + 1;
+         writeFileSync(f, JSON.stringify(cur));
+       },
+     };
+     export const schedules = [];`
+  );
+  // clean slate: drop the table so the store creates the canonical schema
+  const c = await pgConnect(url);
+  await c.query("DROP TABLE IF EXISTS niral_jobs");
+  await c.end();
+
+  const prev = { store: process.env.NIRAL_JOBS_STORE, dburl: process.env.NIRAL_DATABASE_URL, poll: process.env.NIRAL_JOBS_POLL_MS };
+  process.env.NIRAL_JOBS_STORE = "pg";
+  process.env.NIRAL_DATABASE_URL = url;
+  process.env.NIRAL_JOBS_POLL_MS = "120"; // both nodes poll the shared queue quickly
+  const A = await createJobRunner({ projectDir: dir });
+  const B = await createJobRunner({ projectDir: dir }); // a second "server" on the same DB
+  try {
+    const N = 8;
+    for (let i = 0; i < N; i++) await A.enqueue("tag", { n: "j" + i });
+    await new Promise((r) => setTimeout(r, 1500)); // both nodes drain the shared queue
+    const ran = JSON.parse(readFileSync(join(dir, "ran.json"), "utf8"));
+    let total = 0, doubled = 0;
+    for (let i = 0; i < N; i++) { const n = ran["j" + i] ?? 0; total += n; if (n > 1) doubled++; }
+    eq(total, N, "every job ran exactly once across the two nodes");
+    eq(doubled, 0, "no job processed twice — FOR UPDATE SKIP LOCKED holds");
+    const stats = await A.stats();
+    eq(stats.done, N, "all jobs marked done in the shared table");
+  } finally {
+    await A.stop();
+    await B.stop();
+    prev.store === undefined ? delete process.env.NIRAL_JOBS_STORE : (process.env.NIRAL_JOBS_STORE = prev.store);
+    prev.dburl === undefined ? delete process.env.NIRAL_DATABASE_URL : (process.env.NIRAL_DATABASE_URL = prev.dburl);
+    prev.poll === undefined ? delete process.env.NIRAL_JOBS_POLL_MS : (process.env.NIRAL_JOBS_POLL_MS = prev.poll);
+  }
+});
+
 test("uploads: multipart form actions receive files (validated, capped)", async () => {
   const { createDevServer } = await import("../src/dev/server.js");
   const { mkdtempSync, writeFileSync, mkdirSync } = _fs;
