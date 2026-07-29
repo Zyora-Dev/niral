@@ -1,6 +1,6 @@
 <div align="center">
 
-# நிரல் · Niral
+# Niral
 
 **The full-stack framework with zero dependencies.**
 
@@ -8,7 +8,7 @@ Compiler-first components · fine-grained reactivity · SSR at Svelte speed —
 served 7.5× faster than Next.js. Auth, jobs, realtime, AI and deploys built in.
 `node_modules` not required.
 
-[Docs](https://niral.zyora.club) · [Benchmarks](https://niral.zyora.club/docs/benchmarks) · [CLI reference](https://niral.zyora.club/docs/cli)
+[Docs](https://niral.zyora.club) · [Benchmarks](https://niral.zyora.club/docs/benchmarks) · [CLI reference](https://niral.zyora.club/docs/cli) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode)
 
 </div>
 
@@ -88,6 +88,15 @@ Hydration ties Svelte (6.6 ms / 1000 rows) at 29.7 KB of JS — [bench/hydration
 - **Quality** — `niral test` (boots your real app), `niral check` (the actual TypeScript compiler), `niral doctor`
 - **Ship** — content-hashed atomic releases, one-symlink rollback, graceful drains, generated systemd + nginx + Dockerfile deploy kit, CSP nonces and security headers by default
 - **More** — i18n, SMTP mail, image pipeline, structured logging with request IDs, LSP + VS Code extension
+
+## Editor & AI support
+
+- **VS Code** — install the [Niral extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode) (`zyoralabs.niral-vscode`) for `.niral` syntax highlighting, diagnostics, completions and hover docs, backed by the built-in language server (`niral lsp`).
+
+  ```sh
+  code --install-extension zyoralabs.niral-vscode
+  ```
+- **AI agents** — every project scaffolds an `AGENTS.md`, so Copilot / Claude / Cursor understand Niral's conventions natively instead of guessing “Svelte-ish.” New apps also drop a `.vscode/extensions.json` that recommends the extension the moment the folder opens. Agents can run `niral check` / `niral test` to verify their own edits against the real compiler.
 
 ## Secrets can't escape
 

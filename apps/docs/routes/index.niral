@@ -217,6 +217,7 @@
       <div class="footer-col">
         <b>Framework</b>
         <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode">VS Code extension</a>
         <a href="/docs/benchmarks">Benchmarks</a>
         <a href="/docs/scaling">Scaling</a>
         <a href="/docs/cli">CLI reference</a>
