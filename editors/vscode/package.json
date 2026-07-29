@@ -2,6 +2,7 @@
   "name": "niral-vscode",
   "displayName": "Niral",
   "description": "Language support for the Niral framework — syntax highlighting, diagnostics, completions and hover docs for .niral components.",
+  "icon": "icon.png",
   "version": "0.1.1",
   "publisher": "zyoralabs",
   "license": "MIT",
