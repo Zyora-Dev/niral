@@ -3,14 +3,14 @@
 </script>
 
 <head>
-  <title>நிரல் · Niral — the zero-dependency full-stack framework</title>
+  <title>Niral — the zero-dependency full-stack framework</title>
   <meta name="description" content="Niral: compiler-first full-stack web framework. Svelte-class performance, Rails-class features, zero dependencies. By ZyoraLabs." />
 </head>
 
 <main>
   <nav class="nav">
     <div class="nav-inner">
-      <a class="mark" href="/"><span class="mark-glyph">நி</span><span class="mark-name">niral</span></a>
+      <a class="mark" href="/"><img class="mark-logo" src="/n.png" alt="Niral" width="30" height="30" /><span class="mark-name">niral</span></a>
       <div class="nav-links">
         <a href="/docs/getting-started">Docs</a>
         <a href="/docs/benchmarks">Benchmarks</a>
@@ -23,7 +23,7 @@
   <section class="hero">
     <div class="glow"></div>
     <p class="badge"><span class="pulse"></span>v0.1 · zero dependencies · reproducible benchmarks</p>
-    <p class="tamil">நிரல்</p>
+    <img class="hero-logo" src="/n.png" alt="Niral" width="104" height="104" />
     <h1>The full-stack framework<br />with <em>zero</em> dependencies.</h1>
     <p class="sub">
       Compiler-first components. Fine-grained reactivity. SSR at Svelte speed —
@@ -215,6 +215,7 @@
   .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(10, 12, 16, .72); border-bottom: 1px solid rgba(255, 255, 255, .05); }
   .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; }
   .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
+  .mark-logo { width: 2rem; height: 2rem; border-radius: 8px; display: block; }
   .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
   .mark-name { color: #e8eaed; font-weight: 650; letter-spacing: .01em; }
   .nav-links { display: flex; align-items: center; gap: 1.3rem; }
@@ -238,6 +239,7 @@
   .pulse { width: .48rem; height: .48rem; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); animation: pulse 2.2s ease-out infinite; }
   @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
   .tamil { font-size: 2.8rem; margin: 0; background: linear-gradient(120deg, #34d399, #6ee7b7, #0ea5e9, #34d399); background-size: 280% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .05em; animation: rise .7s cubic-bezier(.2, .7, .3, 1) both, sheen 9s linear infinite; }
+  .hero-logo { width: 104px; height: 104px; margin: 0 auto .3rem; display: block; animation: rise .7s cubic-bezier(.2, .7, .3, 1) both; filter: drop-shadow(0 10px 34px rgba(52, 211, 153, .28)); }
   @keyframes sheen { to { background-position: 280% 0; } }
   h1 { font-size: 3.2rem; line-height: 1.1; margin: .6rem 0 1.1rem; letter-spacing: -.028em; }
   h1 em { font-style: normal; background: linear-gradient(120deg, #34d399, #0ea5e9); -webkit-background-clip: text; background-clip: text; color: transparent; }
