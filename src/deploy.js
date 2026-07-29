@@ -184,6 +184,62 @@ server {
 }
 `;
 
+const CLUSTER_SERVICE = (name) => `# /etc/systemd/system/${name}@.service — TEMPLATED unit for horizontal scaling.
+# Run one instance per port (all on one box, or copy to N boxes):
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ${name}@8201 ${name}@8202 ${name}@8203
+# Requires NIRAL_CLUSTER=1 + NIRAL_DATABASE_URL in app.env so real-time channels
+# fan out across every instance via Postgres LISTEN/NOTIFY. Sessions stay in the
+# signed cookie (stateless) so any instance can serve any request — no stickiness.
+[Unit]
+Description=${name} instance on port %i (niral cluster)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/${name}
+ExecStart=/usr/bin/node /opt/niral/bin/niral.js start /opt/${name} -p %i
+EnvironmentFile=/opt/${name}/app.env
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/${name}/data /opt/${name}/dist
+
+[Install]
+WantedBy=multi-user.target
+`;
+
+const NGINX_CLUSTER = (name) => `# /etc/nginx/sites-available/${name} — load-balanced across N niral instances.
+# Start the instances first (niral-cluster@.service), then symlink this + reload.
+upstream ${name}_cluster {
+    least_conn;                 # route each request to the least-busy instance
+    server 127.0.0.1:8201;
+    server 127.0.0.1:8202;
+    server 127.0.0.1:8203;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://${name}_cluster;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # live channels + HMR are WebSockets. No sticky sessions needed: the
+        # Postgres backplane fans messages to whichever instance holds the client.
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 1h;
+    }
+}
+`;
+
 const DOCKERFILE = (name) => `# Container alternative to the systemd unit.
 #   docker build -t ${name} .   &&   docker run -p 8199:8199 -v ${name}-data:/app/data --env-file app.env ${name}
 FROM node:22-slim
@@ -203,6 +259,12 @@ NIRAL_SECURE=1
 # NIRAL_AI_URL=
 # NIRAL_SMTP_URL=
 # NIRAL_MAIL_FROM=
+#
+# ── scale to multiple servers/instances (optional) ──
+# Set both, then run instances via niral-cluster@.service behind nginx-cluster.conf.
+# Real-time channels fan out across every instance via Postgres LISTEN/NOTIFY.
+# NIRAL_CLUSTER=1
+# NIRAL_DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
 `;
 
 export function initDeploy({ root }) {
@@ -221,6 +283,8 @@ export function initDeploy({ root }) {
   writeFileSync(join(out, "niral-app.service"), SERVICE(name));
   writeFileSync(join(out, "niral-watchdog.service"), WATCHDOG_SERVICE(name));
   writeFileSync(join(out, "nginx.conf"), NGINX(name));
+  writeFileSync(join(out, "niral-cluster@.service"), CLUSTER_SERVICE(name));
+  writeFileSync(join(out, "nginx-cluster.conf"), NGINX_CLUSTER(name));
   writeFileSync(join(out, "Dockerfile"), DOCKERFILE(name));
   writeFileSync(join(dir, "app.env"), APP_ENV, { flag: "wx" });
 
@@ -230,6 +294,9 @@ export function initDeploy({ root }) {
     2. copy deploy/ to the server and run:       bash deploy/setup.sh
        (installs node 22 + nginx, systemd unit, generates NIRAL_SECRET)
   every deploy after that:
-    ./deploy/deploy.sh          (rsync → build on server → restart → health check)`);
+    ./deploy/deploy.sh          (rsync → build on server → restart → health check)
+  scale out later (optional):
+    set NIRAL_CLUSTER=1 + NIRAL_DATABASE_URL in app.env, run niral-cluster@.service
+    instances behind nginx-cluster.conf — see docs /docs/scaling`);
   return out;
 }

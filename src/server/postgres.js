@@ -104,6 +104,7 @@ export function pgConnect(config) {
     const state = { rows: [], fields: [], resolvers: [], clientNonce: null, serverSig: null, ready: false, closed: false };
     const pending = []; // queued {sql, params, resolve, reject}
     let current = null;
+    let onNotify = null; // LISTEN/NOTIFY callback (channel, payload)
 
     const send = (buf) => sock.write(buf);
 
@@ -173,6 +174,15 @@ export function pgConnect(config) {
           return;
         }
         case "C": return; // CommandComplete
+        case "A": { // NotificationResponse (LISTEN/NOTIFY) — can arrive any time
+          let off = 4; // skip int32 notifying-backend pid
+          let end = body.indexOf(0, off);
+          const channel = body.subarray(off, end).toString("utf8");
+          off = end + 1; end = body.indexOf(0, off);
+          const payload = body.subarray(off, end).toString("utf8");
+          if (onNotify) { try { onNotify(channel, payload); } catch {} }
+          return;
+        }
         case "Z": { // ReadyForQuery
           if (!state.ready) { state.ready = true; resolve(api); }
           else if (current) {
@@ -253,6 +263,8 @@ export function pgConnect(config) {
 
     const api = {
       query(sql, params) { return new Promise((res, rej) => { pending.push({ sql, params, resolve: res, reject: rej }); drain(); }); },
+      /** Register a LISTEN/NOTIFY handler, then `query("LISTEN channel")`. */
+      onNotification(cb) { onNotify = cb; return api; },
       end() { return new Promise((res) => { try { send(new Writer().frame("X")); } catch {} sock.end(res); }); },
       get closed() { return state.closed; },
     };

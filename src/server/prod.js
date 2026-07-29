@@ -26,6 +26,7 @@ import { parseFormBody, actionName, actionRedirect } from "./forms.js";
 import { multipartBoundary, parseMultipart, encodeFilesForWorker, DEFAULT_MAX_UPLOAD } from "./uploads.js";
 import { createJobRunner } from "./jobs.js";
 import { attachLive } from "./live.js";
+import { clusterEnabled, createPgBackplane } from "./backplane.js";
 import { loadHooks, applyHooks, checkRequiredEnv } from "./hooks.js";
 import { makeNonce, baseSecurityHeaders, htmlSecurityHeaders, MAX_RPC_ARGS } from "./security.js";
 import { setSecureCookies } from "./session.js";
@@ -239,6 +240,15 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
   });
   const liveHub = attachLive(server, { secret: sessionSecret, projectDir: projectRoot }); // /@niral/live — user-facing real-time channels
 
+  // Cluster backplane — when NIRAL_CLUSTER=1 + NIRAL_DATABASE_URL are set,
+  // real-time messages fan out across every server via Postgres LISTEN/NOTIFY.
+  // Off by default: one process stays a single fast box until you outgrow it.
+  let backplane = null;
+  if (clusterEnabled()) {
+    createPgBackplane({ onRemote: (env) => liveHub.deliverLocal(env) })
+      .then((bp) => { backplane = bp; liveHub.setBackplane(bp); console.log("niral · cluster backplane connected (Postgres LISTEN/NOTIFY)"); })
+      .catch((e) => console.error("niral · cluster backplane failed to connect:", e.message));
+  }
   // pending SQL migrations apply BEFORE the server takes traffic
   migrateAtBoot(projectRoot);
 
@@ -643,6 +653,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
     async shutdown({ grace = 10_000 } = {}) {
       const closed = new Promise((r) => server.close(r));
       liveHub.closeAll(); // WebSockets get 1001 "going away" — clients reconnect to the new process
+      backplane?.close?.(); // release the Postgres LISTEN/NOTIFY connections
       server.closeIdleConnections?.();
       // keep-alive sockets go idle the moment their response finishes — sweep
       // them so the drain completes promptly instead of waiting out `grace`

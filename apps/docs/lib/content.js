@@ -7,7 +7,7 @@ export const GROUPS = [
   { name: "Build", slugs: ["routing", "styling", "typescript"] },
   { name: "Server", slugs: ["server", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
-  { name: "Ship", slugs: ["deployment", "security", "cli", "benchmarks"] },
+  { name: "Ship", slugs: ["deployment", "scaling", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
@@ -609,6 +609,89 @@ export function liveAuth({ channel, user }) {
 
 Denied joins get \`{ type: "denied" }\` — and a crashing guard denies, never
 fails open.
+
+> Running on more than one server? Turn on the [cluster backplane](/docs/scaling)
+> and \`publish()\` reaches subscribers on **every** node, not just the one that
+> ran the code.
+`,
+  },
+
+  scaling: {
+    title: "Scaling to many servers",
+    body: `
+Niral is built to run beautifully on **one small box** — a ₹300/month VPS, a
+free tier, a shared laptop. Most apps never need more. But when you outgrow a
+single server, Niral scales horizontally without changing your code.
+
+## The shape of a cluster
+
+Run the **same app on N servers** behind a load balancer. Three things make
+that just work:
+
+- **Stateless requests.** Sessions live in a signed cookie by default, so any
+  server can serve any request — no sticky sessions, no shared session store.
+- **Shared database.** Point every node at the same [Postgres](/docs/server)
+  (\`NIRAL_DATABASE_URL\`) — managed (Neon / Supabase / RDS) or your own.
+- **A real-time backplane.** So \`publish()\` on one node reaches clients
+  connected to *another* node.
+
+## Turn on the backplane
+
+Set two env vars and real-time channels fan out across every server using
+**Postgres LISTEN/NOTIFY** — no Redis, no extra dependency, just the pg driver
+Niral already ships:
+
+\`\`\`sh
+NIRAL_CLUSTER=1
+NIRAL_DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+\`\`\`
+
+Nothing else changes. \`publish("alerts", msg)\` and client \`send()\` now reach
+subscribers on **any** node — behaviour is identical whether you run 1 server
+or 50. Off by default: Niral stays a single fast process until you ask for more.
+
+## Load balancer
+
+\`niral deploy\` writes a ready \`deploy/nginx-cluster.conf\` — an nginx upstream
+that spreads requests across your instances (no stickiness needed):
+
+\`\`\`nginx
+upstream app_cluster {
+    least_conn;
+    server 127.0.0.1:8201;
+    server 127.0.0.1:8202;
+    server 127.0.0.1:8203;
+    keepalive 32;
+}
+server {
+    location / {
+        proxy_pass http://app_cluster;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;   # WebSocket live channels
+        proxy_set_header Connection "upgrade";
+    }
+}
+\`\`\`
+
+Start the instances with the templated systemd unit (\`deploy/niral-cluster@.service\`):
+
+\`\`\`sh
+sudo systemctl enable --now app@8201 app@8202 app@8203
+\`\`\`
+
+Add more ports (or more boxes) to scale out — every instance is stateless, so
+there is nothing to coordinate.
+
+## Background jobs
+
+Run the queue + cron on **one** dedicated worker (\`niral jobs\`) and set
+\`NIRAL_JOBS=off\` on the web instances, so scheduled work fires once, not once
+per node. See [Jobs](/docs/jobs).
+
+## Health checks
+
+Every instance exposes \`GET /@niral/health\` (release + uptime, no secrets) —
+point your balancer's health check at it so a bad node is pulled automatically.
 `,
   },
 

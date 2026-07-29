@@ -5052,6 +5052,25 @@ test("postgres: pure-Node driver — url parsing always, live SCRAM query when N
   await db.end();
 });
 
+test("cluster: pg backplane fans a real-time message to every node (LISTEN/NOTIFY)", async () => {
+  const url = process.env.NIRAL_TEST_PG_URL;
+  if (!url) { ok(true, "cluster backplane test skipped (set NIRAL_TEST_PG_URL to run it)"); return; }
+  const { createPgBackplane } = await import("../src/server/backplane.js");
+  const gotA = [];
+  const gotB = [];
+  // two independent nodes, same database
+  const nodeA = await createPgBackplane({ url, onRemote: (e) => gotA.push(e) });
+  const nodeB = await createPgBackplane({ url, onRemote: (e) => gotB.push(e) });
+  await new Promise((r) => setTimeout(r, 150)); // let both LISTENs settle
+  // publish on node A — must reach node A (echo) AND node B (across the cluster)
+  await nodeA.publish({ k: "pub", c: "room7", d: { msg: "deploy done" } });
+  await new Promise((r) => setTimeout(r, 300)); // NOTIFY propagation
+  ok(gotA.some((e) => e.c === "room7" && e.d.msg === "deploy done"), "origin node delivers to its own clients");
+  ok(gotB.some((e) => e.c === "room7" && e.d.msg === "deploy done"), "message crosses to the other server");
+  await nodeA.close();
+  await nodeB.close();
+});
+
 /* ── summary ──────────────────────────────────────────────────── */
 await runAll();console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

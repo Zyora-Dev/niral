@@ -22,12 +22,13 @@
 import { acceptKey, encodeText, decodeFrame, encodePong, encodeClose } from "../dev/websocket.js";
 import { readSession } from "./session.js";
 import { loadHooks } from "./hooks.js";
+import { randomBytes } from "node:crypto";
 
 const CHANNEL_RE = /^[\w:-]{1,64}$/;
 const MAX_CHANNELS_PER_CLIENT = 32;
 const MAX_FRAME = 64 * 1024;
 
-export function attachLive(server, { path = "/@niral/live", secret = null, projectDir = null } = {}) {
+export function attachLive(server, { path = "/@niral/live", secret = null, projectDir = null, backplane = null } = {}) {
   const channels = new Map(); // name → Set<client>
   const clients = new Set(); // every connected socket — graceful shutdown closes them all
 
@@ -45,18 +46,33 @@ export function attachLive(server, { path = "/@niral/live", secret = null, proje
     client.channels.delete(name);
   }
 
-  function fanout(name, obj, except = null) {
+  function fanout(name, obj, exceptId = null) {
     const set = channels.get(name);
     if (!set) return;
     const frame = encodeText(JSON.stringify(obj));
     for (const c of set) {
-      if (c === except) continue;
+      if (exceptId && c.id === exceptId) continue;
       try {
         c.socket.write(frame);
       } catch {
         dropClient(c);
       }
     }
+  }
+
+  // Deliver an envelope to THIS node's local clients. Same shape whether it
+  // came from a local publish/send or arrived over the cluster backplane.
+  function deliverLocal(env) {
+    const msg = { type: "message", channel: env.c, data: env.d };
+    if (env.k === "snd") fanout(env.c, msg, env.s); // exclude the original sender (matches on its node)
+    else fanout(env.c, msg);
+  }
+
+  // One route for both modes: clustered → through the backplane (every node,
+  // incl. this one, delivers on the echo); standalone → straight to locals.
+  function route(env) {
+    if (backplane) backplane.publish(env);
+    else deliverLocal(env);
   }
 
   function dropClient(client) {
@@ -79,7 +95,7 @@ export function attachLive(server, { path = "/@niral/live", secret = null, proje
         `Sec-WebSocket-Accept: ${acceptKey(key)}\r\n\r\n`
     );
 
-    const client = { socket, channels: new Set() };
+    const client = { socket, channels: new Set(), id: randomBytes(8).toString("hex") };
     clients.add(client);
     // session snapshot from the upgrade request — drives liveAuth decisions
     const session = secret ? readSession(req.headers.cookie, secret).data : {};
@@ -131,7 +147,7 @@ export function attachLive(server, { path = "/@niral/live", secret = null, proje
           })();
         } else if (msg.type === "leave") leaveChannel(client, msg.channel);
         else if (msg.type === "send" && client.channels.has(msg.channel)) {
-          fanout(msg.channel, { type: "message", channel: msg.channel, data: msg.data }, client);
+          route({ k: "snd", c: msg.channel, d: msg.data, s: client.id });
         }
       }
     });
@@ -141,11 +157,17 @@ export function attachLive(server, { path = "/@niral/live", secret = null, proje
   });
 
   const hub = {
-    /** Server-side publish — reaches EVERY member of the channel. */
+    /** Server-side publish — reaches EVERY member of the channel (all nodes). */
     publish(channel, data) {
-      fanout(channel, { type: "message", channel, data });
+      route({ k: "pub", c: channel, d: data });
     },
-    /** Members currently in a channel (diagnostics). */
+    /** Deliver a backplane envelope to this node's local clients. */
+    deliverLocal,
+    /** Attach (or replace) the cluster backplane once it has connected. */
+    setBackplane(bp) {
+      backplane = bp;
+    },
+    /** Members currently in a channel on THIS node (diagnostics). */
     size(channel) {
       return channels.get(channel)?.size ?? 0;
     },
