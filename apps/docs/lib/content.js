@@ -470,12 +470,19 @@ perfect for a marketing site, a tool, or most SaaS apps. It survives deploys
 
 When an app outgrows one box — heavy concurrent writes, multiple servers, big
 data — reach for **Postgres**. Niral speaks the Postgres wire protocol directly
-(SCRAM-SHA-256 auth, parameterized queries, a connection pool) with **its own
-pure-Node driver — no \`pg\`, no npm, still zero dependencies.** Set one env var
-and use the ambient \`sql\` in any \`<server>\` block:
+(SCRAM-SHA-256 auth, TLS, parameterized queries, a connection pool) with **its
+own pure-Node driver — no \`pg\`, no npm, still zero dependencies.**
+
+You don't install Postgres either — point at a **managed database** (Neon,
+Supabase, AWS RDS, GCP Cloud SQL, Railway, …). They hand you a URL; set one env
+var and use the ambient \`sql\` in any \`<server>\` block:
 
 \`\`\`sh
-NIRAL_DATABASE_URL=postgres://user:pass@host:5432/mydb
+# managed Postgres — install nothing, just paste the URL (TLS is built in)
+NIRAL_DATABASE_URL=postgres://user:pass@ep-cool-name.neon.tech/db?sslmode=require
+
+# or your own box on a private network
+NIRAL_DATABASE_URL=postgres://user:pass@localhost:5432/mydb
 \`\`\`
 
 \`\`\`html
@@ -489,8 +496,9 @@ export async function load() {
 \`\`\`
 
 \`sql.query(text, params)\` returns \`{ rows, fields }\`; types come back decoded
-(int → number, bool → boolean, json/jsonb → object). Honest limits: TLS isn't
-implemented yet, so connect over a private network / localhost or a proxy.
+(int → number, bool → boolean, json/jsonb → object). TLS modes follow libpq:
+\`sslmode=require\` encrypts, \`verify-full\` also validates the certificate,
+\`disable\` (or no \`sslmode\`) stays plaintext for localhost / private networks.
 `,
   },
 

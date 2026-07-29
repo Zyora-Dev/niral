@@ -8,14 +8,16 @@
  *
  * Supports: protocol v3, SCRAM-SHA-256 auth (the modern default) + md5 +
  * cleartext, simple + parameterized ($1,$2 — SQLi-safe) queries, a connection
- * pool, and common type decoding. TLS is not yet implemented (connect over a
- * private network / localhost, or a proxy) — documented honestly.
+ * pool, common type decoding, and TLS (sslmode=require / verify-full) so you
+ * can connect to managed Postgres — Neon, Supabase, AWS RDS, GCP Cloud SQL,
+ * Railway, etc. — without installing anything.
  *
  *   const db = pgPool(process.env.DATABASE_URL)
  *   const { rows } = await db.query("select * from users where id = $1", [id])
  */
 
 import { createConnection } from "node:net";
+import { connect as tlsConnect } from "node:tls";
 import { pbkdf2Sync, createHmac, createHash, randomBytes } from "node:crypto";
 
 /* ── wire helpers ──────────────────────────────────────────────── */
@@ -98,7 +100,7 @@ function decode(oid, text) { return text === null ? null : (DECODERS[oid] ?? ((v
 export function pgConnect(config) {
   const cfg = typeof config === "string" ? parseUrl(config) : config;
   return new Promise((resolve, reject) => {
-    const sock = createConnection({ host: cfg.host, port: cfg.port });
+    let sock = null;
     const state = { rows: [], fields: [], resolvers: [], clientNonce: null, serverSig: null, ready: false, closed: false };
     const pending = []; // queued {sql, params, resolve, reject}
     let current = null;
@@ -185,13 +187,39 @@ export function pgConnect(config) {
       }
     });
 
-    sock.on("data", parser);
-    sock.on("error", fail);
-    sock.on("close", () => { state.closed = true; if (current) fail(new Error("pg: connection closed")); });
+    function boot(readySock) {
+      sock = readySock;
+      sock.on("data", parser);
+      sock.on("error", fail);
+      sock.on("close", () => { state.closed = true; if (current) fail(new Error("pg: connection closed")); });
+      // startup
+      const startup = new Writer().int32(196608).str("user").str(cfg.user).str("database").str(cfg.database).str("application_name").str("niral").byte(0);
+      send(startup.frame(null));
+    }
 
-    // startup
-    const startup = new Writer().int32(196608).str("user").str(cfg.user).str("database").str(cfg.database).str("application_name").str("niral").byte(0);
-    send(startup.frame(null));
+    // Establish the socket, upgrading to TLS first when requested. Managed
+    // Postgres (Neon / Supabase / AWS RDS / Cloud SQL) hands you a URL with
+    // sslmode=require — no local install, just connect.
+    const ssl = normalizeSsl(cfg);
+    const plain = createConnection({ host: cfg.host, port: cfg.port });
+    plain.once("error", reject);
+    plain.once("connect", () => {
+      if (!ssl) { plain.removeListener("error", reject); return boot(plain); }
+      const req = Buffer.alloc(8); req.writeInt32BE(8, 0); req.writeInt32BE(80877103, 4);
+      plain.write(req); // SSLRequest
+      plain.once("data", (buf) => {
+        if (String.fromCharCode(buf[0]) === "S") {
+          plain.removeListener("error", reject);
+          const secure = tlsConnect({ socket: plain, servername: cfg.host, rejectUnauthorized: ssl.rejectUnauthorized, ca: ssl.ca });
+          secure.once("error", reject);
+          secure.once("secureConnect", () => { secure.removeListener("error", reject); boot(secure); });
+        } else if (ssl.required) {
+          reject(new Error("pg: server refused TLS (SSLRequest → 'N') but sslmode requires it"));
+        } else {
+          plain.removeListener("error", reject); boot(plain); // prefer/allow → plaintext fallback
+        }
+      });
+    });
 
     function drain() {
       if (current || !pending.length || !state.ready) return;
@@ -270,12 +298,35 @@ export function pgPool(config, { max = 10 } = {}) {
 
 export function parseUrl(url) {
   const u = new URL(url);
-  return {
+  const cfg = {
     host: u.hostname || "localhost",
     port: Number(u.port) || 5432,
     user: decodeURIComponent(u.username) || "postgres",
     password: decodeURIComponent(u.password) || "",
     database: u.pathname.replace(/^\//, "") || "postgres",
+  };
+  // TLS: ?sslmode=require|verify-full|verify-ca|prefer|disable (or ?ssl=true).
+  // Managed providers (Neon / Supabase / RDS) give you sslmode=require.
+  const sslmode = u.searchParams.get("sslmode");
+  if (sslmode) cfg.sslmode = sslmode;
+  const ssl = u.searchParams.get("ssl");
+  if (!cfg.sslmode && (ssl === "true" || ssl === "1" || ssl === "require")) cfg.sslmode = "require";
+  return cfg;
+}
+
+/** Decide TLS behaviour from cfg.sslmode / cfg.ssl. Returns null for plaintext. */
+function normalizeSsl(cfg) {
+  const mode = cfg.sslmode;
+  const ssl = cfg.ssl;
+  if (ssl === false || mode === "disable") return null;
+  if (ssl == null && mode == null) return null; // default: plaintext (localhost / private net)
+  const optional = mode === "prefer" || mode === "allow";
+  const strict = mode === "verify-ca" || mode === "verify-full" ||
+                 (ssl && typeof ssl === "object" && ssl.rejectUnauthorized === true);
+  return {
+    required: !optional,
+    rejectUnauthorized: strict, // require = encrypt only (libpq default); verify-full = verify the cert
+    ca: ssl && typeof ssl === "object" ? ssl.ca : undefined,
   };
 }
 

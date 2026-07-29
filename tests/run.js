@@ -5029,6 +5029,12 @@ test("postgres: pure-Node driver — url parsing always, live SCRAM query when N
   eq(u.password, "s3cret", "password parsed");
   eq(u.database, "shop", "database parsed");
 
+  // TLS: sslmode is parsed off the URL (managed providers hand you ?sslmode=require)
+  eq(parseUrl("postgres://a:b@h/db?sslmode=require").sslmode, "require", "sslmode=require parsed");
+  eq(parseUrl("postgres://a:b@h/db?sslmode=verify-full").sslmode, "verify-full", "sslmode=verify-full parsed");
+  eq(parseUrl("postgres://a:b@h/db?ssl=true").sslmode, "require", "ssl=true → require");
+  eq(parseUrl("postgres://a:b@h/db").sslmode, undefined, "no sslmode by default (plaintext)");
+
   // live driver test — only when a test Postgres is provided (keeps CI green offline)
   const url = process.env.NIRAL_TEST_PG_URL;
   if (!url) { ok(true, "live PG test skipped (set NIRAL_TEST_PG_URL to run it)"); return; }
