@@ -52,6 +52,23 @@ const FRAMEWORKS = [
     build: () => run(bin("vite"), ["build"], join(here, "apps", "sveltekit")),
     start: () => spawnServer("node", [join(here, "apps", "sveltekit", "build", "index.js")], { PORT: "4703" }),
   },
+  {
+    name: "solidstart",
+    port: 4704,
+    clean: () => {
+      rmSync(join(here, "apps", "solidstart", ".output"), { recursive: true, force: true });
+      rmSync(join(here, "apps", "solidstart", ".vinxi"), { recursive: true, force: true });
+    },
+    build: () => run(bin("vinxi"), ["build"], join(here, "apps", "solidstart")),
+    start: () => spawnServer("node", [join(here, "apps", "solidstart", ".output", "server", "index.mjs")], { PORT: "4704" }),
+  },
+  {
+    name: "astro",
+    port: 4705,
+    clean: () => rmSync(join(here, "apps", "astro", "dist"), { recursive: true, force: true }),
+    build: () => run(bin("astro"), ["build"], join(here, "apps", "astro")),
+    start: () => spawnServer("node", [join(here, "apps", "astro", "dist", "server", "entry.mjs")], { HOST: "127.0.0.1", PORT: "4705" }),
+  },
 ];
 
 function run(cmd, args, cwd = here) {

@@ -1005,18 +1005,21 @@ runs, medians reported. Full methodology lives in the repo under
 
 ## End-to-end — real production servers
 
-The whole request path: each framework's own production server (\`niral start\`,
-\`next start\`, SvelteKit adapter-node), dynamic SSR on every request, no
-caching, 100 connections for 10 seconds. Zero errors for every framework.
+The whole request path: each framework's own production server, dynamic SSR on
+every request, no caching, 100 connections for 10 seconds. Zero errors for
+every framework.
 
-| Framework | req/s | p50 | p99 | cold start | build |
-|-----------|------:|----:|----:|-----------:|------:|
-| **niral** | **~2,200** | **40 ms** | ~150 ms | **~160 ms** | **0.2 s** |
-| sveltekit 2 | ~580 | 128 ms | ~1.6 s | ~160 ms | 2.3–3.7 s |
-| next 16 | ~290 | 310 ms | ~2.3–3.2 s | ~350 ms | 3.3–5.5 s |
+| Framework | req/s | p50 | p99 | build |
+|-----------|------:|----:|----:|------:|
+| **niral** | **~2,374** | **39 ms** | **81 ms** | **0.2 s** |
+| solidstart 1 | ~1,885 | 43 ms | 151 ms | 4.9 s |
+| astro 5 | ~698 | 140 ms | 338 ms | 1.3 s |
+| sveltekit 2 | ~599 | 137 ms | ~1.1 s | 2.9 s |
+| next 16 | ~303 | 305 ms | ~2.3 s | 3.9 s |
 
-~3.8× SvelteKit and ~7.5× Next.js on dynamic SSR throughput — and p99 stays
-near 150 ms while the others exceed 1.5 s under the same load.
+niral leads every JS meta-framework on throughput — ~1.3× SolidStart (the
+closest rival), ~3.4× Astro, ~4× SvelteKit, ~7.8× Next.js — with the **best tail
+latency** (p99 81 ms while every other exceeds 150 ms) and the lowest memory.
 
 ## Hydration (parse start → interactive)
 

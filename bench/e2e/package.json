@@ -4,14 +4,22 @@
   "type": "module",
   "description": "End-to-end production-server benchmark: niral vs Next.js vs SvelteKit. Bench-only deps — the framework itself stays zero-dep.",
   "dependencies": {
+    "@astrojs/node": "^9",
+    "@builder.io/qwik": "^1",
+    "@builder.io/qwik-city": "^1",
+    "@solidjs/router": "^0.15",
+    "@solidjs/start": "^1",
     "@sveltejs/adapter-node": "^5",
     "@sveltejs/kit": "^2",
     "@sveltejs/vite-plugin-svelte": "^5",
+    "astro": "^5",
     "autocannon": "^8",
     "next": "^16",
     "react": "^19",
     "react-dom": "^19",
+    "solid-js": "^1",
     "svelte": "^5",
+    "vinxi": "^0.5",
     "vite": "^6"
   }
 }

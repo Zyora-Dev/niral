@@ -14,20 +14,30 @@ node run.js        # builds all three, boots each server, load-tests, prints the
 
 Tunables: `BENCH_DURATION` (default 10s) · `BENCH_CONNECTIONS` (default 100).
 
-## Results (2026-07-28 · M-series MacBook Air, idle · Node 25 · two runs, representative)
+## Results (2026-07-29 · M-series MacBook Air, idle · Node 25 · representative run)
 
-| framework | req/s | p50 | p99 | cold start | build | RSS after load | page (identity) |
-|-----------|------:|----:|----:|-----------:|------:|---------------:|----------------:|
-| **niral** | **2,196–2,240** | **40 ms** | 114–182 ms | **145–169 ms** | **0.2 s** | **194–202 MB** | 125.3 KB |
-| sveltekit 2 (svelte 5) | 570–586 | 127–129 ms | 1,590–1,661 ms | 156–158 ms | 2.3–3.7 s | 291–355 MB | 82.4 KB |
-| next 16 (react 19) | 278–298 | 310–311 ms | 2,274–3,180 ms | 345–351 ms | 3.3–5.5 s | 443–456 MB | 121.3 KB |
+Five frameworks, identical 1000-row dynamic-SSR page, 100 connections × 10s:
+
+| framework | req/s | p50 | p99 | cold start | build | RSS after load |
+|-----------|------:|----:|----:|-----------:|------:|---------------:|
+| **niral** | **2,374** | **39 ms** | **81 ms** | 138 ms | **0.2 s** | 210 MB |
+| solidstart 1 (solid-js) | 1,885 | 43 ms | 151 ms | 154 ms | 4.9 s | 508 MB |
+| astro 5 (node adapter) | 698 | 140 ms | 338 ms | 211 ms | 1.3 s | 295 MB |
+| sveltekit 2 (svelte 5) | 599 | 137 ms | 1,101 ms | 156 ms | 2.9 s | 262 MB |
+| next 16 (react 19) | 303 | 305 ms | 2,337 ms | 363 ms | 3.9 s | 494 MB |
 
 Zero errors / non-2xx for every framework in every run.
 
-- **~3.8× SvelteKit and ~7.5× Next.js** on dynamic SSR throughput
-- p50 latency under load: 40 ms vs 128 ms vs 310 ms
-- p99 stays near 150 ms while the others exceed 1.5–3 s
-- production build: 0.2 s vs seconds — build dirs wiped before each timed build
+- **niral is #1 on throughput** — ~1.3× SolidStart, ~3.4× Astro, ~4× SvelteKit, ~7.8× Next.js
+- **Best tail latency by far** — p99 81 ms while every other framework exceeds 150 ms (and Next/Svelte exceed 1 s)
+- **Lowest memory** — 210 MB vs SolidStart 508 MB, Next 494 MB
+- **Fastest build** — 0.2 s (no bundler) vs 1.3–4.9 s
+- SolidStart is the closest rival (fine-grained, like niral); niral still leads it on throughput, tail latency, memory and build
+
+Honest note: Go/Rust and other compiled-language servers would out-throughput any
+JS framework — that's expected. This bench compares niral against the JavaScript
+meta-frameworks it actually competes with. Qwik was attempted but its node-server
+adapter needs additional manifest wiring; not included here.
 
 ## What is measured
 

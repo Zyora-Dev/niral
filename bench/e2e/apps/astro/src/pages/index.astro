@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+const items = Array.from({ length: 1000 }, (_, i) => ({ id: i, text: "row item number " + i, done: i % 3 === 0 }));
+---
+<html lang="en">
+  <head><meta charset="utf-8" /><title>bench</title></head>
+  <body>
+    <div>
+      <h1 id="h">Rows {items.length} · clicks 0</h1>
+      <ul>
+        {items.map((t) => <li class={t.done ? "done" : ""}>{t.id}: {t.text}</li>)}
+      </ul>
+    </div>
+    <script>
+      let c = 0;
+      const h = document.getElementById("h");
+      const n = h.textContent.split("Rows ")[1].split(" ·")[0];
+      h.addEventListener("click", () => { c++; h.textContent = `Rows ${n} · clicks ${c}`; });
+    </script>
+  </body>
+</html>

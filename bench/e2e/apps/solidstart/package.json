@@ -1,0 +1,6 @@
+{
+  "name": "bench-solidstart",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "vinxi build", "start": "vinxi start" }
+}

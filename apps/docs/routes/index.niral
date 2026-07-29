@@ -103,9 +103,11 @@
     <h2>Measured, not marketed.</h2>
     <p class="section-sub">Production servers, real HTTP, dynamic SSR on every request — the same 1000-row page, 100 connections. <a href="/docs/benchmarks">Full methodology →</a></p>
     <div class="bars">
-      <div class="bar-row"><span class="bar-label">niral</span><div class="bar-track"><div class="bar b-niral" style="width: 100%"></div></div><span class="bar-val">2,200 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">sveltekit</span><div class="bar-track"><div class="bar b-other" style="width: 26%"></div></div><span class="bar-val">580 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">next.js</span><div class="bar-track"><div class="bar b-other" style="width: 13%"></div></div><span class="bar-val">290 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">niral</span><div class="bar-track"><div class="bar b-niral" style="width: 100%"></div></div><span class="bar-val">2,374 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">solidstart</span><div class="bar-track"><div class="bar b-other" style="width: 79%"></div></div><span class="bar-val">1,885 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">astro</span><div class="bar-track"><div class="bar b-other" style="width: 29%"></div></div><span class="bar-val">698 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">sveltekit</span><div class="bar-track"><div class="bar b-other" style="width: 25%"></div></div><span class="bar-val">599 req/s</span></div>
+      <div class="bar-row"><span class="bar-label">next.js</span><div class="bar-track"><div class="bar b-other" style="width: 13%"></div></div><span class="bar-val">303 req/s</span></div>
     </div>
     <p class="bench-note">Zero errors, every framework, every run. The bench is in the repo — run it yourself.</p>
   </section>

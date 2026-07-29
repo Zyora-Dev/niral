@@ -4,3 +4,9 @@ apps/niral/.niral/
 apps/next/.next/
 apps/sveltekit/build/
 apps/sveltekit/.svelte-kit/
+apps/solidstart/.output/
+apps/solidstart/.vinxi/
+apps/astro/dist/
+apps/astro/.astro/
+apps/qwik/dist/
+apps/qwik/server/
