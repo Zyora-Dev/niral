@@ -7,7 +7,8 @@
  */
 
 import { writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
+import { join, resolve, basename, dirname } from "node:path";
+import { TEMPLATES, TEMPLATE_NAMES } from "./templates.js";
 
 const INDEX = `<server>
 // runs on the server only — never ships to the browser
@@ -194,22 +195,44 @@ test("home renders and the server answers", async () => {
 })
 `;
 
-export function createApp({ name, dir }) {
+export function createApp({ name, dir, template = "minimal" }) {
   const root = resolve(dir ?? name);
   const appName = name ?? basename(root);
   if (existsSync(root) && readdirSync(root).length > 0) {
     throw new Error(`${root} exists and is not empty — pick a new directory`);
   }
-  mkdirSync(join(root, "routes"), { recursive: true });
-  mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "routes", "index.niral"), INDEX);
-  writeFileSync(join(root, "routes", "about.niral"), ABOUT);
-  writeFileSync(join(root, "tests", "app.test.js"), SAMPLE_TEST);
+  if (!TEMPLATE_NAMES.includes(template)) {
+    throw new Error(`unknown template "${template}" — available: ${TEMPLATE_NAMES.join(", ")}`);
+  }
+  mkdirSync(root, { recursive: true });
+
+  // every project gets these
   writeFileSync(join(root, ".gitignore"), GITIGNORE);
   writeFileSync(join(root, "README.md"), README(appName));
-  console.log(`niral · created ${appName}/`);
+
+  if (template === "minimal") {
+    mkdirSync(join(root, "routes"), { recursive: true });
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(join(root, "routes", "index.niral"), INDEX);
+    writeFileSync(join(root, "routes", "about.niral"), ABOUT);
+    writeFileSync(join(root, "tests", "app.test.js"), SAMPLE_TEST);
+    console.log(`niral · created ${appName}/`);
+    console.log(`\n  cd ${appName}`);
+    console.log("  niral dev\n");
+    console.log("routes/index.niral has SSR + state + a keyed list + a server RPC — start there. `niral test` runs tests/.");
+    return root;
+  }
+
+  // a named starter template
+  const tpl = TEMPLATES[template];
+  for (const [rel, content] of Object.entries(tpl.files)) {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content);
+  }
+  console.log(`niral · created ${appName}/ (${template} template)`);
   console.log(`\n  cd ${appName}`);
   console.log("  niral dev\n");
-  console.log("routes/index.niral has SSR + state + a keyed list + a server RPC — start there. `niral test` runs tests/.");
+  console.log(tpl.hint + " `niral test` runs tests/.");
   return root;
 }

@@ -55,6 +55,19 @@ niral dev            # http://localhost:5199 — HMR, error overlays
 The scaffold is a real working app: a server-rendered page with reactive state,
 a keyed list, and a server function called over RPC.
 
+## Starter templates
+
+Prefer to learn from a fuller example? Pass \`--template\`:
+
+\`\`\`sh
+niral create my-blog --template blog        # posts + dynamic [slug] routes + a data module
+niral create my-app  --template dashboard   # a sidebar layout, stat cards, a live-refresh RPC
+niral create my-app  --template minimal     # the default — SSR + state + RPC
+\`\`\`
+
+Each is small and heavily commented — they teach the core patterns by example,
+not a giant app to wade through.
+
 ## One file, whole feature
 
 A route is a single \`.niral\` file. Server code, client logic, markup and styles

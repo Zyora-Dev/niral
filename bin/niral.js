@@ -17,7 +17,7 @@ import { compileClient, NiralError } from "../src/index.js";
 const [, , cmd, ...args] = process.argv;
 
 /** Flags that take a value — their value must never be mistaken for a positional arg. */
-const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db", "--to", "--env", "--url", "--restart-cmd"]);
+const VALUE_FLAGS = new Set(["-o", "-p", "--port", "--runtime", "--family", "--version", "--model", "--db", "--to", "--env", "--url", "--restart-cmd", "--template"]);
 
 /** Positional args (flag values excluded). `niral dev -p 5199` has none. */
 function positionals() {
@@ -136,10 +136,10 @@ if (cmd === "compile") {
   setInterval(() => {}, 1 << 30); // stay alive
 } else if (cmd === "create") {
   const name = positionals()[0];
-  if (!name) die("usage: niral create <app-name>");
+  if (!name) die("usage: niral create <app-name> [--template minimal|blog|dashboard]");
   const { createApp } = await import("../src/create.js");
   try {
-    createApp({ name });
+    createApp({ name, template: flag("--template") ?? "minimal" });
   } catch (e) {
     die(`niral · create failed — ${e.message}`);
   }
@@ -338,6 +338,7 @@ if (cmd === "compile") {
 } else {
   die(`niral v0.1 — commands:
   create <name>                    new project — zero to running in one command
+                                   [--template minimal|blog|dashboard]
   compile <file.niral> [-o out.js] [--runtime path]
   serve [dir] [-p port]
   dev [dir] [-p port]
