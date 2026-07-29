@@ -2,3 +2,4 @@
 .vscodeignore
 **/*.map
 **/.DS_Store
+*.vsix
