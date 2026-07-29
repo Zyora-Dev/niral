@@ -461,6 +461,36 @@ export async function handle(event) {
 Sessions live in a signed HttpOnly cookie by default. Set
 \`NIRAL_SESSION_STORE=db\` and the data moves into \`data/sessions.db\` — the
 cookie shrinks to a signed id, and the 4KB limit disappears.
+
+## Databases — SQLite by default, Postgres when you need it
+
+SQLite (\`node:sqlite\`) is built in and is the default — one file, zero setup,
+perfect for a marketing site, a tool, or most SaaS apps. It survives deploys
+(\`data/\` lives outside releases) and \`niral snapshot\` backs it up.
+
+When an app outgrows one box — heavy concurrent writes, multiple servers, big
+data — reach for **Postgres**. Niral speaks the Postgres wire protocol directly
+(SCRAM-SHA-256 auth, parameterized queries, a connection pool) with **its own
+pure-Node driver — no \`pg\`, no npm, still zero dependencies.** Set one env var
+and use the ambient \`sql\` in any \`<server>\` block:
+
+\`\`\`sh
+NIRAL_DATABASE_URL=postgres://user:pass@host:5432/mydb
+\`\`\`
+
+\`\`\`html
+<server>
+export async function load() {
+  // $1, $2 params are SQLi-safe — the value is data, never SQL
+  const { rows } = await sql.query("select * from posts where author = $1", [id])
+  return { posts: rows }
+}
+</server>
+\`\`\`
+
+\`sql.query(text, params)\` returns \`{ rows, fields }\`; types come back decoded
+(int → number, bool → boolean, json/jsonb → object). Honest limits: TLS isn't
+implemented yet, so connect over a private network / localhost or a proxy.
 `,
   },
 
@@ -533,36 +563,6 @@ export const signup = withSchema(
 
 Rules: \`string\`, \`email\`, \`int\`, \`number\`, \`bool\`, \`oneOf\`, \`array\`, \`file\`,
 \`object\`, \`optional\`.
-
-## Databases — SQLite by default, Postgres when you need it
-
-SQLite (\`node:sqlite\`) is built in and is the default — one file, zero setup,
-perfect for a marketing site, a tool, or most SaaS apps. It survives deploys
-(\`data/\` lives outside releases) and \`niral snapshot\` backs it up.
-
-When an app outgrows one box — heavy concurrent writes, multiple servers, big
-data — reach for **Postgres**. Niral speaks the Postgres wire protocol directly
-(SCRAM-SHA-256 auth, parameterized queries, a connection pool) with **its own
-pure-Node driver — no \`pg\`, no npm, still zero dependencies.** Set one env var
-and use the ambient \`sql\` in any \`<server>\` block:
-
-\`\`\`sh
-NIRAL_DATABASE_URL=postgres://user:pass@host:5432/mydb
-\`\`\`
-
-\`\`\`html
-<server>
-export async function load() {
-  // $1, $2 params are SQLi-safe — the value is data, never SQL
-  const { rows } = await sql.query("select * from posts where author = $1", [id])
-  return { posts: rows }
-}
-</server>
-\`\`\`
-
-\`sql.query(text, params)\` returns \`{ rows, fields }\`; types come back decoded
-(int → number, bool → boolean, json/jsonb → object). Honest limits: TLS isn't
-implemented yet, so connect over a private network / localhost or a proxy.
 `,
   },
 
