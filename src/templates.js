@@ -60,7 +60,7 @@ export async function load() {
 
 <main>
   <header>
-    <span class="mark">நி</span>
+    <span class="mark">n</span>
     <h1>My Blog</h1>
     <p class="sub">A tiny blog — server-rendered, zero dependencies.</p>
   </header>
@@ -133,7 +133,7 @@ const DASH_LAYOUT = `<script>
 
 <div class="shell">
   <aside>
-    <span class="mark">நி</span>
+    <span class="mark">n</span>
     <nav>
       <a href="/">Overview</a>
       <a href="/reports">Reports</a>

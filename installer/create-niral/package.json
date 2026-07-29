@@ -1,7 +1,7 @@
 {
   "name": "create-niral",
-  "version": "0.1.0",
-  "description": "Create a niral app with one command — நிரல், the zero-dependency full-stack framework by ZyoraLabs.",
+  "version": "0.1.1",
+  "description": "Create a niral app with one command — the zero-dependency full-stack framework by ZyoraLabs.",
   "bin": {
     "create-niral": "bin/create-niral.js",
     "niral": "bin/niral.js"

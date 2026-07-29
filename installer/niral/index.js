@@ -44,7 +44,7 @@ function hasGit() {
 /** Download the framework to ~/.niral/framework (git if available, tarball otherwise). */
 export async function ensureFramework({ update = false } = {}) {
   if (existsSync(join(FRAMEWORK, "bin", "niral.js")) && !update) return FRAMEWORK;
-  console.log("நிரல் · downloading the framework (one time, ~1 MB — it has zero dependencies)…");
+  console.log("niral · downloading the framework (one time, ~1 MB — it has zero dependencies)…");
   mkdirSync(NIRAL_HOME, { recursive: true });
   if (hasGit()) {
     if (existsSync(join(FRAMEWORK, ".git"))) {
@@ -81,7 +81,7 @@ export function installLauncher() {
     const line = `export PATH="$HOME/.niral/bin:$PATH"`;
     const current = existsSync(profile) ? readFileSync(profile, "utf8") : "";
     if (!current.includes(".niral/bin")) {
-      appendFileSync(profile, `\n# niral — நிரல்\n${line}\n`);
+      appendFileSync(profile, `\n# niral\n${line}\n`);
       return { shim, profile, added: true };
     }
     return { shim, profile, added: false };

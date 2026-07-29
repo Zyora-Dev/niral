@@ -39,19 +39,19 @@ export async function hello(name) {
 </script>
 
 <head>
-  <title>நிரல் · new app</title>
+  <title>niral · new app</title>
 </head>
 
 <main>
   <div class="glow"></div>
 
   <header>
-    <span class="mark">நி</span>
+    <span class="mark">n</span>
     <span class="badge">SSR'd on the server, hydrated in your browser</span>
   </header>
 
   <h1>It works.</h1>
-  <p class="lead">Your நிரல் app is running — zero dependencies, nothing installed.<br />
+  <p class="lead">Your niral app is running — zero dependencies, nothing installed.<br />
   <span class="dim">server said hi at {started}</span></p>
 
   <section class="demo">
@@ -89,7 +89,7 @@ export async function hello(name) {
   </nav>
 
   <footer>
-    <span>நிரல் · start in <code>routes/index.niral</code> · powered by <a href="https://zyoralabs.com">ZyoraLabs</a></span>
+    <span>niral · start in <code>routes/index.niral</code> · powered by <a href="https://zyoralabs.com">ZyoraLabs</a></span>
   </footer>
 </main>
 
@@ -136,7 +136,7 @@ const ABOUT = `<script mode="static"></script>
 </head>
 
 <main>
-  <span class="mark">நி</span>
+  <span class="mark">n</span>
   <h1>Zero JavaScript</h1>
   <p>This page has <code>mode="static"</code> — pure HTML, no hydration, nothing shipped.<br />
   View source: there is no script tag. That's the whole trick.</p>

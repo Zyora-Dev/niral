@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# நிரல் · niral installer — https://niral.zyora.club
+# niral installer — https://niral.zyora.club
 #   curl -fsSL https://niral.zyora.club/install.sh | bash
 # Installs the framework to ~/.niral (zero dependencies — the download IS the install).
 
@@ -18,7 +18,7 @@ if [ "$MAJOR" -lt 22 ]; then
   exit 1
 fi
 
-echo "நிரல் · installing to $NIRAL_HOME …"
+echo "niral · installing to $NIRAL_HOME …"
 mkdir -p "$NIRAL_HOME"
 
 if command -v git >/dev/null 2>&1; then
@@ -51,7 +51,7 @@ case "${SHELL:-}" in
   */bash) PROFILE="$HOME/.bashrc" ;;
 esac
 if [ -n "$PROFILE" ] && ! grep -q '\.niral/bin' "$PROFILE" 2>/dev/null; then
-  printf '\n# niral — நிரல்\nexport PATH="$HOME/.niral/bin:$PATH"\n' >> "$PROFILE"
+  printf '\n# niral\nexport PATH="$HOME/.niral/bin:$PATH"\n' >> "$PROFILE"
   echo "→ added ~/.niral/bin to PATH in $PROFILE"
 fi
 
