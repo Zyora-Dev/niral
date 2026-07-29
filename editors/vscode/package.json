@@ -1,6 +1,6 @@
 {
   "name": "niral-vscode",
-  "displayName": "Niral (நிரல்)",
+  "displayName": "Niral",
   "description": "Language support for the Niral framework — syntax highlighting, diagnostics, completions and hover docs for .niral components.",
   "version": "0.1.0",
   "publisher": "zyoralabs",
