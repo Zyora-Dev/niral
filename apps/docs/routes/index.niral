@@ -177,14 +177,17 @@
   <section class="cloud">
     <p class="eyebrow">Instant deploys</p>
     <h2>Your machine to a live URL in three commands.</h2>
-    <p class="section-sub"><b>zHost</b> — ZyoraLabs' deployment cloud — detects Niral automatically, builds in seconds, and runs your app sandboxed at <code>&lt;slug&gt;.zyora.in</code>. No server, no nginx, no CI.</p>
+    <p class="section-sub"><b>zHost</b> — ZyoraLabs' deployment cloud — detects Niral automatically, builds in seconds, and runs your app sandboxed at <code>{"<slug>"}.zyora.in</code>. No server, no nginx, no CI.</p>
     <div class="cloud-term">
       <div class="cloud-bar"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span><span class="cloud-title">zhost deploy</span></div>
-      <pre><code><span class="cl-p">$</span> zhost login
-<span class="cl-p">$</span> zhost link my-app
-<span class="cl-p">$</span> zhost deploy
-<span class="cl-d">› Packing source… · queued → building → deploying → <b>live</b></span>
-<span class="cl-ok">✓ Live → https://my-app.zyora.in</span></code></pre>
+      <div class="cloud-body">
+        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t1">zhost login</span><span class="cl-caret c1"></span></p>
+        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t2">zhost link my-app</span><span class="cl-caret c2"></span></p>
+        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t3">zhost deploy</span><span class="cl-caret c3"></span></p>
+        <p class="cl-line cl-d cl-out o1">› Packing source… uploading 3 KB</p>
+        <p class="cl-line cl-d cl-out o2">queued → building → deploying → <b>live</b></p>
+        <p class="cl-line cl-ok cl-out o3">✓ Live → https://my-app.zyora.in</p>
+      </div>
     </div>
     <p class="bench-note">Start at <a href="https://console.zyoralabs.com">console.zyoralabs.com</a> — create a project, follow Settings. <a href="/docs/zhost">Full guide →</a></p>
   </section>
@@ -425,11 +428,40 @@
   .cloud-term { max-width: 620px; margin: 1.8rem auto 0; background: #0d1014; border: 1px solid #232930; border-radius: 16px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
   .cloud-bar { display: flex; align-items: center; gap: .42rem; padding: .6rem .9rem; background: #11151a; border-bottom: 1px solid #1b2027; }
   .cloud-title { margin-left: .5rem; color: #5f6b76; font-size: .76rem; font-family: ui-monospace, "SF Mono", monospace; }
-  .cloud-term pre { margin: 0; padding: 1.1rem 1.2rem 1.2rem; overflow-x: auto; }
-  .cloud-term code { font-family: ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.75; color: #cdd3da; }
-  .cl-p { color: #34d399; }
+  .cloud-body { padding: 1.1rem 1.2rem 1.2rem; overflow-x: auto; min-height: 11.4em; }
+  .cl-line { margin: 0; font-family: ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.9; color: #cdd3da; white-space: nowrap; }
+  .cl-p { color: #34d399; margin-right: .6ch; }
   .cl-d { color: #5f6b76; }
   .cl-ok { color: #6ee7b7; font-weight: 600; }
+  /* typed commands — the whole sequence loops on a 12s cycle (terminal "clears" and replays) */
+  .cl-type { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; width: 0; }
+  .t1 { animation: type-t1 12s infinite; }
+  .t2 { animation: type-t2 12s infinite; }
+  .t3 { animation: type-t3 12s infinite; }
+  @keyframes type-t1 { 0%, 5% { width: 0; animation-timing-function: steps(11, end); } 12.5%, 94% { width: 11ch; } 96%, 100% { width: 0; } }
+  @keyframes type-t2 { 0%, 18.3% { width: 0; animation-timing-function: steps(17, end); } 28.3%, 94% { width: 17ch; } 96%, 100% { width: 0; } }
+  @keyframes type-t3 { 0%, 35% { width: 0; animation-timing-function: steps(12, end); } 42.5%, 94% { width: 12ch; } 96%, 100% { width: 0; } }
+  /* the block caret blinks on the active line, then hops to the next */
+  .cl-caret { display: inline-block; width: .55ch; height: 1.05em; margin-left: 1px; background: #34d399; vertical-align: text-bottom; opacity: 0; }
+  .c1 { animation: caret-c1 12s step-end infinite; }
+  .c2 { animation: caret-c2 12s step-end infinite; }
+  .c3 { animation: caret-c3 12s step-end infinite; }
+  @keyframes caret-c1 { 0% { opacity: 1; } 2.5% { opacity: 0; } 4%, 12.5% { opacity: 1; } 14%, 100% { opacity: 0; } }
+  @keyframes caret-c2 { 0%, 14% { opacity: 0; } 16% { opacity: 1; } 17.5% { opacity: 0; } 19%, 28.3% { opacity: 1; } 30%, 100% { opacity: 0; } }
+  @keyframes caret-c3 { 0%, 30% { opacity: 0; } 32% { opacity: 1; } 33.5% { opacity: 0; } 35%, 42.5% { opacity: 1; } 44%, 100% { opacity: 0; } }
+  /* output lines appear after `zhost deploy` finishes, then clear with the loop */
+  .cl-out { opacity: 0; }
+  .o1 { animation: out-o1 12s ease-out infinite; }
+  .o2 { animation: out-o2 12s ease-out infinite; }
+  .o3 { animation: out-o3 12s ease-out infinite; }
+  @keyframes out-o1 { 0%, 48% { opacity: 0; transform: translateY(4px); } 51.5%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+  @keyframes out-o2 { 0%, 55% { opacity: 0; transform: translateY(4px); } 58.5%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+  @keyframes out-o3 { 0%, 63.3% { opacity: 0; transform: translateY(4px); } 67%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .cl-type { width: auto !important; animation: none; }
+    .cl-out { opacity: 1; transform: none; animation: none; }
+    .cl-caret { display: none; }
+  }
   .cloud .section-sub code { color: #7ee2b8; background: #0e1115; padding: .05rem .35rem; border-radius: 5px; font-size: .85em; }
   .cloud .section-sub b { color: #e8eaed; }
 
