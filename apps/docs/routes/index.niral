@@ -1,16 +1,42 @@
 <script mode="static">
   const demo = "&lt;server&gt;\n<span class='k'>export async function</span> <span class='f'>load</span>() {\n  <span class='k'>return</span> { items: <span class='k'>await</span> db.all() }          <span class='c'>// SSR data — never ships</span>\n}\n<span class='k'>export async function</span> <span class='f'>add</span>(text) {\n  <span class='f'>publish</span>(\"todos\", { text })                <span class='c'>// realtime to every tab</span>\n}\n&lt;/server&gt;\n\n&lt;script&gt;\n  <span class='k'>let</span> { items } = <span class='r'>$props</span>\n  <span class='k'>let</span> list = <span class='r'>$state</span>(items)\n  <span class='f'>live</span>(\"todos\", (t) =&gt; list = [...list, t])\n&lt;/script&gt;\n\n{#for t of list key t.id}\n  &lt;li transition:fade&gt;{t.text}&lt;/li&gt;\n{/for}"
+  const ld = '<script type="application/ld+json">' + JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "SoftwareApplication", "name": "Niral", "applicationCategory": "DeveloperApplication", "operatingSystem": "Node.js 22+", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "A zero-dependency, compiler-first full-stack web framework. Svelte-class performance, batteries included (SSR, auth, database, realtime, jobs, AI), deploy in three commands.", "url": "https://niral.site", "downloadUrl": "https://www.npmjs.com/package/create-niral", "author": { "@type": "Organization", "name": "ZyoraLabs", "url": "https://zyoralabs.com" } },
+      { "@type": "WebSite", "name": "Niral", "url": "https://niral.site", "publisher": { "@type": "Organization", "name": "ZyoraLabs" } }
+    ]
+  }) + '<\/script>'
 </script>
 
 <head>
   <title>Niral — the zero-dependency full-stack framework</title>
-  <meta name="description" content="Niral: compiler-first full-stack web framework. Svelte-class performance, Rails-class features, zero dependencies. By ZyoraLabs." />
+  <meta name="description" content="Niral is a zero-dependency, compiler-first full-stack web framework — Svelte-class performance, faster than Next.js, with auth, database, realtime, jobs, AI and one-command cloud deploys built in. By ZyoraLabs." />
+  <meta name="keywords" content="niral, full-stack framework, zero dependency framework, javascript framework, node.js framework, ssr framework, svelte alternative, next.js alternative, web framework, zyoralabs" />
+  <meta name="author" content="ZyoraLabs" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0a0c10" />
+  <link rel="canonical" href="https://niral.site/" />
+  <link rel="icon" type="image/png" href="/n.png" />
+  <link rel="apple-touch-icon" href="/n.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="Niral — the zero-dependency full-stack framework" />
+  <meta property="og:description" content="Zero dependencies. Faster than Next.js. Auth, database, realtime, jobs, AI &amp; one-command cloud deploys — built in. By ZyoraLabs." />
+  <meta property="og:url" content="https://niral.site/" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral — the zero-dependency full-stack framework" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Niral — the zero-dependency full-stack framework" />
+  <meta name="twitter:description" content="Zero dependencies. Faster than Next.js. Batteries included. Deploy in three commands." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
 </head>
 
 <main>
+  {@html ld}
   <nav class="nav">
     <div class="nav-inner">
       <a class="mark" href="/"><img class="mark-logo" src="/n.png" alt="Niral" width="30" height="30" /><span class="mark-name">niral</span></a>

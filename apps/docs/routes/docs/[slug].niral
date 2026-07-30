@@ -3,19 +3,22 @@ export async function load({ params }) {
   const { PAGES, GROUPS } = await projectImport("lib/content.js")
   const { md } = await projectImport("lib/md.js")
   const page = PAGES[params.slug]
-  if (!page) return { title: "Not found", html: "<p>No such page — pick a topic from the sidebar.</p>", prev: null, next: null, toc: [] }
+  if (!page) return { title: "Not found", description: "Page not found — pick a topic from the sidebar.", slug: params.slug, html: "<p>No such page — pick a topic from the sidebar.</p>", prev: null, next: null, toc: [] }
   const html = md(page.body)
+  // plain-text summary for meta description (strip code fences, links, md syntax)
+  const plain = page.body.replace(/\x60\x60\x60[\s\S]*?\x60\x60\x60/g, " ").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[#>*_|]/g, " ").replace(/\s+/g, " ").trim()
+  const description = plain ? (plain.slice(0, 155).trim() + (plain.length > 155 ? "…" : "")) : (page.title + " — Niral, the zero-dependency full-stack framework by ZyoraLabs.")
   // "On this page" — the h2s the renderer just emitted (they carry ids)
   const toc = [...html.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/g)].map((m) => ({ id: m[1], text: m[2].replace(/<[^>]+>/g, "") }))
   const order = GROUPS.flatMap((g) => g.slugs)
   const i = order.indexOf(params.slug)
   const ref = (s) => (s ? { slug: s, title: PAGES[s].title } : null)
-  return { title: page.title, html, prev: ref(order[i - 1]), next: ref(order[i + 1]), toc }
+  return { title: page.title, description, slug: params.slug, html, prev: ref(order[i - 1]), next: ref(order[i + 1]), toc }
 }
 </server>
 
 <script>
-  let { title, html, prev, next, toc } = $props
+  let { title, description, slug, html, prev, next, toc } = $props
 
   // copy buttons on code blocks — injected AFTER mount (never during hydration)
   if (typeof window !== "undefined") {
@@ -49,6 +52,22 @@ export async function load({ params }) {
 
 <head>
   <title>{title} · Niral docs</title>
+  <meta name="description" content="{description}" />
+  <link rel="canonical" href="https://niral.site/docs/{slug}" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b0d10" />
+  <link rel="icon" type="image/png" href="/n.png" />
+  <link rel="apple-touch-icon" href="/n.png" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="{title} · Niral docs" />
+  <meta property="og:description" content="{description}" />
+  <meta property="og:url" content="https://niral.site/docs/{slug}" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{title} · Niral docs" />
+  <meta name="twitter:description" content="{description}" />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
