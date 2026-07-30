@@ -5,6 +5,9 @@
 <head>
   <title>Niral — the zero-dependency full-stack framework</title>
   <meta name="description" content="Niral: compiler-first full-stack web framework. Svelte-class performance, Rails-class features, zero dependencies. By ZyoraLabs." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
 </head>
 
 <main>
@@ -255,7 +258,7 @@
   :global(html) { scroll-behavior: smooth; }
   :global(body) { margin: 0; background: #0a0c10; color: #e8eaed; background-image: radial-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px); background-size: 28px 28px; }
   :global(::selection) { background: #34d39933; }
-  main { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.6; }
+  main { font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.6; }
   section { max-width: 920px; margin: 0 auto; padding: 3.6rem 1.4rem; }
   h2 { font-size: 1.75rem; letter-spacing: -.018em; text-align: center; margin: 0 0 .5rem; }
   .section-sub { text-align: center; color: #9aa3ad; max-width: 560px; margin: 0 auto 2rem; font-size: .97rem; }
@@ -333,7 +336,7 @@
   .d1 { background: #f6726f; } .d2 { background: #f5bd4f; } .d3 { background: #55ca62; }
   .window-title { margin-left: .6rem; color: #5f6b76; font-size: .8rem; font-family: ui-monospace, monospace; }
   pre { margin: 0; padding: 1.25rem 1.4rem; overflow-x: auto; font-size: .88rem; line-height: 1.6; }
-  code { color: #d7dde3; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  code { color: #d7dde3; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   pre :global(.c) { color: #5f6b76; font-style: italic; }
   pre :global(.k) { color: #7aa2f7; }
   pre :global(.f) { color: #e0af68; }
@@ -429,7 +432,7 @@
   .cloud-bar { display: flex; align-items: center; gap: .42rem; padding: .6rem .9rem; background: #11151a; border-bottom: 1px solid #1b2027; }
   .cloud-title { margin-left: .5rem; color: #5f6b76; font-size: .76rem; font-family: ui-monospace, "SF Mono", monospace; }
   .cloud-body { padding: 1.1rem 1.2rem 1.2rem; overflow-x: auto; min-height: 11.4em; }
-  .cl-line { margin: 0; font-family: ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.9; color: #cdd3da; white-space: nowrap; }
+  .cl-line { margin: 0; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.9; color: #cdd3da; white-space: nowrap; }
   .cl-p { color: #34d399; margin-right: .6ch; }
   .cl-d { color: #5f6b76; }
   .cl-ok { color: #6ee7b7; font-weight: 600; }
