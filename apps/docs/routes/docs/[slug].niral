@@ -99,15 +99,22 @@ export async function load({ params }) {
   .toc p { color: #5b6672; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; margin: 0 0 .5rem; }
   .toc a { display: block; color: #79838e; text-decoration: none; padding: .18rem 0 .18rem .7rem; border-left: 2px solid #191e24; transition: color .12s, border-color .12s; }
   .toc a:hover { color: #6ee7b7; border-color: #34d399; }
-  @media (max-width: 1000px) { .toc { display: none; } .page { grid-template-columns: 1fr; } }
+  @media (max-width: 1000px) { .toc { display: none; } .page { grid-template-columns: minmax(0, 1fr); } }
 
-  article { max-width: 720px; line-height: 1.7; font-size: .96rem; }
+  article { max-width: 720px; min-width: 0; line-height: 1.7; font-size: .96rem; }
   article :global(h1) { font-size: 2rem; letter-spacing: -.025em; margin-top: 0; font-weight: 700; }
   article :global(h2) { margin-top: 2.2rem; font-size: 1.35rem; border-bottom: 1px solid #1d2229; padding-bottom: .35rem; }
   article :global(h3) { margin-top: 1.6rem; font-size: 1.08rem; }
-  article :global(p) { color: #c3cad2; }
-  article :global(li) { color: #c3cad2; margin: .25rem 0; }
+  article :global(p) { color: #c3cad2; margin: .9rem 0; }
   article :global(a) { color: #34d399; }
+  article :global(a:hover) { text-decoration: underline; }
+  article :global(strong), article :global(b) { color: #e8eaed; font-weight: 600; }
+  article :global(ul), article :global(ol) { padding-left: 1.35rem; margin: .85rem 0; }
+  article :global(li) { color: #c3cad2; margin: .35rem 0; padding-left: .15rem; }
+  article :global(li::marker) { color: #4b5560; }
+  article :global(blockquote) { margin: 1.2rem 0; padding: .15rem 1.1rem; border-left: 3px solid #34d39966; background: #10b98108; border-radius: 0 10px 10px 0; }
+  article :global(blockquote p) { color: #b9c1c9; }
+  article :global(hr) { border: 0; border-top: 1px solid #1d2229; margin: 2.2rem 0; }
   article :global(code) { background: #14181d; border: 1px solid #232930; border-radius: 6px; padding: .1rem .35rem; font-size: .82em; color: #7ee2b8; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
   article :global(pre) { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; }
   article :global(pre code) { background: none; border: 0; padding: 0; color: #d7dde3; font-size: .84rem; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
@@ -126,4 +133,13 @@ export async function load({ params }) {
   article :global(b) { color: #e8eaed; }
   .pager { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #1d2229; }
   .pager a { color: #34d399; text-decoration: none; }
+
+  @media (max-width: 860px) {
+    article { font-size: .94rem; }
+    article :global(h1) { font-size: 1.7rem; }
+    article :global(h2) { font-size: 1.2rem; margin-top: 1.9rem; }
+    article :global(table) { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    article :global(pre) { padding: .85rem .95rem; border-radius: 10px; }
+    .pager { gap: 1rem; font-size: .9rem; }
+  }
 </style>

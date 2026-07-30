@@ -39,6 +39,7 @@ export async function searchDocs(q) {
   let q = $state("")
   let results = $state([])
   let searching = $state(false)
+  let sidebarOpen = $state(false)
   let timer = null
 
   function onSearch(value) {
@@ -54,7 +55,14 @@ export async function searchDocs(q) {
   function clearSearch() { q = ""; results = []; searching = false }
 </script>
 
-<div class="wrap">
+<div class={sidebarOpen ? "wrap nav-open" : "wrap"}>
+  <header class="mtopbar">
+    <button class="hamburger" on:click={() => (sidebarOpen = true)} aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <a class="mbrand" href="/"><img src="/n.png" width="26" height="26" alt="" />niral <em>docs</em></a>
+  </header>
+  <div class="scrim" on:click={() => (sidebarOpen = false)}></div>
   <aside>
     <a class="brand" href="/">
       <img class="mark" src="/n.png" alt="Niral" width="34" height="34" />
@@ -85,7 +93,7 @@ export async function searchDocs(q) {
       {#for g of nav key g.name}
         <p class="group">{g.name}</p>
         {#for item of g.items key item.slug}
-          <a class={item.slug === current ? "navlink active" : "navlink"} href={"/docs/" + item.slug}>
+          <a class={item.slug === current ? "navlink active" : "navlink"} href={"/docs/" + item.slug} on:click={() => (sidebarOpen = false)}>
             <span class="tick"></span>{item.title}
           </a>
         {/for}
@@ -195,9 +203,33 @@ export async function searchDocs(q) {
 
   .content { padding: 2.4rem 2.6rem 4.5rem; min-width: 0; }
 
-  @media (max-width: 760px) {
+  /* mobile top bar + hamburger (hidden on desktop) */
+  .mtopbar { display: none; }
+  .scrim { display: none; }
+  .hamburger { display: inline-flex; flex-direction: column; justify-content: center; gap: 4px; width: 40px; height: 38px; padding: 0 9px; background: #12161b; border: 1px solid #232930; border-radius: 9px; cursor: pointer; }
+  .hamburger span { display: block; height: 2px; background: #cdd3da; border-radius: 2px; }
+  .mbrand { display: flex; align-items: center; gap: .5rem; color: #e8eaed; text-decoration: none; font-weight: 650; letter-spacing: -.01em; }
+  .mbrand img { border-radius: 7px; }
+  .mbrand em { color: #6b7681; font-style: normal; font-weight: 450; }
+
+  @media (max-width: 860px) {
     .wrap { grid-template-columns: 1fr; }
-    aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid #191e24; }
-    .content { padding: 1.6rem 1.2rem 3rem; }
+    .mtopbar {
+      display: flex; align-items: center; gap: .8rem;
+      position: sticky; top: 0; z-index: 40;
+      padding: .65rem .9rem;
+      background: rgba(11, 13, 16, .9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid #191e24;
+    }
+    aside {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px; max-width: 84vw; height: 100vh; z-index: 60;
+      background: #0b0d10; border-right: 1px solid #232930;
+      transform: translateX(-100%); transition: transform .26s cubic-bezier(.4, 0, .2, 1);
+    }
+    .nav-open aside { transform: translateX(0); box-shadow: 0 0 70px rgba(0, 0, 0, .6); }
+    .nav-open .scrim { display: block; position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .5); }
+    .content { padding: 1.5rem 1.15rem 3rem; }
+    .results { right: 0; }
   }
 </style>

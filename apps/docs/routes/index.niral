@@ -40,6 +40,8 @@
   <nav class="nav">
     <div class="nav-inner">
       <a class="mark" href="/"><img class="mark-logo" src="/n.png" alt="Niral" width="30" height="30" /><span class="mark-name">niral</span></a>
+      <input type="checkbox" id="navtoggle" class="nav-toggle" aria-hidden="true" />
+      <label for="navtoggle" class="nav-burger" aria-label="Toggle menu"><span></span><span></span><span></span></label>
       <div class="nav-links">
         <a href="/docs/getting-started">Docs</a>
         <a href="/docs/benchmarks">Benchmarks</a>
@@ -293,7 +295,7 @@
 
   /* nav — sticky glass */
   .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(10, 12, 16, .72); border-bottom: 1px solid rgba(255, 255, 255, .05); }
-  .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; }
+  .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; position: relative; }
   .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
   .mark-logo { width: 2rem; height: 2rem; border-radius: 8px; display: block; }
   .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
@@ -303,6 +305,9 @@
   .nav-links a:hover { color: #e8eaed; }
   .nav-cta { background: #14181d; border: 1px solid #262c33; border-radius: 9px; padding: .42rem .9rem; color: #7ee2b8 !important; transition: border-color .15s, box-shadow .15s; }
   .nav-cta:hover { border-color: #34d399; box-shadow: 0 0 18px rgba(52, 211, 153, .18); }
+  .nav-toggle { display: none; }
+  .nav-burger { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 40px; height: 40px; padding: 8px; border: 1px solid #262c33; border-radius: 9px; background: #14181d; cursor: pointer; }
+  .nav-burger span { display: block; height: 2px; width: 100%; background: #cbd2da; border-radius: 2px; transition: transform .2s, opacity .2s; }
 
   /* hero */
   .hero { text-align: center; padding-top: 4.4rem; position: relative; }
@@ -353,7 +358,7 @@
   .num span { color: #9aa3ad; font-size: .85rem; display: block; margin-top: .3rem; }
 
   /* code window */
-  .window-wrap { position: relative; }
+  .window-wrap { position: relative; overflow-x: clip; }
   .window-halo { position: absolute; inset: -1.6rem -2.2rem; background: radial-gradient(ellipse 60% 70% at 50% 45%, rgba(52, 211, 153, .09), transparent 70%); filter: blur(6px); pointer-events: none; }
   .window { position: relative; background: #0e1115; border: 1px solid #232930; border-radius: 15px; overflow: hidden; box-shadow: 0 24px 70px rgba(0, 0, 0, .45); transition: transform .25s ease, border-color .25s ease; }
   .window:hover { transform: translateY(-3px); border-color: #2c3742; }
@@ -524,7 +529,15 @@
     h1 { font-size: 2.3rem; }
     .footer-inner { grid-template-columns: 1fr; gap: 1.6rem; }
     .arrow { display: none; }
-    .nav-links { gap: .9rem; }
+    .nav-burger { display: flex; }
+    .nav-links { position: absolute; top: calc(100% + 6px); right: 1rem; left: 1rem; flex-direction: column; align-items: stretch; gap: .2rem; background: #0d1116; border: 1px solid #1c232b; border-radius: 12px; padding: .5rem; box-shadow: 0 20px 50px rgba(0,0,0,.5); display: none; z-index: 60; }
+    #navtoggle:checked ~ .nav-links { display: flex; }
+    .nav-links a { padding: .7rem .8rem; border-radius: 8px; font-size: 1rem; }
+    .nav-links a:hover { background: #14181d; }
+    .nav-cta { text-align: center; margin-top: .2rem; }
+    #navtoggle:checked ~ .nav-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    #navtoggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
+    #navtoggle:checked ~ .nav-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01s !important; animation-iteration-count: 1 !important; transition-duration: .01s !important; }
