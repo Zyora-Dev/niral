@@ -49,6 +49,9 @@ export async function load({ params }) {
 
 <head>
   <title>{title} · Niral docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
 </head>
 
 <div class="page">
@@ -86,9 +89,9 @@ export async function load({ params }) {
   article :global(p) { color: #c3cad2; }
   article :global(li) { color: #c3cad2; margin: .25rem 0; }
   article :global(a) { color: #34d399; }
-  article :global(code) { background: #14181d; border: 1px solid #232930; border-radius: 6px; padding: .1rem .35rem; font-size: .86em; color: #7ee2b8; }
-  article :global(pre) { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.5; }
-  article :global(pre code) { background: none; border: 0; padding: 0; color: #d7dde3; font-size: .86rem; }
+  article :global(code) { background: #14181d; border: 1px solid #232930; border-radius: 6px; padding: .1rem .35rem; font-size: .82em; color: #7ee2b8; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
+  article :global(pre) { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; }
+  article :global(pre code) { background: none; border: 0; padding: 0; color: #d7dde3; font-size: .84rem; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
   article :global(.copy) { position: absolute; top: .55rem; right: .6rem; background: #1a2027; border: 1px solid #2a313a; color: #79838e; font-size: .7rem; padding: .22rem .55rem; border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity .15s; font-family: inherit; }
   article :global(pre:hover .copy) { opacity: 1; }
   article :global(.copy:hover) { color: #6ee7b7; border-color: #34d39955; }
