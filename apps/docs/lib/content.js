@@ -973,6 +973,36 @@ Results are content-hash cached — rebuilds are free.
   deployment: {
     title: "Deployment",
     body: `
+Two ways to ship: **zHost** (ZyoraLabs' cloud — easiest, three commands) or
+**your own server** (the generated deploy kit — full control).
+
+## Deploy to zHost (ZyoraLabs cloud)
+
+The fastest path from your machine to a live URL — no server to provision.
+zHost detects Niral automatically, builds with \`niral build\`, and runs your app
+in an isolated sandbox at \`https://<slug>.zyora.in\`.
+
+1. Register at [console.zyoralabs.com](https://console.zyoralabs.com)
+2. Open **zHost** → **create a project** (pick your slug)
+3. Go to the project's **Settings** and follow the CLI steps:
+
+\`\`\`sh
+curl -fsSL https://dl.zyora.in/zhost/install.sh | sh
+
+zhost login
+zhost link <slug>
+zhost deploy        # → https://<slug>.zyora.in
+\`\`\`
+
+Every \`zhost deploy\` after that packs your source, builds it on the platform,
+and flips your URL to the new version — queued → building → deploying → live.
+Niral's tiny footprint (~200 MB, 0.2 s builds) makes deploys fast and hosting
+cheap.
+
+## Deploy to your own server
+
+Prefer your own box? \`niral deploy\` generates a complete, self-owned kit:
+
 ## Atomic releases
 
 \`\`\`sh
