@@ -7,7 +7,7 @@ export const GROUPS = [
   { name: "Build", slugs: ["routing", "styling", "typescript"] },
   { name: "Server", slugs: ["server", "database", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
-  { name: "Ship", slugs: ["deployment", "scaling", "security", "cli", "benchmarks"] },
+  { name: "Ship", slugs: ["deployment", "zhost", "scaling", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
@@ -973,7 +973,7 @@ Results are content-hash cached — rebuilds are free.
   deployment: {
     title: "Deployment",
     body: `
-Two ways to ship: **zHost** (ZyoraLabs' cloud — easiest, three commands) or
+Two ways to ship: **[zHost](/docs/zhost)** (ZyoraLabs' cloud — easiest, three commands) or
 **your own server** (the generated deploy kit — full control).
 
 ## Deploy to zHost (ZyoraLabs cloud)
@@ -981,10 +981,6 @@ Two ways to ship: **zHost** (ZyoraLabs' cloud — easiest, three commands) or
 The fastest path from your machine to a live URL — no server to provision.
 zHost detects Niral automatically, builds with \`niral build\`, and runs your app
 in an isolated sandbox at \`https://<slug>.zyora.in\`.
-
-1. Register at [console.zyoralabs.com](https://console.zyoralabs.com)
-2. Open **zHost** → **create a project** (pick your slug)
-3. Go to the project's **Settings** and follow the CLI steps:
 
 \`\`\`sh
 curl -fsSL https://dl.zyora.in/zhost/install.sh | sh
@@ -994,10 +990,8 @@ zhost link <slug>
 zhost deploy        # → https://<slug>.zyora.in
 \`\`\`
 
-Every \`zhost deploy\` after that packs your source, builds it on the platform,
-and flips your URL to the new version — queued → building → deploying → live.
-Niral's tiny footprint (~200 MB, 0.2 s builds) makes deploys fast and hosting
-cheap.
+Full walkthrough — account, project, settings, how the build works, redeploys —
+on the dedicated [Instant deploys · zHost](/docs/zhost) page.
 
 ## Deploy to your own server
 
@@ -1065,6 +1059,94 @@ hydrate; server features (RPC, actions) need \`niral start\`.
 | \`NIRAL_AI_URL/KEY/MODEL\` | AI endpoint |
 | \`NIRAL_SMTP_URL\`, \`NIRAL_MAIL_FROM\` | mail |
 | \`NIRAL_WORKERS\` | polyglot worker pool size |
+`,
+  },
+
+  zhost: {
+    title: "Instant deploys · zHost",
+    body: `
+**zHost** is ZyoraLabs' deployment cloud — the fastest way to put a Niral app
+on the internet. No server to provision, no nginx to configure, no CI to wire.
+Three commands from your machine to a live HTTPS URL.
+
+\`\`\`sh
+curl -fsSL https://dl.zyora.in/zhost/install.sh | sh
+
+zhost login
+zhost link <slug>
+zhost deploy        # → https://<slug>.zyora.in
+\`\`\`
+
+## 1 · Create your account & project
+
+1. Register at **[console.zyoralabs.com](https://console.zyoralabs.com)** — one
+   ZyoraLabs account works across every product.
+2. In the console, open **zHost** and **create a project**. The slug you pick
+   becomes your URL: \`https://<slug>.zyora.in\`.
+3. Open the project's **Settings** — it shows the exact CLI commands for your
+   project, ready to copy.
+
+## 2 · Install the CLI & log in
+
+\`\`\`sh
+curl -fsSL https://dl.zyora.in/zhost/install.sh | sh
+zhost login          # your console email + password
+\`\`\`
+
+The CLI installs to \`~/.local/bin/zhost\`. \`zhost login\` authenticates your
+machine against the console.
+
+## 3 · Link & deploy
+
+From your app's directory (any \`npx create-niral\` app works as-is):
+
+\`\`\`sh
+cd my-app
+zhost link <slug>    # writes ./zhost.json — remembers which project this is
+zhost deploy
+\`\`\`
+
+\`\`\`
+› Packing source…
+› Uploading 3 KB → <slug>.zyora.in
+✓ Queued deployment 98aeb00c
+› Building…
+  queued → building → deploying → live
+✓ Live → https://<slug>.zyora.in
+\`\`\`
+
+Ship again any time — every \`zhost deploy\` packs your source, builds a fresh
+version on the platform, and flips your URL over when it's live.
+
+## What happens under the hood
+
+- zHost **detects Niral automatically** (your \`routes/*.niral\` files) — no
+  config, no Dockerfile needed.
+- It builds a container: Node 22 → \`niral build\` (0.2 s) → \`niral start\`.
+- Your app runs **sandboxed with gVisor** on an isolated network — real
+  container isolation, not just a process.
+- HTTPS + routing for \`<slug>.zyora.in\` are handled for you.
+- Environment variables set in the console are **encrypted at rest** and
+  injected at runtime — pair them with \`export const env = [...]\` in
+  \`hooks.js\` so a missing secret fails the deploy, not production at 3am.
+
+## Why Niral apps are ideal on zHost
+
+- **~200 MB memory, one process** — your app is cheap to host and quick to start.
+- **0.2 s builds, zero \`npm install\` of app dependencies** — deploys take
+  seconds, not minutes.
+- **SQLite in the box** — most apps need no external database at all.
+
+## Bring a Dockerfile (optional)
+
+Already have a \`Dockerfile\`? zHost uses it as-is instead of the Niral
+buildpack — full control when you need it.
+
+## Prefer your own server?
+
+Niral never locks you in: \`niral deploy\` generates a complete self-owned kit
+(systemd + nginx + atomic releases) for any Linux box — see
+[Deployment](/docs/deployment).
 `,
   },
 

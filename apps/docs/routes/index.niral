@@ -174,6 +174,21 @@
     <p class="bench-note">Opt-in at every step — you never switch frameworks, you flip a switch when you outgrow the last tier. <a href="/docs/scaling">How scaling works →</a></p>
   </section>
 
+  <section class="cloud">
+    <p class="eyebrow">Instant deploys</p>
+    <h2>Your machine to a live URL in three commands.</h2>
+    <p class="section-sub"><b>zHost</b> — ZyoraLabs' deployment cloud — detects Niral automatically, builds in seconds, and runs your app sandboxed at <code>&lt;slug&gt;.zyora.in</code>. No server, no nginx, no CI.</p>
+    <div class="cloud-term">
+      <div class="cloud-bar"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span><span class="cloud-title">zhost deploy</span></div>
+      <pre><code><span class="cl-p">$</span> zhost login
+<span class="cl-p">$</span> zhost link my-app
+<span class="cl-p">$</span> zhost deploy
+<span class="cl-d">› Packing source… · queued → building → deploying → <b>live</b></span>
+<span class="cl-ok">✓ Live → https://my-app.zyora.in</span></code></pre>
+    </div>
+    <p class="bench-note">Start at <a href="https://console.zyoralabs.com">console.zyoralabs.com</a> — create a project, follow Settings. <a href="/docs/zhost">Full guide →</a></p>
+  </section>
+
   <section class="philosophy">
     <div class="phil">
       <i>01</i>
@@ -212,6 +227,7 @@
         <a href="/docs/getting-started">Getting started</a>
         <a href="/docs/components">Components</a>
         <a href="/docs/server">Server functions</a>
+        <a href="/docs/zhost">Instant deploys</a>
         <a href="/docs/deployment">Deployment</a>
       </div>
       <div class="footer-col">
@@ -404,6 +420,18 @@
     .tiers { grid-template-columns: 1fr; }
     .tier-join { transform: rotate(90deg); padding: .15rem 0; }
   }
+
+  /* instant deploys — zhost */
+  .cloud-term { max-width: 620px; margin: 1.8rem auto 0; background: #0d1014; border: 1px solid #232930; border-radius: 16px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
+  .cloud-bar { display: flex; align-items: center; gap: .42rem; padding: .6rem .9rem; background: #11151a; border-bottom: 1px solid #1b2027; }
+  .cloud-title { margin-left: .5rem; color: #5f6b76; font-size: .76rem; font-family: ui-monospace, "SF Mono", monospace; }
+  .cloud-term pre { margin: 0; padding: 1.1rem 1.2rem 1.2rem; overflow-x: auto; }
+  .cloud-term code { font-family: ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.75; color: #cdd3da; }
+  .cl-p { color: #34d399; }
+  .cl-d { color: #5f6b76; }
+  .cl-ok { color: #6ee7b7; font-weight: 600; }
+  .cloud .section-sub code { color: #7ee2b8; background: #0e1115; padding: .05rem .35rem; border-radius: 5px; font-size: .85em; }
+  .cloud .section-sub b { color: #e8eaed; }
 
   /* philosophy */
   .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }
