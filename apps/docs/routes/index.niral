@@ -30,9 +30,6 @@
   <meta name="twitter:title" content="Niral — the zero-dependency full-stack framework" />
   <meta name="twitter:description" content="Zero dependencies. Faster than Next.js. Batteries included. Deploy in three commands." />
   <meta name="twitter:image" content="https://niral.site/n.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
 </head>
 
 <main>
