@@ -60,13 +60,13 @@ export async function searchDocs(q) {
     <button class="hamburger" on:click={() => (sidebarOpen = true)} aria-label="Open navigation">
       <span></span><span></span><span></span>
     </button>
-    <a class="mbrand" href="/"><img src="/n.png" width="26" height="26" alt="" />niral <em>docs</em></a>
+    <a class="mbrand" href="/"><img class="mbrand-logo" src="/niral-logo.svg" alt="Niral" /><em>docs</em></a>
   </header>
   <div class="scrim" on:click={() => (sidebarOpen = false)}></div>
   <aside>
     <a class="brand" href="/">
-      <img class="mark" src="/n.png" alt="Niral" width="34" height="34" />
-      <span class="name">niral <em>docs</em></span>
+      <img class="brand-logo" src="/niral-logo.svg" alt="Niral" />
+      <em class="docs-tag">docs</em>
     </a>
 
     <div class="search">
@@ -131,12 +131,13 @@ export async function searchDocs(q) {
   nav { flex: 1; }
 
   .brand {
-    display: flex; align-items: center; gap: .6rem;
+    display: flex; align-items: center; gap: .55rem;
     text-decoration: none; margin: 0 .4rem 1.6rem;
   }
-  .mark {
-    display: block; width: 34px; height: 34px; border-radius: 10px;
+  .brand-logo {
+    display: block; height: 28px; width: auto;
   }
+  .docs-tag { color: #6b7681; font-style: normal; font-weight: 450; font-size: .95rem; }
   .name { color: #e8eaed; font-weight: 650; letter-spacing: -.01em; }
   .name em { color: #6b7681; font-style: normal; font-weight: 450; }
 
@@ -208,8 +209,8 @@ export async function searchDocs(q) {
   .scrim { display: none; }
   .hamburger { display: inline-flex; flex-direction: column; justify-content: center; gap: 4px; width: 40px; height: 38px; padding: 0 9px; background: #12161b; border: 1px solid #232930; border-radius: 9px; cursor: pointer; }
   .hamburger span { display: block; height: 2px; background: #cdd3da; border-radius: 2px; }
-  .mbrand { display: flex; align-items: center; gap: .5rem; color: #e8eaed; text-decoration: none; font-weight: 650; letter-spacing: -.01em; }
-  .mbrand img { border-radius: 7px; }
+  .mbrand { display: flex; align-items: center; gap: .45rem; color: #e8eaed; text-decoration: none; font-weight: 650; letter-spacing: -.01em; }
+  .mbrand-logo { height: 22px; width: auto; display: block; }
   .mbrand em { color: #6b7681; font-style: normal; font-weight: 450; }
 
   @media (max-width: 860px) {

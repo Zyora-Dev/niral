@@ -36,7 +36,7 @@
   {@html ld}
   <nav class="nav">
     <div class="nav-inner">
-      <a class="mark" href="/"><img class="mark-logo" src="/n.png" alt="Niral" width="30" height="30" /><span class="mark-name">niral</span></a>
+      <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral" height="30" /></a>
       <input type="checkbox" id="navtoggle" class="nav-toggle" aria-hidden="true" />
       <label for="navtoggle" class="nav-burger" aria-label="Toggle menu"><span></span><span></span><span></span></label>
       <div class="nav-links">
@@ -250,7 +250,7 @@
   <footer class="footer">
     <div class="footer-inner">
       <div class="footer-brand">
-        <p class="footer-mark"><span class="mark-glyph">நி</span> niral</p>
+        <img class="footer-logo" src="/niral-logo.svg" alt="Niral" height="30" />
         <p class="footer-tag">The zero-dependency full-stack framework.<br />Built in India. Made for everyone.</p>
       </div>
       <div class="footer-col">
@@ -294,7 +294,7 @@
   .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(10, 12, 16, .72); border-bottom: 1px solid rgba(255, 255, 255, .05); }
   .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; position: relative; }
   .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
-  .mark-logo { width: 2rem; height: 2rem; border-radius: 8px; display: block; }
+  .brand-logo { height: 30px; width: auto; display: block; }
   .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
   .mark-name { color: #e8eaed; font-weight: 650; letter-spacing: .01em; }
   .nav-links { display: flex; align-items: center; gap: 1.3rem; }
@@ -512,6 +512,7 @@
   .footer::before { content: "நிரல்"; position: absolute; left: 50%; bottom: -4.5rem; transform: translateX(-50%); font-size: 12rem; font-weight: 700; color: rgba(52, 211, 153, .04); letter-spacing: .04em; pointer-events: none; white-space: nowrap; }
   .footer-inner { max-width: 920px; margin: 0 auto; padding: 3rem 1.4rem 2rem; display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2rem; }
   .footer-mark { display: flex; align-items: center; gap: .55rem; font-weight: 650; margin: 0 0 .7rem; }
+  .footer-logo { height: 30px; width: auto; display: block; margin: 0 0 .9rem; }
   .footer-tag { color: #9aa3ad; font-size: .88rem; margin: 0; }
   .footer-col { display: flex; flex-direction: column; gap: .45rem; }
   .footer-col b { color: #cdd3da; font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .3rem; }
