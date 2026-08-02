@@ -1,0 +1,143 @@
+<server>
+export async function load() {
+  const { ENTRIES, GENERATED_AT } = await projectImport("lib/changelog.js")
+  // group by month, newest first
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+  const groups = []
+  let cur = null
+  for (const e of ENTRIES) {
+    const [y, m, d] = e.date.split("-")
+    const key = `${MONTHS[Number(m) - 1]} ${y}`
+    if (!cur || cur.key !== key) { cur = { key, items: [] }; groups.push(cur) }
+    cur.items.push({ ...e, day: `${MONTHS[Number(m) - 1].slice(0, 3)} ${Number(d)}` })
+  }
+  return { groups, generatedAt: GENERATED_AT, total: ENTRIES.length }
+}
+</server>
+
+<script>
+  let { groups, generatedAt, total } = $props
+</script>
+
+<head>
+  <title>Changelog · Niral</title>
+  <meta name="description" content="Everything that changed in Niral — generated automatically from the commit history on every release." />
+  <link rel="canonical" href="https://niral.site/changelog" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b0d10" />
+  <link rel="icon" type="image/png" href="/n.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="Niral — Changelog" />
+  <meta property="og:description" content="Everything that changed in Niral — generated from the commit history on every release." />
+  <meta property="og:url" content="https://niral.site/changelog" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+</head>
+
+<main>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral" height="30" /></a>
+      <div class="nav-links">
+        <a href="/docs/getting-started">Docs</a>
+        <a href="https://github.com/Zyora-Dev/niral" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow">Changelog</p>
+    <h1>Every change, automatically</h1>
+    <p class="lead">
+      This page is generated from the commit history on every release —
+      {total} changes and counting. Nothing here is written by hand.
+    </p>
+    <p class="stamp">last generated {generatedAt}</p>
+  </header>
+
+  <section class="log">
+    {#for g of groups key g.key}
+      <div class="month">
+        <h2>{g.key}</h2>
+        <ul>
+          {#for e of g.items key e.hash}
+            <li>
+              <span class="day">{e.day}</span>
+              <span class="area" data-a="{e.area}">{e.area}</span>
+              <span class="text">{e.text}</span>
+              <code class="hash">{e.hash}</code>
+            </li>
+          {/for}
+        </ul>
+      </div>
+    {/for}
+  </section>
+
+  <footer class="foot">
+    <a href="/">← niral.site</a>
+    <span>compiled straight from <code>git log</code></span>
+  </footer>
+</main>
+
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0b0d10; color: #e6e9ec; font-family: "Geist", -apple-system, sans-serif; }
+  main { min-height: 100vh; }
+
+  .nav { border-bottom: 1px solid #1a1f26; }
+  .nav-inner { max-width: 880px; margin: 0 auto; padding: .9rem 1.4rem; display: flex; align-items: center; justify-content: space-between; }
+  .brand-logo { display: block; height: 30px; width: auto; }
+  .nav-links { display: flex; gap: 1.2rem; }
+  .nav-links a { color: #9aa3ad; text-decoration: none; font-size: .92rem; transition: color .15s; }
+  .nav-links a:hover { color: #34d399; }
+
+  .hero { max-width: 880px; margin: 0 auto; padding: 3.4rem 1.4rem 1rem; }
+  .eyebrow { color: #34d399; font-size: .8rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; margin-bottom: .7rem; }
+  h1 { font-size: clamp(1.9rem, 4.5vw, 2.7rem); letter-spacing: -.02em; line-height: 1.12; }
+  .lead { color: #9aa3ad; margin-top: .8rem; max-width: 34rem; line-height: 1.65; }
+  .stamp { color: #566068; font-size: .8rem; margin-top: .9rem; font-family: "Geist Mono", monospace; }
+
+  .log { max-width: 880px; margin: 0 auto; padding: 1.6rem 1.4rem 3rem; }
+  .month { margin-top: 2.2rem; }
+  .month h2 {
+    font-size: .85rem; text-transform: uppercase; letter-spacing: .12em; color: #cdd3da;
+    padding-bottom: .55rem; border-bottom: 1px solid #1a1f26; margin-bottom: .4rem;
+  }
+  .month ul { list-style: none; }
+  .month li {
+    display: grid; grid-template-columns: 4.2rem 7.2rem 1fr auto;
+    gap: .9rem; align-items: baseline;
+    padding: .62rem .4rem; border-bottom: 1px solid #14181d;
+  }
+  .month li:hover { background: #0e1116; }
+  .day { color: #566068; font-size: .8rem; font-family: "Geist Mono", monospace; white-space: nowrap; }
+  .area {
+    justify-self: start; font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+    padding: .14rem .55rem; border-radius: 999px;
+    background: #12211b; color: #34d399; border: 1px solid #1d3a2e;
+    white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .area[data-a="fix"], .area[data-a="fixes"] { background: #241518; color: #f0868f; border-color: #45242a; }
+  .area[data-a="docs"] { background: #131c26; color: #7db4e8; border-color: #22344a; }
+  .area[data-a="landing"], .area[data-a="branding"], .area[data-a="fonts"] { background: #221c12; color: #e2b465; border-color: #43351f; }
+  .text { color: #c8cdd3; line-height: 1.55; font-size: .93rem; min-width: 0; overflow-wrap: break-word; }
+  .hash { color: #566068; font-size: .76rem; font-family: "Geist Mono", monospace; }
+
+  .foot {
+    max-width: 880px; margin: 0 auto; padding: 1.4rem; border-top: 1px solid #1a1f26;
+    display: flex; justify-content: space-between; align-items: center;
+    color: #566068; font-size: .85rem;
+  }
+  .foot a { color: #9aa3ad; text-decoration: none; }
+  .foot a:hover { color: #34d399; }
+  .foot code { font-family: "Geist Mono", monospace; color: #7d8790; }
+
+  @media (max-width: 640px) {
+    .month li { grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: .25rem .6rem; }
+    .day { grid-column: 1; grid-row: 2; }
+    .area { grid-column: 2; grid-row: 1; justify-self: end; }
+    .text { grid-column: 1; grid-row: 1; }
+    .hash { display: none; }
+  }
+</style>
