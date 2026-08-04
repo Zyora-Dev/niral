@@ -1,0 +1,15 @@
+<server>
+// BLOCKING baseline: load() awaits the slow data source, so nothing can be
+// sent until it resolves — first byte is gated on the full delay.
+const DELAY = Number(process.env.BENCH_DELAY ?? 300)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+export async function load() {
+  await sleep(DELAY)
+  return { total: 1000 }
+}
+</server>
+<script>
+  let { total } = $props
+</script>
+<h1>SHELL READY</h1>
+<p>STREAMED-OK total={total}</p>

@@ -201,6 +201,27 @@ export function bindStyle(node, prop, fn) {
   });
 }
 
+/** A streamed {#await} boundary the SERVER already resolved (out-of-order
+ *  streaming SSR): the cursor is sitting on its <!--nb:id--> marker. Claim the
+ *  whole <!--nb:id--> … <!--/nb:id--> run as-is — the resolved {:then} HTML is
+ *  server-owned, so we adopt it inert rather than refetch the promise and
+ *  flash. Returns the claimed nodes, or null if there's no boundary here. */
+function claimServerBoundary() {
+  const f = hTop();
+  const c = f.next;
+  if (!c || c.nodeType !== 8 || c.data.slice(0, 3) !== "nb:") return null;
+  const close = "/nb:" + c.data.slice(3);
+  const out = [];
+  let n = c;
+  while (n) {
+    out.push(n);
+    if (n.nodeType === 8 && n.data === close) break;
+    n = n.nextSibling;
+  }
+  f.next = out.length ? out[out.length - 1].nextSibling : f.next;
+  return out;
+}
+
 /** Claim EVERYTHING up to this region's matching end anchor — for opaque
  *  content ({@html}) whose builder can't claim node-by-node. Depth-aware:
  *  nested regions inside the raw HTML stay intact. */
@@ -632,6 +653,12 @@ export function child(Comp, propsFn, slot) {
  */
 export function awaitBlock(exprFn, pendingB, thenB, catchB) {
   return region(() => {
+    // Streaming SSR: the server already resolved this boundary and swapped the
+    // {:then}/{:catch} HTML into place. Adopt it inert — no refetch, no flash.
+    if (hActive()) {
+      const adopted = claimServerBoundary();
+      if (adopted) return adopted;
+    }
     const p = exprFn();
     if (!p || typeof p.then !== "function") {
       return thenB ? thenB(p) : []; // plain value — straight to {:then}

@@ -14,6 +14,7 @@ import { compileClient } from "../compiler/codegen.js";
 import { componentCss } from "../compiler/style.js";
 import { createDocument, serializeChildren } from "./dom-shim.js";
 import * as ssrHelpers from "../runtime/ssr.js";
+import "./stream.js"; // installs globalThis.__niralStream for streamed {#await}
 
 // string-mode SSR helpers are SERVER-ONLY: compiled __ssr functions reach them
 // through this global instead of the runtime bundle — the browser never pays
@@ -129,19 +130,26 @@ export function composeComponent(runtime, layouts, Page) {
   return Composed;
 }
 
-/** Render a route wrapped in its layouts. layoutAbsList = outermost first. */
-export async function renderPage(absPath, props = {}, layoutAbsList = [], i18n = null) {
+/**
+ * Load + compose a route inside its layouts WITHOUT rendering yet — returns
+ * the composed component function. Streaming callers render this themselves
+ * (inside a streaming store) so {#await} boundaries are collected per request.
+ * layoutAbsList = outermost first.
+ */
+export async function preparePage(absPath, layoutAbsList = [], i18n = null) {
   const page = await loadComponent(absPath);
   const layouts = [];
   for (const labs of layoutAbsList) layouts.push(await loadComponent(labs));
   const runtime = await import(RUNTIME_FILE_URL);
   if (i18n) runtime._setI18n(i18n.messages, i18n.locale); // catalog for t() during SSR
   const fn = composeComponent(runtime, layouts.map((l) => l.mod.default), page.mod.default);
-  return {
-    html: renderComponent(fn, props),
-    ast: page.ast,
-    layoutAsts: layouts.map((l) => l.ast),
-  };
+  return { fn, ast: page.ast, layoutAsts: layouts.map((l) => l.ast) };
+}
+
+/** Render a route wrapped in its layouts. layoutAbsList = outermost first. */
+export async function renderPage(absPath, props = {}, layoutAbsList = [], i18n = null) {
+  const { fn, ast, layoutAsts } = await preparePage(absPath, layoutAbsList, i18n);
+  return { html: renderComponent(fn, props), ast, layoutAsts };
 }
 
 /**

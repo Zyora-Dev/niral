@@ -1,0 +1,15 @@
+<server>
+// STREAMING: load() returns the slow work as a PROMISE without awaiting it, so
+// the shell + pending placeholder flush immediately and the resolved {:then}
+// branch streams in out of order once the promise settles.
+const DELAY = Number(process.env.BENCH_DELAY ?? 300)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+export async function load() {
+  return { slow: sleep(DELAY).then(() => 1000) }
+}
+</server>
+<script stream>
+  let { slow } = $props
+</script>
+<h1>SHELL READY</h1>
+{#await slow}<p>PENDING</p>{:then total}<p>STREAMED-OK total={total}</p>{/await}

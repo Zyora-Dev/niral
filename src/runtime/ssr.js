@@ -115,13 +115,49 @@ export function sChild(Comp, props, slot) {
   return `<!--niral:start-->${ssr(props)}<!--niral:end-->`;
 }
 
-/** {#await} — plain values render {:then} directly; promises render the
- *  NESTED pending region (matches awaitBlock's SSR anchor shape). */
-export function sAwait(value, pendingFn, thenFn) {
-  if (!value || typeof value.then !== "function") {
+/** {#await} — resolution model depends on the render context:
+ *
+ *  · plain value            → render {:then} directly (no promise to wait on)
+ *  · promise, NO streaming  → render the nested pending region; the client
+ *                             re-runs the promise and swaps on settle (legacy)
+ *  · promise, STREAMING     → register an out-of-order boundary: emit the
+ *                             pending markup tagged with a boundary id NOW,
+ *                             and let the server flush the resolved {:then}/
+ *                             {:catch} HTML in a later chunk as it settles.
+ *
+ *  The streaming context is installed server-side as `globalThis.__niralStream`
+ *  (see src/server/stream.js) — it is scoped per request via AsyncLocalStorage,
+ *  so concurrent streamed responses never share boundary ids. */
+export function sAwait(value, pendingFn, thenFn, catchFn) {
+  const isPromise = value != null && typeof value.then === "function";
+  const stream = globalThis.__niralStream && globalThis.__niralStream.active
+    ? globalThis.__niralStream.active()
+    : null;
+
+  if (stream && isPromise) {
+    const id = "b" + stream.seq++;
+    stream.boundaries.push({ id, value, thenFn: thenFn || null, catchFn: catchFn || null });
+    const pending = pendingFn ? pendingFn() : "";
+    // outer region anchors match the client's awaitBlock region; the inner
+    // <!--nb:id--> … <!--/nb:id--> pair is what the swap runtime replaces.
+    return `<!--niral:start--><!--nb:${id}-->${pending}<!--/nb:${id}--><!--niral:end-->`;
+  }
+
+  if (!isPromise) {
     return `<!--niral:start-->${thenFn ? thenFn(value) : ""}<!--niral:end-->`;
   }
   return `<!--niral:start--><!--niral:start-->${pendingFn ? pendingFn() : ""}<!--niral:end--><!--niral:end-->`;
+}
+
+/** The markup a settled boundary streams as a later chunk: the resolved HTML
+ *  parked in a <template>, plus an inline classic script that swaps it into
+ *  the placeholder the moment the browser parses it (no framework JS needed). */
+export function sBoundaryChunk(id, html, nonce = null) {
+  const n = nonce ? ` nonce="${nonce}"` : "";
+  return (
+    `<template data-nb="${id}">${html ?? ""}</template>` +
+    `<script${n}>window.__nb&&window.__nb(${JSON.stringify(id)})</script>`
+  );
 }
 
 export const sEscape = escText;

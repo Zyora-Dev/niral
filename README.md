@@ -74,10 +74,21 @@ request, the same 1000-row page, 100 connections × 10 s
 
 Hydration ties Svelte (6.6 ms / 1000 rows) at 29.7 KB of JS — [bench/hydration/](bench/hydration/).
 
+**Streaming SSR — time to first byte** with a 300 ms slow data source
+([run it yourself](bench/streaming/)). Streaming flushes the shell before the
+slow value; `total` stays ~300 ms, but the page paints in single-digit ms:
+
+| framework | blocking TTFB | streaming TTFB | streamed data |
+|-----------|--------------:|---------------:|---------------|
+| **niral** | 304 ms | **2 ms** | server-rendered HTML |
+| next 16 | 307 ms | 6 ms | server-rendered HTML |
+| sveltekit 2 | 305 ms | 3 ms | client-resolved payload |
+
 ## What's in the box
 
 - **Components** — `.niral` single-file components, runes (`$state`, `$props`), keyed lists, transitions, context, slots
 - **SSR + hydration** — dual codegen: DOM builder for the client, string renderer for the server, byte-identical output
+- **Streaming SSR** — `<script stream>` flushes the shell first, then streams each `{#await}` branch out of order as its promise settles (server-rendered HTML, revealed with zero framework JS). ~2 ms first byte vs ~300 ms blocking — [bench/streaming/](bench/streaming/)
 - **Server functions** — `<server>` blocks become RPC with compile-time stubs, streaming (async generators → NDJSON), form actions that work without JS
 - **Polyglot** — server blocks in Python, Ruby or Go; same sessions, same RPC
 - **Auth** — passkeys, passwords, TOTP 2FA, OAuth, route guards (`niral add auth` — scaffolded code you own)
@@ -116,7 +127,7 @@ src/server/         dev + prod servers, sessions, auth, jobs, live, ai, rag, mig
 src/add/            recipes: tailwind · sqlite · fonts · image · auth · typescript · chat · llm
 apps/docs/          the documentation site — a niral app (dogfood)
 apps/quickpoll/     realtime polling app (dogfood)
-bench/              reproducible benchmarks vs React, Next.js, Svelte, SvelteKit
+bench/              reproducible benchmarks — e2e throughput + streaming TTFB, vs Next.js, SvelteKit, SolidStart, Astro
 tests/              161 tests — npm test
 editors/vscode/     syntax highlighting + LSP client
 ```

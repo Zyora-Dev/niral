@@ -5125,6 +5125,120 @@ test("cluster: pg backplane fans a real-time message to every node (LISTEN/NOTIF
   await nodeB.close();
 });
 
+/* ── streaming SSR: out-of-order {#await} ─────────────────────── */
+
+test("codegen: {#await} SSR emits pending + then + catch branches (4-arg sAwait)", () => {
+  const { code } = compileClient(
+    `<script>let p = $state(fetchIt())</script>
+     {#await p}<span>loading</span>{:then v}<b>{v}</b>{:catch e}<i>{e.message}</i>{/await}`,
+    { runtime: "x" }
+  );
+  ok(code.includes("__s.sAwait("), "SSR await helper emitted");
+  // sAwait(value, pendingFn, thenFn, catchFn) — catch must be a real builder, not null
+  const call = code.slice(code.indexOf("__s.sAwait("));
+  ok(!/__s\.sAwait\([^]*?,\s*null\)\s*;/.test(call.slice(0, call.indexOf(";") + 1)), "catch branch present");
+  ok(call.includes("loading") && call.includes("</b>") && call.includes("</i>"), "all three branches compiled");
+});
+
+test("ssr.sAwait: plain values render :then; promises (no stream ctx) render nested pending", async () => {
+  const ssr = await import("../src/runtime/ssr.js");
+  const prev = globalThis.__niralStream;
+  globalThis.__niralStream = { active: () => null }; // no active streaming render
+  try {
+    const plain = ssr.sAwait(42, () => "PEND", (v) => `V${v}`, null);
+    eq(plain, "<!--niral:start-->V42<!--niral:end-->", "plain value → then");
+    const prom = ssr.sAwait(Promise.resolve(1), () => "PEND", (v) => `V${v}`, null);
+    eq(prom, "<!--niral:start--><!--niral:start-->PEND<!--niral:end--><!--niral:end-->", "promise → nested pending (legacy)");
+  } finally {
+    globalThis.__niralStream = prev;
+  }
+});
+
+test("ssr.sAwait: an active streaming ctx registers a boundary and tags the pending markup", async () => {
+  const ssr = await import("../src/runtime/ssr.js");
+  const prev = globalThis.__niralStream;
+  const store = { boundaries: [], seq: 0 };
+  globalThis.__niralStream = { active: () => store };
+  try {
+    const p = Promise.resolve("done");
+    const out = ssr.sAwait(p, () => "spinner", (v) => `[${v}]`, null);
+    eq(out, "<!--niral:start--><!--nb:b0-->spinner<!--/nb:b0--><!--niral:end-->", "boundary-tagged pending");
+    eq(store.boundaries.length, 1, "one boundary registered");
+    eq(store.boundaries[0].id, "b0", "boundary id");
+    eq(await store.boundaries[0].value, "done", "carries the promise");
+  } finally {
+    globalThis.__niralStream = prev;
+  }
+});
+
+test("stream.drainBoundaries: streams settled branches out of order + reveal script", async () => {
+  const { drainBoundaries, boundaryRuntime } = await import("../src/server/stream.js");
+  ok(boundaryRuntime().includes("window.__nb="), "reveal runtime defines __nb");
+  ok(boundaryRuntime("abc").includes('nonce="abc"'), "nonce threads into the reveal script");
+
+  // slow b0, fast b1 → b1 must flush first (fastest-first, out of order)
+  const store = {
+    boundaries: [
+      { id: "b0", value: new Promise((r) => setTimeout(() => r("SLOW"), 40)), thenFn: (v) => `<p>${v}</p>`, catchFn: null },
+      { id: "b1", value: Promise.resolve("FAST"), thenFn: (v) => `<p>${v}</p>`, catchFn: null },
+    ],
+    seq: 2,
+  };
+  const chunks = [];
+  await drainBoundaries(store, (s) => chunks.push(s));
+  const joined = chunks.join("");
+  ok(joined.indexOf("FAST") < joined.indexOf("SLOW"), "fast boundary streamed before the slow one");
+  ok(joined.includes('<template data-nb="b1"><p>FAST</p></template>'), "resolved html parked in a template");
+  ok(joined.includes("__nb(\"b1\")"), "reveal call for the boundary");
+});
+
+test("stream.drainBoundaries: rejection renders the :catch branch", async () => {
+  const { drainBoundaries } = await import("../src/server/stream.js");
+  const store = {
+    boundaries: [{ id: "b0", value: Promise.reject(new Error("nope")), thenFn: () => "ok", catchFn: (e) => `<em>${e.message}</em>` }],
+    seq: 1,
+  };
+  const chunks = [];
+  await drainBoundaries(store, (s) => chunks.push(s));
+  ok(chunks.join("").includes("<em>nope</em>"), "catch branch streamed on rejection");
+});
+
+test("dev server: <script stream> page streams the shell first, then each {#await} branch", async () => {
+  const { createDevServer } = await import("../src/dev/server.js");
+  const { mkdtempSync, writeFileSync, mkdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "niral-stream-"));
+  mkdirSync(join(dir, "routes"), { recursive: true });
+  writeFileSync(
+    join(dir, "routes", "index.niral"),
+    `<server>
+      export async function load() {
+        return { slow: new Promise((r) => setTimeout(() => r("streamed-data"), 30)) }
+      }
+    </server>
+    <script stream>let { slow } = $props</script>
+    <h1>Shell</h1>
+    {#await slow}<p class="pending">loading…</p>{:then v}<p class="done">{v}</p>{/await}`
+  );
+
+  const dev = createDevServer({ root: dir, port: 0, watch: false });
+  const port = await new Promise((r) => dev.listen(r));
+  const base = `http://localhost:${port}`;
+  try {
+    const html = await (await fetch(`${base}/`)).text();
+    ok(html.includes("<h1>Shell</h1>"), "shell content rendered");
+    ok(html.includes('id="niral-root"'), "mount root present");
+    ok(html.includes("loading…"), "pending placeholder flushed in the shell");
+    ok(html.includes("<!--nb:b0-->"), "await boundary tagged for streaming");
+    ok(html.includes("window.__nb="), "reveal runtime injected");
+    ok(html.includes('<template data-nb="b0">'), "resolved branch streamed as a template");
+    ok(html.includes(">streamed-data<"), "server-resolved promise value streamed in");
+    ok(html.indexOf("<!--nb:b0-->") < html.indexOf('<template data-nb="b0">'), "shell precedes the streamed chunk");
+  } finally {
+    dev.close();
+  }
+});
+
 /* ── summary ──────────────────────────────────────────────────── */
 await runAll();console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

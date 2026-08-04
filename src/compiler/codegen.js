@@ -721,7 +721,10 @@ function genAwaitS(node, ctx) {
   const thenB = node.thenChildren
     ? stringBuilder(node.thenChildren, ctx, [node.thenVar].filter(Boolean), node.thenVar ?? "")
     : "null";
-  ctx.lines.push(`__h += __s.sAwait((${expr(node.expr, ctx)}), ${pending}, ${thenB});`);
+  const catchB = node.catchChildren
+    ? stringBuilder(node.catchChildren, ctx, [node.catchVar].filter(Boolean), node.catchVar ?? "")
+    : "null";
+  ctx.lines.push(`__h += __s.sAwait((${expr(node.expr, ctx)}), ${pending}, ${thenB}, ${catchB});`);
 }
 
 /** A `(params) => htmlString` builder for slots / await branches. */

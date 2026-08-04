@@ -17,8 +17,9 @@ import { compileClient } from "../compiler/codegen.js";
 import { NiralError, codeFrame } from "../compiler/errors.js";
 import { attachWebSocket } from "./websocket.js";
 import { scanRoutes, matchRoute, layoutChain } from "../server/router.js";
-import { renderPage, renderFile, loadComponent, collectCss } from "../server/render.js";
+import { renderPage, renderFile, loadComponent, collectCss, preparePage, renderComponent } from "../server/render.js";
 import { hydrationScript, assemblePageParts, renderHead, preloadLinks } from "../server/page.js";
+import { streamBody } from "../server/stream.js";
 import { parseFormBody, actionName, actionRedirect } from "../server/forms.js";
 import { multipartBoundary, parseMultipart, encodeFilesForWorker, DEFAULT_MAX_UPLOAD } from "../server/uploads.js";
 import { createJobRunner } from "../server/jobs.js";
@@ -189,7 +190,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
       let props = await loadAllProps(route, layouts, params, store, locals);
       const i18nBoot = i18nFor(cookieHeader, accept);
       if (i18nBoot) props = { locale: i18nBoot.locale, ...props };
-      const { html, ast } = await renderPage(route.file, props, layouts.map((l) => l.abs), i18nBoot);
+      const { fn, ast } = await preparePage(route.file, layouts.map((l) => l.abs), i18nBoot);
       const hydrate =
         (ast.script?.attrs?.mode ?? "client") === "client"
           ? hydrationScript("/routes/" + route.rel, props, {
@@ -198,7 +199,9 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
               i18n: i18nBoot,
             })
           : "";
-      res.end(html + "</div>" + hydrate + tail);
+      // render the shell + stream each {#await} branch as its promise settles
+      await streamBody(() => renderComponent(fn, props), (s) => res.write(s));
+      res.end(hydrate + tail);
     } catch (e) {
       console.error(e);
       // already flushed — surface the failure via the dev overlay

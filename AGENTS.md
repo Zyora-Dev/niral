@@ -57,7 +57,13 @@ A `.niral` file can contain these top-level blocks:
 - Reactivity is **fine-grained** (no virtual DOM). Runes: `$state`, `$props`, `$derived`.
 - Control flow: `{#if}` / `{:else}`, `{#for x of list key x.id}`. Events: `on:click`.
   Binding: `bind:value`. Transitions: `transition:fade`.
+- `{#await promise}pending{:then v}…{:catch e}…{/await}` — async rendering. On a
+  `<script stream>` page the server flushes the pending branch, then STREAMS each
+  `{:then}`/`{:catch}` block out of order as its promise settles (server-resolved,
+  no client refetch — great for slow per-widget `load()` data). Otherwise the client
+  resolves the promise after hydration.
 - `<head>…</head>` sets the document head. `<script mode="static">` = zero-JS SSR page.
+  `<script stream>` = streaming SSR (early head flush + out-of-order `{#await}`).
 - Server blocks may be other languages: `<server lang="python|ruby|go">` (same `load`/RPC/sessions).
 
 ## Routing (file-based, in `routes/`)

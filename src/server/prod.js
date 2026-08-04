@@ -18,6 +18,7 @@ import { callServerFn, pooledCall, authFailure, streamRpc } from "./rpc.js";
 import { satisfiesAuth } from "./auth.js";
 import { newSecret, readSession, sessionCookie } from "./session.js";
 import { assemblePage, assemblePageParts, hydrationScript, renderHead, preloadLinks } from "./page.js";
+import { streamBody } from "./stream.js";
 import { createWorkerPool } from "./workers.js";
 import { createLimiter } from "./ratelimit.js";
 import { LANG_EXT, materialize } from "./polyglot.js";
@@ -564,7 +565,6 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
       const fnRuntime = await runtimeModule();
       if (i18nBoot) fnRuntime._setI18n(i18nBoot.messages, i18nBoot.locale); // catalog for t() during SSR
       const fn = composeComponent(fnRuntime, layoutMods, mod.default);
-      const html = renderComponent(fn, props);
       const hydrate =
         route.mode === "client"
           ? hydrationScript(route.client, props, {
@@ -576,9 +576,12 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
           : "";
 
       if (streaming) {
-        return res.end(html + "</div>" + hydrate + streamTail);
+        // shell flushes first; each {#await} branch streams as it settles
+        await streamBody(() => renderComponent(fn, props), (s) => res.write(s), { nonce });
+        return res.end(hydrate + streamTail);
       }
 
+      const html = renderComponent(fn, props);
       const page = assemblePage({
         shell: manifest.shell,
         style: styles || null,

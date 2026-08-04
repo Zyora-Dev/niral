@@ -123,7 +123,7 @@ const DIRECTIVES = [
 const SCRIPT_ATTRS = [
   kw('lang="ts"', "TypeScript in this script (types stripped, not checked)"),
   kw('mode="static"', "zero JS — SSR only, no hydration"),
-  kw("stream", "streaming SSR — head flushes before load() runs"),
+  kw("stream", "streaming SSR — head flushes early; {#await} branches stream in as they resolve"),
 ];
 
 export function completions(text, offset) {
@@ -179,7 +179,7 @@ const DOCS = {
   $props: "**$props** — what the parent passed in. For routes: URL params + everything `load()` returned. Destructure it: `let { slug } = $props`.",
   "#if": "**{#if cond} … {:else if} … {:else} … {/if}** — conditional rendering. Only the active branch exists in the DOM.",
   "#for": "**{#for item, i of items key item.id} … {/for}** — loop. With `key`, rows are matched by identity: DOM, input state and effects survive reorders.",
-  "#await": "**{#await promise} pending {:then v} … {:catch e} … {/await}** — async rendering. SSR shows the pending branch; the client swaps when it settles. Re-runs when a signal inside the expression changes.",
+  "#await": "**{#await promise} pending {:then v} … {:catch e} … {/await}** — async rendering. On a `<script stream>` page the server flushes the pending branch immediately, then streams the resolved `{:then}`/`{:catch}` HTML out of order as the promise settles. Otherwise SSR shows pending and the client swaps on settle. Re-runs when a signal inside the expression changes.",
   "@html": "**{@html expr}** — render raw, UNESCAPED html. ⚠️ Trusted content only — this bypasses Niral's XSS protection.",
   "bind:": "**bind:value={state}** — two-way input binding. Paths work too: `bind:value={todo.text}` writes through to the object.",
   "on:": "**on:click={handler}** — DOM event. Handlers may be async; thrown errors are contained and reported, the app stays alive.",
@@ -193,7 +193,7 @@ const DOCS = {
   slot: "**<slot />** — where children passed by the parent component render.",
   server: "**<server>** — backend code that NEVER ships to the client. Exported functions become type-safe RPC stubs. `lang=\"python|ruby|go\"` for other languages.",
   head: "**<head>** — per-page head content. `{prop}` interpolates load() data into e.g. `<title>` (HTML-escaped).",
-  stream: "**<script stream>** — streaming SSR: the shell + styles flush before `load()` runs. Note: load() can't set session cookies on streamed pages.",
+  stream: "**<script stream>** — streaming SSR: the shell + styles flush before `load()` runs, and each `{#await}` branch streams in out of order as its promise settles (fastest first). Note: load() can't set session cookies on streamed pages.",
   batch: "**batch(fn)** — group many state writes into one flush; effects see only the final state.",
 };
 
