@@ -1,22 +1,68 @@
 <server>
+let commitCache = null
+let commitCacheAt = 0
+const CACHE_MS = 10 * 60 * 1000
+
+function parseCommit(c) {
+  const subject = String(c?.commit?.message ?? "").split("\n")[0].trim()
+  if (!subject || /^(wip|tmp|fixup|squash)\b|^Merge\b/i.test(subject)) return null
+  const m = subject.match(/^([\w+/-]+):\s*(.+)$/)
+  return {
+    hash: String(c.sha ?? "").slice(0, 7),
+    date: String(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "").slice(0, 10),
+    area: m ? m[1].toLowerCase() : "core",
+    text: m ? m[2] : subject,
+  }
+}
+
+async function currentEntries() {
+  const now = Date.now()
+  if (commitCache && now - commitCacheAt < CACHE_MS) return { entries: commitCache, source: "GitHub" }
+  try {
+    const res = await fetch("https://api.github.com/repos/Zyora-Dev/niral/commits?per_page=100", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "niral-site-changelog",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    })
+    if (!res.ok) throw new Error(`GitHub ${res.status}`)
+    const entries = (await res.json()).map(parseCommit).filter(Boolean)
+    if (!entries.length) throw new Error("GitHub returned no commits")
+    commitCache = entries
+    commitCacheAt = now
+    return { entries, source: "GitHub" }
+  } catch {
+    const { ENTRIES } = await projectImport("lib/changelog.js")
+    return { entries: ENTRIES, source: "release fallback" }
+  }
+}
+
 export async function load() {
-  const { ENTRIES, GENERATED_AT } = await projectImport("lib/changelog.js")
+  const { ENTRIES: fallback, GENERATED_AT } = await projectImport("lib/changelog.js")
+  const { entries, source } = await currentEntries()
   // group by month, newest first
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
   const groups = []
   let cur = null
-  for (const e of ENTRIES) {
+  for (const e of entries) {
     const [y, m, d] = e.date.split("-")
     const key = `${MONTHS[Number(m) - 1]} ${y}`
     if (!cur || cur.key !== key) { cur = { key, items: [] }; groups.push(cur) }
     cur.items.push({ ...e, day: `${MONTHS[Number(m) - 1].slice(0, 3)} ${Number(d)}` })
   }
-  return { groups, generatedAt: GENERATED_AT, total: ENTRIES.length }
+  return {
+    groups,
+    generatedAt: source === "GitHub" ? new Date().toISOString().slice(0, 10) : GENERATED_AT,
+    total: entries.length,
+    source,
+    fallbackTotal: fallback.length,
+  }
 }
 </server>
 
 <script>
-  let { groups, generatedAt, total } = $props
+  let { groups, generatedAt, total, source } = $props
 </script>
 
 <head>
@@ -49,10 +95,10 @@ export async function load() {
     <p class="eyebrow">Changelog</p>
     <h1>Every change, automatically</h1>
     <p class="lead">
-      This page is generated from the commit history on every release —
+      Synced automatically from the repository commit history —
       {total} changes and counting. Nothing here is written by hand.
     </p>
-    <p class="stamp">last generated {generatedAt}</p>
+    <p class="stamp">source: {source} · refreshed {generatedAt} · updates within 10 minutes</p>
   </header>
 
   <section class="log">
@@ -75,7 +121,7 @@ export async function load() {
 
   <footer class="foot">
     <a href="/">← niral.site</a>
-    <span>compiled straight from <code>git log</code></span>
+    <span>synced from <code>github.com/Zyora-Dev/niral</code></span>
   </footer>
 </main>
 
