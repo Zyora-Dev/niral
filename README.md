@@ -98,6 +98,7 @@ slow value; `total` stays ~300 ms, but the page paints in single-digit ms:
 - **Data** — SQL migrations that auto-apply at boot; `node:sqlite` everywhere
 - **Quality** — `niral test` (boots your real app), `niral check` (the actual TypeScript compiler), `niral doctor`
 - **Ship** — content-hashed atomic releases, one-symlink rollback, graceful drains, generated systemd + nginx + Dockerfile deploy kit, CSP nonces and security headers by default
+- **Recover off-box** — gzip + scrypt + AES-256-GCM snapshots to any S3-compatible store, native SigV4, remote retention and authenticated restore
 - **More** — i18n, SMTP mail, image pipeline, structured logging with request IDs, LSP + VS Code extension
 
 ## Editor & AI support
@@ -120,7 +121,7 @@ slow value; `total` stays ~300 ms, but the page paints in single-digit ms:
 ## Repository layout
 
 ```
-bin/niral.js        the CLI — create · dev · check · test · migrate · build · start · deploy · doctor
+bin/niral.js        the CLI — create · dev · check · test · migrate · build · start · deploy · doctor · snapshot/restore
 src/compiler/       parser, codegen (DOM + string-SSR), rewriter
 src/runtime/        signals, DOM ops, hydration, router, i18n, rpc client
 src/server/         dev + prod servers, sessions, auth, jobs, live, ai, rag, migrate

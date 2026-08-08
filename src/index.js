@@ -29,3 +29,8 @@ export { v, validate, withSchema, ValidationError } from "./shared/validate.js";
 export { parseCron, nextCronTime, createJobRunner } from "./server/jobs.js";
 export { parseMultipart, multipartBoundary } from "./server/uploads.js";
 export { createProdServer } from "./server/prod.js";
+export {
+  remoteSnapshotConfig, encryptSnapshot, decryptSnapshot, signS3Request,
+  listRemoteSnapshots, pushRemoteSnapshot, snapshotRemote,
+  pullRemoteSnapshot, restoreRemoteSnapshot,
+} from "./server/remote-snapshot.js";

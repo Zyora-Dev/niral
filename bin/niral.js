@@ -202,15 +202,35 @@ if (cmd === "compile") {
   integrity    re-hash the built release and compare to its manifest`);
   }
 } else if (cmd === "snapshot") {
-  // `snapshot [dir]` or `snapshot list [dir]`
+  // local:  snapshot [dir] | snapshot list [dir]
+  // remote: snapshot --remote [dir] | snapshot list --remote [dir]
+  //         snapshot push <label|latest> [dir]
   const pos = positionals();
-  const sub = pos[0] === "list" ? "list" : "create";
-  const dir = resolve((pos[0] === "list" ? pos[1] : pos[0]) ?? ".");
+  const sub = pos[0] === "list" || pos[0] === "push" ? pos[0] : "create";
+  const remote = args.includes("--remote") || sub === "push";
+  const dir = resolve((sub === "list" ? pos[1] : sub === "push" ? pos[2] : pos[0]) ?? ".");
   const { snapshot, listSnapshots } = await import("../src/server/recover.js");
-  if (sub === "list") {
+  if (sub === "list" && remote) {
+    const { listRemoteSnapshots } = await import("../src/server/remote-snapshot.js");
+    const snaps = await listRemoteSnapshots();
+    if (!snaps.length) console.log("niral · no remote snapshots yet");
+    else for (const s of snaps) console.log(`  ${s.label}`);
+  } else if (sub === "list") {
     const snaps = listSnapshots(dir);
     if (!snaps.length) console.log("niral · no snapshots yet");
     else for (const s of snaps) console.log(`  ${s.label.padEnd(42)} ${String(s.reason).padEnd(12)} ${s.files.join(", ")}`);
+  } else if (sub === "push") {
+    const requested = pos[1] ?? "latest";
+    const local = listSnapshots(dir);
+    const label = requested === "latest" ? local[0]?.label : requested;
+    if (!label) die("niral · no local snapshot available to push");
+    const { pushRemoteSnapshot } = await import("../src/server/remote-snapshot.js");
+    const r = await pushRemoteSnapshot(dir, label);
+    console.log(`niral · remote snapshot ${r.label} — encrypted ${r.bytes} bytes → ${r.key}`);
+  } else if (remote) {
+    const { snapshotRemote } = await import("../src/server/remote-snapshot.js");
+    const r = await snapshotRemote(dir, { reason: "manual-remote" });
+    console.log(`niral · snapshot ${r.local.label} — local + encrypted remote (${r.remote.bytes} bytes)`);
   } else {
     const r = snapshot(dir, { reason: "manual" });
     console.log(`niral · snapshot ${r.label} — ${r.files.length ? r.files.join(", ") : "no databases found"}`);
@@ -220,9 +240,20 @@ if (cmd === "compile") {
   const pos = positionals();
   const label = flag("--to") ?? pos[0] ?? "latest";
   const dir = resolve((flag("--to") ? pos[0] : pos[1]) ?? ".");
-  const { restore } = await import("../src/server/recover.js");
   try {
-    const r = restore(dir, label);
+    let r;
+    if (args.includes("--remote")) {
+      const { listRemoteSnapshots, restoreRemoteSnapshot } = await import("../src/server/remote-snapshot.js");
+      let remoteLabel = label;
+      if (label === "latest") remoteLabel = (await listRemoteSnapshots())[0]?.label;
+      if (!remoteLabel) throw new Error("no remote snapshots available");
+      const result = await restoreRemoteSnapshot(dir, remoteLabel);
+      r = result.restored;
+      console.log(`niral · downloaded + decrypted remote snapshot ${remoteLabel}`);
+    } else {
+      const { restore } = await import("../src/server/recover.js");
+      r = restore(dir, label);
+    }
     console.log(`niral · restored ${r.restored.join(", ") || "nothing"} from ${r.from} (previous state saved as a pre-restore snapshot)`);
     console.log("        Restart the server to pick up the restored data.");
   } catch (e) {
@@ -349,8 +380,12 @@ if (cmd === "compile") {
   doctor [dir]                     diagnose the common "why won't it start" problems
   shield <status|log|verify|integrity> [dir]   in-process security guard
   watchdog [dir] [-p port]         independent guardian: health + integrity + audit
-  snapshot [list] [dir]            back up every data/*.db (auto: hourly + pre-migrate/deploy)
-  restore <label|latest> [dir]     restore databases from a snapshot
+  snapshot [list] [dir]            local SQLite snapshots
+  snapshot --remote [dir]          create + encrypt + push an off-box snapshot
+  snapshot list --remote [dir]     list encrypted remote snapshots
+  snapshot push <label|latest>     encrypt + push an existing local snapshot
+  restore <label|latest> [dir]     restore a local snapshot
+  restore <label|latest> --remote  download, decrypt and safely restore
   rollback [dir] [--to <hash>]     flip dist/current to the previous release
   rotate-secret [dir] [--env f]    new NIRAL_SECRET — evicts every session
   test [dir]                       run the project's tests/ (ambient test/ok/eq/startApp)

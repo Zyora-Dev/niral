@@ -107,6 +107,7 @@ Run these to verify changes (don't guess — the compiler is the source of truth
 - `niral create <name> [--template minimal|blog|dashboard]` — scaffold an app.
 - `niral deploy` — generate systemd + nginx + atomic-release deploy kit.
 - `niral doctor` — diagnose project health. `niral lsp` — the language server VS Code uses.
+- `niral snapshot --remote` / `niral restore latest --remote` — encrypted off-box disaster recovery when `NIRAL_SNAPSHOT_REMOTE_*` is configured server-side.
 
 ## Scaling (opt-in, still zero-dep)
 

@@ -35,6 +35,9 @@ rsync -az --delete \\
 
 echo "→ snapshotting databases before deploy (instant undo if this goes wrong)"
 ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js snapshot \$APP_DIR" || true
+# When remote snapshot env vars exist in app.env, also push the newest local
+# snapshot off-box. The server loads secrets itself; deploy never reads them.
+ssh "\$SERVER" "set -a; . \$APP_DIR/app.env; set +a; if [ -n \"\${NIRAL_SNAPSHOT_REMOTE_URL:-}\" ]; then node \$NIRAL_DIR/bin/niral.js snapshot push latest \$APP_DIR; fi" || true
 
 echo "→ building release on the server (atomic — a failed build changes nothing)"
 ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js build \$APP_DIR"
@@ -259,6 +262,17 @@ NIRAL_SECURE=1
 # NIRAL_AI_URL=
 # NIRAL_SMTP_URL=
 # NIRAL_MAIL_FROM=
+#
+# ── encrypted off-box snapshots (optional, any S3-compatible store) ──
+# Plain database bytes NEVER leave the server: gzip → AES-256-GCM → S3 SigV4.
+# NIRAL_SNAPSHOT_REMOTE_URL=https://s3.example.com
+# NIRAL_SNAPSHOT_REMOTE_BUCKET=my-backups
+# NIRAL_SNAPSHOT_REMOTE_REGION=us-east-1
+# NIRAL_SNAPSHOT_REMOTE_PREFIX=niral/my-app
+# NIRAL_SNAPSHOT_REMOTE_ACCESS_KEY=
+# NIRAL_SNAPSHOT_REMOTE_SECRET_KEY=
+# NIRAL_SNAPSHOT_REMOTE_KEY=use-a-separate-long-encryption-passphrase
+# NIRAL_SNAPSHOT_REMOTE_KEEP=30
 #
 # ── scale to multiple servers/instances (optional) ──
 # Set both, then run instances via niral-cluster@.service behind nginx-cluster.conf.

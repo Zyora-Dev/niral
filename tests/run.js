@@ -5002,6 +5002,86 @@ test("recover: snapshot → tamper → restore brings a database back", async ()
   ok(listSnapshots(dir).some((s) => s.reason === "pre-restore"), "restore first snapshotted the live state (undoable)");
 });
 
+test("recover: remote snapshot encrypts, signs, uploads, downloads and safely restores", async () => {
+  const {
+    encryptSnapshot, decryptSnapshot, signS3Request, pushRemoteSnapshot,
+    listRemoteSnapshots, restoreRemoteSnapshot,
+  } = await import("../src/server/remote-snapshot.js");
+  const { snapshot } = await import("../src/server/recover.js");
+  const { mkdtempSync, mkdirSync, rmSync } = _fs;
+  const { tmpdir } = _os;
+  const { DatabaseSync } = await import("node:sqlite");
+  const dir = mkdtempSync(join(tmpdir(), "niral-remote-recover-"));
+  mkdirSync(join(dir, "data"), { recursive: true });
+  const dbPath = join(dir, "data", "app.db");
+  let db = new DatabaseSync(dbPath);
+  db.exec("CREATE TABLE t (v TEXT)");
+  db.prepare("INSERT INTO t VALUES (?)").run("remote-good-secret-value");
+  db.close();
+
+  const local = snapshot(dir, { reason: "remote-test" });
+  const passphrase = "correct horse battery staple — remote snapshots";
+  const encrypted = encryptSnapshot(local.dir, passphrase);
+  ok(encrypted.subarray(0, 8).toString() === "NIRALRS1", "encrypted bundle has the versioned Niral envelope");
+  ok(!encrypted.includes(Buffer.from("remote-good-secret-value")), "plaintext database content never appears in the remote bundle");
+
+  const unpackRoot = mkdtempSync(join(tmpdir(), "niral-remote-unpack-"));
+  const unpacked = decryptSnapshot(encrypted, passphrase, unpackRoot);
+  ok(unpacked.files.includes("app.db"), "AES-GCM bundle decrypts back into a local snapshot");
+  let wrongKeyFailed = false;
+  try { decryptSnapshot(encrypted, "wrong-key", mkdtempSync(join(tmpdir(), "niral-wrong-key-"))); } catch { wrongKeyFailed = true; }
+  ok(wrongKeyFailed, "wrong encryption key is rejected");
+  const damaged = Buffer.from(encrypted); damaged[damaged.length - 1] ^= 1;
+  let tamperFailed = false;
+  try { decryptSnapshot(damaged, passphrase, mkdtempSync(join(tmpdir(), "niral-tampered-"))); } catch { tamperFailed = true; }
+  ok(tamperFailed, "AES-GCM authentication rejects a tampered bundle");
+
+  const config = {
+    endpoint: new URL("https://objects.example.test"), bucket: "backups",
+    accessKey: "AKIDEXAMPLE", secretKey: "secret", encryptionKey: passphrase,
+    region: "us-east-1", prefix: "niral/demo", keep: 1,
+  };
+  const signedA = signS3Request(config, { method: "PUT", key: "niral/demo/a.nrs", body: Buffer.from("abc"), now: new Date("2026-08-08T12:00:00Z") });
+  const signedB = signS3Request(config, { method: "PUT", key: "niral/demo/a.nrs", body: Buffer.from("abc"), now: new Date("2026-08-08T12:00:00Z") });
+  eq(signedA.headers.authorization, signedB.headers.authorization, "SigV4 is deterministic for the same request");
+  ok(signedA.headers.authorization.includes("Credential=AKIDEXAMPLE/20260808/us-east-1/s3/aws4_request"), "SigV4 scope targets the configured S3 region");
+
+  const objects = new Map();
+  const calls = [];
+  const fetchImpl = async (input, init = {}) => {
+    const url = new URL(input);
+    calls.push({ method: init.method, path: url.pathname, authorization: init.headers?.authorization });
+    const bucketPrefix = "/backups/";
+    if (init.method === "GET" && url.searchParams.get("list-type") === "2") {
+      const xml = [...objects.keys()].sort().map((key) => `<Contents><Key>${key}</Key></Contents>`).join("");
+      return new Response(`<ListBucketResult>${xml}</ListBucketResult>`, { status: 200 });
+    }
+    const key = decodeURIComponent(url.pathname.slice(bucketPrefix.length));
+    if (init.method === "PUT") { objects.set(key, Buffer.from(init.body)); return new Response("", { status: 200 }); }
+    if (init.method === "GET" && objects.has(key)) return new Response(objects.get(key), { status: 200 });
+    if (init.method === "DELETE") { objects.delete(key); return new Response("", { status: 204 }); }
+    return new Response("missing", { status: 404 });
+  };
+
+  const pushed = await pushRemoteSnapshot(dir, local.label, { config, fetchImpl });
+  ok(objects.has(pushed.key), "encrypted object uploaded to the configured prefix");
+  ok(calls.every((call) => call.authorization?.startsWith("AWS4-HMAC-SHA256")), "every S3 request is signed");
+  eq((await listRemoteSnapshots({ config, fetchImpl }))[0].label, local.label, "remote list returns the uploaded label");
+
+  // Remove the local snapshot and corrupt live data: recovery must now come off-box.
+  rmSync(local.dir, { recursive: true, force: true });
+  db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM t");
+  db.prepare("INSERT INTO t VALUES (?)").run("CORRUPTED");
+  db.close();
+  const recovered = await restoreRemoteSnapshot(dir, local.label, { config, fetchImpl });
+  ok(recovered.restored.restored.includes("app.db"), "remote restore reused the safe local restore path");
+  db = new DatabaseSync(dbPath, { readOnly: true });
+  const values = db.prepare("SELECT v FROM t").all().map((row) => row.v);
+  db.close();
+  eq(values, ["remote-good-secret-value"], "off-box snapshot restored the original database content");
+});
+
 test("recover: rollbackRelease flips current to the previous release", async () => {
   const { build } = await import("../src/build/build.js");
   const { rollbackRelease } = await import("../src/server/recover.js");

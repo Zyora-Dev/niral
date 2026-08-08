@@ -1058,6 +1058,7 @@ hydrate; server features (RPC, actions) need \`niral start\`.
 | \`NIRAL_LOG\`, \`NIRAL_ACCESS_LOG\`, \`NIRAL_SLOW_MS\` | logging |
 | \`NIRAL_AI_URL/KEY/MODEL\` | AI endpoint |
 | \`NIRAL_SMTP_URL\`, \`NIRAL_MAIL_FROM\` | mail |
+| \`NIRAL_SNAPSHOT_REMOTE_*\` | encrypted S3-compatible off-box snapshots |
 | \`NIRAL_WORKERS\` | polyglot worker pool size |
 `,
   },
@@ -1235,6 +1236,42 @@ every migration, and before every deploy (the generated \`deploy.sh\` snapshots
 first). They use SQLite's \`VACUUM INTO\` — a consistent copy even while the app
 is writing. The newest 24 are kept; older ones prune.
 
+## Encrypted off-box snapshots
+
+Local snapshots protect against bad deploys and corruption. Remote snapshots
+survive the entire server being lost. Niral supports any S3-compatible object
+store with no SDK and no plaintext upload:
+
+1. package the local snapshot databases
+2. gzip the package
+3. derive a 256-bit key with scrypt
+4. encrypt with AES-256-GCM (tamper authenticated)
+5. sign the request with native AWS Signature V4
+
+\`\`\`sh
+NIRAL_SNAPSHOT_REMOTE_URL=https://s3.example.com
+NIRAL_SNAPSHOT_REMOTE_BUCKET=my-backups
+NIRAL_SNAPSHOT_REMOTE_REGION=us-east-1
+NIRAL_SNAPSHOT_REMOTE_PREFIX=niral/my-app
+NIRAL_SNAPSHOT_REMOTE_ACCESS_KEY=…
+NIRAL_SNAPSHOT_REMOTE_SECRET_KEY=…
+NIRAL_SNAPSHOT_REMOTE_KEY=a-separate-long-encryption-passphrase
+NIRAL_SNAPSHOT_REMOTE_KEEP=30
+\`\`\`
+
+\`\`\`sh
+niral snapshot --remote              # local snapshot + encrypted upload
+niral snapshot push latest           # upload an existing local snapshot
+niral snapshot list --remote         # remote inventory
+niral restore latest --remote        # download, authenticate, decrypt, restore
+\`\`\`
+
+The generated deploy script automatically pushes the newest pre-deploy snapshot
+when \`NIRAL_SNAPSHOT_REMOTE_URL\` is configured in server-side \`app.env\`.
+The encryption key is independent of the object-store credentials: losing the
+bucket credentials does not reveal database contents, but losing
+\`NIRAL_SNAPSHOT_REMOTE_KEY\` makes remote backups intentionally unrecoverable.
+
 **Auto-rollback**: set \`NIRAL_AUTO_ROLLBACK=1\` and a tampered release reverts to
 the previous good one and restarts itself — the site heals without you awake.
 
@@ -1261,9 +1298,8 @@ watchdog, systemd brings it back. The two processes guard each other and share
 no memory — only the files on disk. \`niral deploy\` generates the watchdog unit
 and \`setup.sh\` enables it automatically.
 
-> On-box backups protect against bad deploys, corruption and malicious writes.
-> They do NOT survive the machine being lost or root-wiped — push snapshots
-> off-box for that (roadmap: \`niral snapshot --remote\`).
+> On-box snapshots are the fast rollback path. Encrypted remote snapshots are
+> the disaster-recovery path when the machine itself is gone.
 
 ## Audit your setup
 
