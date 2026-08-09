@@ -1,6 +1,6 @@
 {
   "name": "niral",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Niral — the zero-dependency full-stack framework by ZyoraLabs. This package is a tiny launcher; the framework itself lives at github.com/Zyora-Dev/niral and has zero dependencies.",
   "bin": {
     "niral": "bin/niral.js",

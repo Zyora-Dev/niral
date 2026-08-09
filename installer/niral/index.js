@@ -7,7 +7,7 @@
  */
 
 import { existsSync, mkdirSync, rmSync, writeFileSync, chmodSync, appendFileSync, readFileSync } from "node:fs";
-import { spawnSync, execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { get } from "node:https";
@@ -33,12 +33,23 @@ function download(url, dest) {
 }
 
 function hasGit() {
-  try {
-    execSync("git --version", { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
+  const result = spawnSync("git", ["--version"], { stdio: "ignore" });
+  return !result.error && result.status === 0;
+}
+
+function commandError(label, result) {
+  const detail = result.error?.message || result.stderr?.trim() || `exit ${result.status ?? "unknown"}`;
+  return new Error(`${label} failed: ${detail}`);
+}
+
+async function installFromTarball() {
+  const tgz = join(NIRAL_HOME, "niral.tgz");
+  await download(TARBALL, tgz);
+  rmSync(FRAMEWORK, { recursive: true, force: true });
+  mkdirSync(FRAMEWORK, { recursive: true });
+  const extracted = spawnSync("tar", ["-xzf", tgz, "-C", FRAMEWORK, "--strip-components=1"], { encoding: "utf8" });
+  rmSync(tgz, { force: true });
+  if (extracted.error || extracted.status !== 0) throw commandError("framework extraction", extracted);
 }
 
 /** Download the framework to ~/.niral/framework (git if available, tarball otherwise). */
@@ -46,21 +57,22 @@ export async function ensureFramework({ update = false } = {}) {
   if (existsSync(join(FRAMEWORK, "bin", "niral.js")) && !update) return FRAMEWORK;
   console.log("niral · downloading the framework (one time, ~1 MB — it has zero dependencies)…");
   mkdirSync(NIRAL_HOME, { recursive: true });
+  let installed = false;
   if (hasGit()) {
-    if (existsSync(join(FRAMEWORK, ".git"))) {
-      execSync("git pull -q", { cwd: FRAMEWORK, stdio: "ignore" });
+    const gitResult = existsSync(join(FRAMEWORK, ".git"))
+      ? spawnSync("git", ["pull", "--ff-only", "-q"], { cwd: FRAMEWORK, encoding: "utf8" })
+      : (() => {
+          rmSync(FRAMEWORK, { recursive: true, force: true });
+          return spawnSync("git", ["clone", "-q", "--depth", "1", REPO, FRAMEWORK], { encoding: "utf8" });
+        })();
+    if (!gitResult.error && gitResult.status === 0) {
+      installed = true;
     } else {
-      rmSync(FRAMEWORK, { recursive: true, force: true });
-      execSync(`git clone -q --depth 1 ${REPO} "${FRAMEWORK}"`, { stdio: "ignore" });
+      const reason = gitResult.error?.message || gitResult.stderr?.trim() || `exit ${gitResult.status ?? "unknown"}`;
+      console.warn(`niral · Git download unavailable (${reason}); trying the release tarball…`);
     }
-  } else {
-    const tgz = join(NIRAL_HOME, "niral.tgz");
-    await download(TARBALL, tgz);
-    rmSync(FRAMEWORK, { recursive: true, force: true });
-    mkdirSync(FRAMEWORK, { recursive: true });
-    execSync(`tar -xzf "${tgz}" -C "${FRAMEWORK}" --strip-components=1`, { stdio: "ignore" });
-    rmSync(tgz);
   }
+  if (!installed) await installFromTarball();
   if (!existsSync(join(FRAMEWORK, "bin", "niral.js"))) throw new Error("framework download failed — try again or clone github.com/Zyora-Dev/niral manually");
   return FRAMEWORK;
 }
@@ -69,9 +81,14 @@ export async function ensureFramework({ update = false } = {}) {
 export function installLauncher() {
   const binDir = join(NIRAL_HOME, "bin");
   mkdirSync(binDir, { recursive: true });
-  const shim = join(binDir, "niral");
-  writeFileSync(shim, `#!/usr/bin/env bash\nexec node "${join(FRAMEWORK, "bin", "niral.js")}" "$@"\n`);
-  chmodSync(shim, 0o755);
+  const frameworkCli = join(FRAMEWORK, "bin", "niral.js");
+  const shim = join(binDir, process.platform === "win32" ? "niral.cmd" : "niral");
+  if (process.platform === "win32") {
+    writeFileSync(shim, `@echo off\r\n"${process.execPath}" "${frameworkCli}" %*\r\n`);
+  } else {
+    writeFileSync(shim, `#!/usr/bin/env sh\nexec "${process.execPath}" "${frameworkCli}" "$@"\n`);
+    chmodSync(shim, 0o755);
+  }
 
   const profile =
     (process.env.SHELL ?? "").endsWith("/zsh") ? join(homedir(), ".zshrc")
@@ -91,6 +108,9 @@ export function installLauncher() {
 
 /** Forward a command to the framework CLI. */
 export function runNiral(args) {
-  const r = spawnSync("node", [join(FRAMEWORK, "bin", "niral.js"), ...args], { stdio: "inherit" });
-  return r.status ?? 0;
+  const r = spawnSync(process.execPath, [join(FRAMEWORK, "bin", "niral.js"), ...args], { stdio: "inherit" });
+  if (r.error) throw new Error(`could not start the Niral CLI: ${r.error.message}`);
+  if (r.signal) throw new Error(`Niral CLI terminated by ${r.signal}`);
+  if (r.status === null) throw new Error("Niral CLI exited without a status");
+  return r.status;
 }

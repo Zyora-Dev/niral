@@ -241,7 +241,7 @@ Add features: \`niral add auth|tailwind|sqlite|chat\`.
 
 export function createApp({ name, dir, template = "minimal" }) {
   const root = resolve(dir ?? name);
-  const appName = name ?? basename(root);
+  const appName = !name || name === "." ? basename(root) : name;
   if (existsSync(root) && readdirSync(root).length > 0) {
     throw new Error(`${root} exists and is not empty — pick a new directory`);
   }
