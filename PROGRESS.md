@@ -21,7 +21,18 @@
   `/opt/niral` has no Git metadata; use checkpointed file synchronization.
 - Docs build `b56a025ac2ea` passed; a local production-server smoke check returned
   200 for `/docs/api-routes` and rendered the endpoint and signed-webhook sections.
-- Commit and checkpointed deployment are pending at this entry.
+- Feature commit: `352034e` (`feat: add native HTTP endpoints and component composition`).
+- Authorized production deployment completed: release `b56a025ac2ea` built on
+  Node 22.22.2 and passed integrity validation before restart. Both `niral-demo`
+  and `niral-demo-watchdog` are active; recent service logs show normal startup.
+- Remote API regression groups passed. Pre-activation validation found the older
+  host lacked `src/server/stream.js`; synchronized it and its matching renderer
+  from the committed source before rerunning successfully.
+- Local health and API docs returned 200; public `https://niral.site/` and
+  `https://niral.site/docs/api-routes` returned 200 with the signed-webhook guide.
+- Rollback checkpoint: `/root/niral-upgrade-checkpoints/20260908-352034e`, containing
+  source archive, active previous release, release path and environment backup.
+  Production environment and persistent data were preserved. No Git push or npm publish.
 
 ## 2026-09-08: Component Composition and Lifecycle Upgrade
 
@@ -42,7 +53,8 @@
   binding/lifecycle checks passed; changed JavaScript has no editor diagnostics.
   Optional TypeScript, image-tool and live Postgres checks remain environment-gated;
   no real-browser Playwright suite was run.
-- No dependencies, production changes, commits, or pushes.
+- No dependencies were added. At this component-only checkpoint there were no
+  production changes, commits or pushes; see the API entry above for deployment.
 
 ## 2026-09-08: Standalone Repository Relocation
 

@@ -2,7 +2,7 @@
 
 Transferred from ZyoraByte-scoped Niral memory on 2026-09-08. This file is the
 portable repository-owned context for future sessions. Operational facts below
-are historical unless explicitly marked as verified during relocation.
+are historical unless explicitly marked as verified with a date.
 
 ## Identity and Repository
 
@@ -55,6 +55,21 @@ Never replace production configuration with local environment files. Build using
 `/usr/bin/node /opt/niral/bin/niral.js build .` from `/opt/niral-demo` before an
 authorized service restart; verify health, `systemctl is-active` and recent logs.
 
+## Verified Deployment: 2026-09-08
+
+- Feature commit `352034e` deployed by targeted rsync; `/opt/niral` has no Git metadata.
+- Node 22.22.2; docs release `b56a025ac2ea` built on the host and integrity-checked.
+- Remote API regression groups passed. Both services active; health and API guide
+  returned 200 locally; public homepage and `/docs/api-routes` verified as 200.
+- Checkpoint: `/root/niral-upgrade-checkpoints/20260908-352034e` preserves source,
+  previous release `8a3ac074df89`, its original path and the environment file.
+- Environment file is `/opt/niral-demo/app.env`; preserved unchanged along with data.
+- Older remote source lacked the streaming module and matching renderer update;
+  both were synchronized from committed source before activation. Compare runtime
+  dependencies as well as the new commit's changed files on subsequent deployments.
+- Watchdog briefly stopped during build/activation and restarted afterward.
+- No Git push or npm publication. Unrelated local instruction/spec files untouched.
+
 ## HTTP API Routes
 
 - `.server.js` routes export HTTP verbs; handlers receive native `request`, `url`,
@@ -84,7 +99,7 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
   returned cleanup on rerun/disposal. Register lifecycle hooks during setup.
 - Component upgrade verified locally on 2026-09-08: `npm test` reported 185 passed,
   0 failed. Optional tool/service checks are environment-gated; browser verification
-  used the DOM shim, not Playwright. No deployment was performed.
+  used the DOM shim, not Playwright. Subsequently deployed with the API upgrade above.
 - `<script mode="static">` supports compile-time constants, not runes or reactive
   state. Use a plain `<script>` block for reactivity.
 - The parser historically breaks on literal backticks in regex/template literals
