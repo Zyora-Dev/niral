@@ -25,7 +25,8 @@ import { fileURLToPath } from "node:url";
 import { compileClient, collectServerExports, parseComponent } from "../compiler/codegen.js";
 import { stripTypes } from "../compiler/typescript.js";
 import { authPrelude } from "../server/rpc.js";
-import { scanRoutes, layoutChain } from "../server/router.js";
+import { scanRoutes, scanEndpoints, layoutChain } from "../server/router.js";
+import { collectEndpointModules, writeEndpointModules, moduleSpecifiers } from "../server/endpoint-modules.js";
 import { DEFAULT_SHELL } from "../server/page.js";
 import { writeBundledRuntime } from "./bundle-runtime.js";
 import { LANG_EXT } from "../server/polyglot.js";
@@ -38,17 +39,20 @@ const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
 const SKIP_STATIC = new Set(["routes", "dist", "node_modules", "data", "migrations", "tests", "deploy"]);
 // server-only project files — never shipped as public static assets
-const PRIVATE_FILES = /^(hooks|jobs)\.js$|\.env$/;
+const PRIVATE_FILES = /^(hooks|jobs)\.js$|\.env$|\.server\.(js|mjs|ts)$/;
 
 export function build({ root = ".", out } = {}) {
   const dir = resolve(root);
   const distDir = resolve(out ?? join(dir, "dist"));
   const routes = scanRoutes(join(dir, "routes"));
-  if (!routes.length) throw new Error(`no routes found in ${join(dir, "routes")}`);
+  const endpoints = scanEndpoints(join(dir, "routes"));
+  const endpointFiles = collectEndpointModules(dir, endpoints, { validate: true });
+  if (!routes.length && !endpoints.length) throw new Error(`no routes found in ${join(dir, "routes")}`);
 
   // recipes first: a failing tailwind pass fails the build BEFORE anything flips
   const twRecipe = loadRecipe(dir);
   if (twRecipe) runTailwindOnce(dir, twRecipe, { minify: true });
+  const publicFiles = staticFiles(dir).filter((file) => !endpointFiles.has(file));
 
   const shellFile = join(dir, "routes", "_shell.html");
   const shell = existsSync(shellFile) ? readFileSync(shellFile, "utf8") : DEFAULT_SHELL;
@@ -99,6 +103,12 @@ export function build({ root = ".", out } = {}) {
       deps.push(childRel);
       return `from "${spec}.js"`;
     });
+    for (const spec of moduleSpecifiers(code)) {
+      if (spec.startsWith(".")) {
+        const imported = relative(dir, resolve(dirname(abs), spec)).split(sep).join("/");
+        if (endpointFiles.has(imported) || /\.server\.(js|mjs|ts)$/.test(spec)) throw new Error(`Client module ${srcRel} imports private endpoint code: ${spec}`);
+      }
+    }
     modules.set(srcRel, { source, code, ast, deps });
   }
 
@@ -117,7 +127,8 @@ export function build({ root = ".", out } = {}) {
   /* ── content hash over every input ── */
   const hasher = createHash("sha256");
   for (const rel of [...modules.keys()].sort()) hasher.update(rel).update("\0").update(modules.get(rel).source);
-  for (const f of staticFiles(dir)) hasher.update(f).update("\0").update(readFileSync(join(dir, f)));
+  for (const f of publicFiles) hasher.update(f).update("\0").update(readFileSync(join(dir, f)));
+  for (const [rel, source] of [...endpointFiles].sort(([left], [right]) => left.localeCompare(right))) hasher.update(rel).update("\0").update(source);
   hasher.update(shell);
   const hash = hasher.digest("hex").slice(0, 12);
 
@@ -126,6 +137,7 @@ export function build({ root = ".", out } = {}) {
 
   /* ── write compiled modules + server blocks ── */
   const manifestRoutes = [];
+  if (endpoints.length) writeEndpointModules(join(release, "server", "endpoints"), endpointFiles);
   const usedLangs = new Set();
   for (const [srcRel, { code, ast }] of modules) {
     const clientOut = join(release, "assets", srcRel.replace(/\.(niral|jsx|tsx|ts)$/, ".js"));
@@ -217,7 +229,7 @@ export function build({ root = ".", out } = {}) {
   for (const lang of usedLangs) {
     cpSync(join(FRAMEWORK_DIR, "langs", lang, `runner.${LANG_EXT[lang] ?? lang}`), join(release, "server", "@niral", `runner-${lang}.${LANG_EXT[lang] ?? lang}`));
   }
-  const staticList = staticFiles(dir);
+  const staticList = publicFiles;
   for (const f of staticList) {
     const dest = join(release, "static", f);
     mkdirSync(dirname(dest), { recursive: true });
@@ -229,7 +241,7 @@ export function build({ root = ".", out } = {}) {
   writeFileSync(
     join(release, "manifest.json"),
     JSON.stringify(
-      { hash, createdAt: new Date().toISOString(), shell, routes: manifestRoutes, layouts: manifestLayouts, special: manifestSpecial },
+      { hash, createdAt: new Date().toISOString(), shell, routes: manifestRoutes, endpoints: endpoints.map(({ rel, pattern, segments }) => ({ rel, pattern, segments })), layouts: manifestLayouts, special: manifestSpecial },
       null,
       2
     )
@@ -252,7 +264,7 @@ export function build({ root = ".", out } = {}) {
     if (old.name !== hash) rmSync(join(releasesDir, old.name), { recursive: true });
   }
 
-  return { hash, release, routes: manifestRoutes.length };
+  return { hash, release, routes: manifestRoutes.length + endpoints.length };
 }
 
 /** Project files copied verbatim (everything except routes/dist/node_modules/hidden). */

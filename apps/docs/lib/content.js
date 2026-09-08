@@ -5,12 +5,130 @@
 export const GROUPS = [
   { name: "Start", slugs: ["getting-started", "components", "reactivity"] },
   { name: "Build", slugs: ["routing", "styling", "typescript"] },
-  { name: "Server", slugs: ["server", "database", "auth", "validation", "realtime"] },
+  { name: "Server", slugs: ["server", "api-routes", "database", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
   { name: "Ship", slugs: ["deployment", "zhost", "scaling", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
+  "api-routes": {
+    title: "HTTP API routes",
+    body: `
+Export HTTP methods from a \`routes/**/*.server.js\` file. Endpoints run only on the
+server and return native Web \`Response\` objects. No component or browser bundle is required.
+
+## Start an endpoint
+
+\`\`\`sh
+niral add api
+niral dev
+\`\`\`
+
+The recipe creates \`routes/api/index.server.js\` at \`/api\`, with GET and POST handlers.
+It refuses to overwrite an existing route. API-only projects also support \`niral build\`
+and \`niral start\`.
+
+\`\`\`js
+// routes/api/orders/[id].server.js
+export function GET({ params, url, user }) {
+  if (!user()) return Response.json({ error: "Sign in first" }, { status: 401 });
+  return Response.json({ id: params.id, format: url.searchParams.get("format") });
+}
+
+export async function PATCH({ params, request, user }) {
+  if (!user()) return Response.json({ error: "Sign in first" }, { status: 401 });
+  const changes = await request.json();
+  if (typeof changes?.title !== "string") {
+    return Response.json({ error: "title is required" }, { status: 422 });
+  }
+  return Response.json({ id: params.id, title: changes.title });
+}
+\`\`\`
+
+This example validates and echoes a change. Persist updates in your database and
+check ownership against \`user().id\` before reading or changing a record.
+
+## Routing and methods
+
+- \`routes/api/index.server.js\` maps to \`/api\`.
+- \`routes/api/orders/[id].server.js\` maps to \`/api/orders/:id\`.
+- \`routes/api/files/[...path].server.js\` captures the remaining path, including an empty suffix.
+- Static endpoint segments win over parameters; parameters win over catch-alls.
+- Export GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS. Other methods receive
+  **405** with an **Allow** header. HEAD falls back to GET without sending its body;
+  explicit HEAD overrides it. OPTIONS defaults to **204** with Allow.
+- Endpoints run before static files and pages, after middleware. A page and endpoint
+  cannot own the same route pattern, even with different parameter names. Keep API
+  routes under a distinct prefix to avoid overlapping page patterns.
+- Catch-alls must be last, parameter names cannot repeat, and \`/@niral\` and \`/assets\`
+  are reserved. Trailing slashes are equivalent. Malformed URL encoding returns 400.
+
+## Request context
+
+Handlers receive \`{ request, url, params, locals, session, user }\`:
+
+- \`request\` is a native Request: use json(), text(), arrayBuffer() or formData().
+  The body is buffered once, preserving bytes for signature verification.
+- \`url\` is a URL with searchParams. \`params\` contains decoded route parameters.
+- \`locals\` comes from hooks.js. Middleware guards and short-circuit responses still apply.
+- \`session\` supports get(key, default), set(key, value), delete(key), all().
+  Middleware and endpoint writes share one signed session and persist in Set-Cookie.
+- \`user()\` returns the session user or null. Authentication is explicit, not automatic.
+
+The default body limit is **1 MiB**; set the positive-integer \`NIRAL_MAX_BODY\` byte limit
+server-side to change it. Oversized requests return 413; JSON syntax errors return
+400. Unhandled failures return 500 with details only in dev; production logs retain
+the exception. Validate application inputs and return your own 4xx responses.
+
+Unsafe methods reject an Origin whose host differs from the request URL. Set
+\`NIRAL_ORIGIN=https://your-domain.example\` behind a reverse proxy to provide the canonical
+request URL; forwarded headers are not trusted automatically. Cross-origin writes
+are not enabled by default. Server-to-server webhooks without Origin are supported.
+Always authenticate API clients and verify webhook signatures.
+
+## Signed webhooks
+
+\`\`\`js
+// routes/api/webhook.server.js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export async function POST({ request }) {
+  const raw = Buffer.from(await request.arrayBuffer());
+  const expected = createHmac("sha256", process.env.WEBHOOK_SECRET).update(raw).digest();
+  const signature = request.headers.get("x-signature") ?? "";
+  if (!/^[0-9a-f]{64}$/.test(signature) ||
+      !timingSafeEqual(expected, Buffer.from(signature, "hex"))) {
+    return new Response(null, { status: 401 });
+  }
+  const event = JSON.parse(raw.toString("utf8"));
+  return Response.json({ received: event.type });
+}
+\`\`\`
+
+Declare WEBHOOK_SECRET in hooks.js's required env list. Match your provider's signing
+format; add timestamp validation and persistent event-ID deduplication for replay
+protection before processing real events. The example demonstrates byte-exact HMAC verification.
+
+## Responses and private imports
+
+Return Response.json(), a Response containing text or binary bytes, or a Response
+with a ReadableStream. Status, headers and multiple Set-Cookie values are preserved;
+streaming respects backpressure and disconnects. Set session values before returning
+the Response, not during streaming. Responses default to Cache-Control: no-store.
+
+Relative ESM imports with explicit .js, .mjs or .json extensions and Node built-ins
+are supported. JSON imports use Node's import attributes. Literal dynamic imports
+are supported; computed dynamic imports and imports in template expressions are not.
+CommonJS loading and package imports are not part of the endpoint build contract.
+
+The endpoint dependency graph is copied into the release's private server directory,
+never public assets. Imported helpers become server-only even without a .server.js
+suffix. Do not share those helpers with browser modules. Build validates syntax and
+hashes dependencies; dev reloads the graph when any imported source changes.
+\`import.meta.url\` refers to the copied module. Use a configured absolute data path
+for persistent storage, never a path relative to a release module.
+`,
+  },
   /* ── START ─────────────────────────────────────────────────── */
   "getting-started": {
     title: "Getting started",
@@ -186,6 +304,92 @@ survive reorders, and \`animate:flip\` makes rows glide.
 
 Inside \`Card.niral\`, \`<slot/>\` renders the children and \`on:save\` arrives as an
 \`onSave\` prop. Props update **fine-grained** — the child keeps its local state.
+
+### Named slots and fallbacks
+
+\`Card.niral\` can expose multiple outlets:
+
+\`\`\`html
+<header><slot name="header">Untitled</slot></header>
+<main><slot>No content yet</slot></main>
+<footer><slot name="footer"/></footer>
+\`\`\`
+
+The parent assigns direct children to those outlets:
+
+\`\`\`html
+<Card>
+  <h2 slot="header">Account</h2>
+  <p>Account details</p>
+  <template slot="footer">
+    <button on:click={save}>Save</button>
+    <button on:click={cancel}>Cancel</button>
+  </template>
+</Card>
+\`\`\`
+
+Names must be static, non-empty strings. Unassigned children use the default
+slot. A \`template\` group adds no DOM wrapper, and assignment attributes are
+not rendered. Fallback content renders only when the caller supplies no content
+for that outlet; an explicitly empty group suppresses it. Put conditional named
+content inside a \`template slot="name"\` group. The same rules work in JSX/TSX,
+SSR and hydration.
+
+### Two-way component bindings
+
+A parent explicitly grants write access with \`bind:\`:
+
+\`\`\`html
+<script>
+  import Editor from "../components/Editor.niral"
+  let name = $state("")
+</script>
+
+<Editor bind:value={name}/>
+<p>{name}</p>
+\`\`\`
+
+Inside \`Editor.niral\`, use the prop directly:
+
+\`\`\`html
+<script>
+  let { value = "" } = $props
+</script>
+
+<input bind:value={value}/>
+\`\`\`
+
+Updates flow in both directions without recreating the child. Ordinary props
+remain read-only; no child-side rune is required. Wrappers can forward a binding
+with \`<Editor bind:value={value}/>\`. State property paths such as
+\`bind:value={form.name}\` and \`bind:value={form[field]}\` also work. Derived
+values, plain variables and arbitrary expressions are rejected as binding
+targets. Forwarding a prop that the caller did not bind remains read-only.
+
+### Lifecycle and cleanup
+
+\`onMount\` and \`onDestroy\` are available in component scripts without imports:
+
+\`\`\`html
+<script>
+  let seconds = $state(0)
+
+  onMount(() => {
+    const timer = setInterval(() => seconds++, 1000)
+    return () => clearInterval(timer)
+  })
+</script>
+
+<p>{seconds} seconds</p>
+\`\`\`
+
+\`onMount\` runs in a microtask after DOM attachment or hydration, never during
+SSR. Return a cleanup function from a synchronous callback to release resources
+on unmount. Removing a component before that microtask cancels its mount callback.
+\`onDestroy(() => cleanup())\` registers setup-time cleanup, including during SSR.
+Cleanup follows ownership through conditional branches and keyed rows, runs once,
+and also runs if component setup fails. Runtime \`effect\` callbacks may return a
+cleanup function; it runs before the next execution and on disposal.
 
 ## JSX / TSX
 

@@ -9,6 +9,7 @@
   <url><loc>https://niral.site/docs/styling</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://niral.site/docs/typescript</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://niral.site/docs/server</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://niral.site/docs/api-routes</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://niral.site/docs/database</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://niral.site/docs/auth</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://niral.site/docs/validation</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>

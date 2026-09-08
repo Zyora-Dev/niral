@@ -81,14 +81,18 @@ export function parsePropsPattern(inner) {
 export function collectDeclarations(code) {
   const signals = new Set();
   const props = new Set();
+  const writable = new Set();
   const declRe = /(?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\$(state|derived)\b/g;
   let m;
-  while ((m = declRe.exec(code))) signals.add(m[1]);
+  while ((m = declRe.exec(code))) {
+    signals.add(m[1]);
+    if (m[2] === "state") writable.add(m[1]);
+  }
   const propsRe = /(?:let|const|var)\s*\{([^}]*)\}\s*=\s*\$props\b/g;
   while ((m = propsRe.exec(code))) {
     for (const { local } of parsePropsPattern(m[1])) props.add(local);
   }
-  return { signals, props };
+  return { signals, props, writable };
 }
 
 /** Rewrite a full <script> block. */

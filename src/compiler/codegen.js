@@ -89,13 +89,13 @@ export function compileClient(source, options = {}) {
     ast.script = { ...ast.script, code: stripTypes(ast.script.code) };
   }
 
-  const { signals, props } = ast.script
+  const { signals, props, writable } = ast.script
     ? collectDeclarations(ast.script.code)
-    : { signals: new Set(), props: new Set() };
+    : { signals: new Set(), props: new Set(), writable: new Set() };
   // props compile to reactive prop() bindings — reads rewrite like signals
   const tracked = new Set([...signals, ...props]);
 
-  const ctx = { signals: tracked, locals: new Set(), counter: 0, lines: [], scope: componentScope(ast) };
+  const ctx = { signals: tracked, writable: new Set([...writable, ...props]), locals: new Set(), counter: 0, lines: [], scope: componentScope(ast) };
   const roots = genNodes(ast.template, ctx);
 
   const { imports, rest: scriptRest } = ast.script
@@ -142,8 +142,8 @@ export function compileClient(source, options = {}) {
     }
   }
   // context — share values with any descendant component, no prop drilling
-  for (const fn of ["setContext", "getContext"]) {
-    if (new RegExp(`\\b${fn}\\s*\\(`).test(scriptCode) && !new RegExp(`\\b(?:let|const|var|function)\\s+${fn}\\b`).test(scriptCode)) {
+  for (const fn of ["setContext", "getContext", "onMount", "onDestroy"]) {
+    if (new RegExp(`\\b${fn}\\s*\\(`).test(scriptCode) && !new RegExp(`\\b(?:let|const|var|function)\\s+${fn}\\b`).test(scriptCode) && !imports.some((line) => new RegExp(`\\b${fn}\\b`).test(line)) && !serverFns.includes(fn)) {
       body.push(`  const ${fn} = __n.${fn};`);
     }
   }
@@ -156,7 +156,7 @@ export function compileClient(source, options = {}) {
   // STRING-MODE SSR: a second renderer that concatenates HTML directly —
   // no shim DOM, no effects. Byte-identical to the serializer (hydration
   // claims depend on it). Wrapped in root() so setContext/effects own a scope.
-  const sctx = { signals: tracked, locals: new Set(), counter: 0, lines: [], scope: componentScope(ast), raw: false };
+  const sctx = { signals: tracked, writable: ctx.writable, locals: new Set(), counter: 0, lines: [], scope: componentScope(ast), raw: false };
   genNodesS(ast.template, sctx);
   const sBody = [
     ...prelude,
@@ -272,7 +272,10 @@ function genElement(node, ctx) {
   // <slot/> — render the children passed by the parent component
   if (node.tag === "slot") {
     const v = fresh(ctx, "s");
-    ctx.lines.push(`const ${v} = __props.children ? __props.children() : [];`);
+    const name = slotName(node, "name");
+    const content = name === "default" ? "__props.children" : `(Object.hasOwn(__props.__slots ?? {}, ${JSON.stringify(name)}) ? __props.__slots[${JSON.stringify(name)}] : null)`;
+    const fallback = node.children.length ? `(${childBuilder(node.children, ctx, [])})()` : "[]";
+    ctx.lines.push(`const ${v} = ${content} ? ${content}() : ${fallback};`);
     return v;
   }
 
@@ -371,7 +374,17 @@ function genElement(node, ctx) {
 /** <Card title={x}>children</Card> → __n.child(Card, propsFn, slotFn) */
 function genComponent(node, ctx) {
   const v = fresh(ctx, "c");
+  const props = componentProps(node, ctx);
+  const slot = componentSlotArgs(node, ctx, childBuilder);
+  ctx.lines.push(
+    `const ${v} = __n.child(${node.tag}, () => ({ ${props.join(", ")} })${slot});`
+  );
+  return v;
+}
+
+function componentProps(node, ctx) {
   const props = [];
+  const bindings = [];
   for (const attr of node.attrs) {
     if (attr.type === "Attr") {
       if (attr.value === true) props.push(`${JSON.stringify(attr.name)}: true`);
@@ -381,15 +394,54 @@ function genComponent(node, ctx) {
       // <Card on:save={fn}> → the child receives an `onSave` handler prop
       const prop = "on" + attr.event.charAt(0).toUpperCase() + attr.event.slice(1);
       props.push(`${JSON.stringify(prop)}: (${expr(attr.expr, ctx)})`);
+    } else if (attr.type === "Bind") {
+      const raw = attr.expr.raw.trim();
+      const root = raw.match(/^([A-Za-z_$][\w$]*)(?=\s*(?:[.[]|$))/)?.[1];
+      const scalar = /^[A-Za-z_$][\w$]*$/.test(raw);
+      if (!root || !ctx.writable.has(root) || ctx.locals.has(root) || (!scalar && !/^(?:[A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*|\[(?:[A-Za-z_$][\w$]*|\d+|"[^"\\]*"|'[^'\\]*')\])+$/.test(raw))) {
+        throw new NiralError("NIRAL061", `bind:${attr.name} requires writable state or a property path`, {
+          source: raw,
+          hint: `Use bind:${attr.name}={value} with $state, or bind:${attr.name}={form.value}. Props can forward an existing binding.`,
+        });
+      }
+      const value = expr(attr.expr, ctx);
+      const setter = scalar ? `${root}.set(__value);` : `(${value}) = __value; ${root}.touch();`;
+      props.push(`${JSON.stringify(attr.name)}: (${value})`);
+      bindings.push(`[${JSON.stringify(attr.name)}]: { set: (__value) => { ${setter} }, touch: () => ${root}.touch() }`);
     }
-    // bind:/use: on components — not supported: pass handlers/values as props.
   }
-  const slot =
-    node.children.length > 0 ? `, ${childBuilder(node.children, ctx, [])}` : "";
-  ctx.lines.push(
-    `const ${v} = __n.child(${node.tag}, () => ({ ${props.join(", ")} })${slot});`
-  );
-  return v;
+  if (bindings.length) props.push(`"__bindings": { ${bindings.join(", ")} }`);
+  return props;
+}
+
+function slotName(node, attribute) {
+  const attr = node.attrs.find((entry) => entry.type === "Attr" && entry.name === attribute);
+  if (!attr) return "default";
+  if (typeof attr.value !== "string" || !attr.value.trim()) {
+    throw new NiralError("NIRAL060", `${attribute} must be a non-empty static slot name`, {
+      hint: `Use ${attribute}="header". Dynamic slot names are not supported.`,
+    });
+  }
+  return attr.value;
+}
+
+function componentSlotArgs(node, ctx, builder) {
+  const groups = new Map();
+  for (const child of node.children) {
+    if (child.type === "Text" && normalizeText(child.value) === "") continue;
+    const assigned = child.type === "Element" && child.attrs.some((attr) => attr.type === "Attr" && attr.name === "slot");
+    const name = assigned ? slotName(child, "slot") : "default";
+    if (!groups.has(name)) groups.set(name, []);
+    const children = groups.get(name);
+    if (assigned && child.tag === "template") children.push(...child.children);
+    else children.push(assigned ? { ...child, attrs: child.attrs.filter((attr) => !(attr.type === "Attr" && attr.name === "slot")) } : child);
+  }
+  const defaults = groups.get("default");
+  groups.delete("default");
+  const content = defaults ? builder(defaults, ctx, []) : "null";
+  if (!groups.size) return defaults ? `, ${content}` : "";
+  const named = [...groups].map(([name, children]) => `[${JSON.stringify(name)}]: ${builder(children, ctx, [])}`);
+  return `, ${content}, { ${named.join(", ")} }`;
 }
 
 function genIf(node, ctx) {
@@ -447,6 +499,7 @@ function genFor(node, ctx) {
 function childBuilder(children, ctx, extraLocals, params = "", extraSignals = []) {
   const child = {
     signals: extraSignals.length ? new Set([...ctx.signals, ...extraSignals]) : ctx.signals,
+    writable: extraSignals.length ? new Set([...ctx.writable, ...extraSignals]) : ctx.writable,
     locals: new Set([...ctx.locals, ...extraLocals].filter((n) => !extraSignals.includes(n))),
     counter: ctx.counter,
     lines: [],
@@ -532,7 +585,10 @@ function genElementS(node, ctx) {
   if (/^[A-Z]/.test(node.tag)) return genComponentS(node, ctx);
 
   if (node.tag === "slot") {
-    ctx.lines.push(`__h += __props.children ? __props.children() : "";`);
+    const name = slotName(node, "name");
+    const content = name === "default" ? "__props.children" : `(Object.hasOwn(__props.__slots ?? {}, ${JSON.stringify(name)}) ? __props.__slots[${JSON.stringify(name)}] : null)`;
+    const fallback = node.children.length ? `(${stringBuilder(node.children, ctx, [])})()` : '\"\"';
+    ctx.lines.push(`__h += ${content} ? ${content}() : ${fallback};`);
     return;
   }
 
@@ -646,18 +702,8 @@ function genElementS(node, ctx) {
 }
 
 function genComponentS(node, ctx) {
-  const props = [];
-  for (const attr of node.attrs) {
-    if (attr.type === "Attr") {
-      if (attr.value === true) props.push(`${JSON.stringify(attr.name)}: true`);
-      else if (typeof attr.value === "string") props.push(`${JSON.stringify(attr.name)}: ${JSON.stringify(attr.value)}`);
-      else props.push(`${JSON.stringify(attr.name)}: (${expr(attr.value, ctx)})`);
-    } else if (attr.type === "On") {
-      const prop = "on" + attr.event.charAt(0).toUpperCase() + attr.event.slice(1);
-      props.push(`${JSON.stringify(prop)}: (${expr(attr.expr, ctx)})`);
-    }
-  }
-  const slot = node.children.length > 0 ? `, ${stringBuilder(node.children, ctx, [])}` : "";
+  const props = componentProps(node, ctx);
+  const slot = componentSlotArgs(node, ctx, stringBuilder);
   ctx.lines.push(`__h += __s.sChild(${node.tag}, { ${props.join(", ")} }${slot});`);
 }
 
@@ -689,6 +735,7 @@ function genForS(node, ctx) {
     const block = {
       ...ctx,
       signals: new Set([...ctx.signals, ...signalLocals]),
+      writable: new Set([...ctx.writable, ...signalLocals]),
       locals: new Set([...ctx.locals].filter((n) => !signalLocals.includes(n))),
       lines: [],
     };

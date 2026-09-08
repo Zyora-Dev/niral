@@ -106,12 +106,13 @@ export function sSig(v) {
 }
 
 /** <Card/> — region-wrapped child component via ITS string renderer. */
-export function sChild(Comp, props, slot) {
+export function sChild(Comp, props, slot, slots) {
   const ssr = Comp.__ssr;
   if (typeof ssr !== "function") {
     throw new Error(`component has no string SSR renderer — recompile it with this version of niral`);
   }
   if (slot) props.children = slot;
+  if (slots) props.__slots = slots;
   return `<!--niral:start-->${ssr(props)}<!--niral:end-->`;
 }
 

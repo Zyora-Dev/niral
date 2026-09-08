@@ -632,7 +632,7 @@ function runOf(estart, eend) {
  * changes flow FINE-GRAINED into the child's DOM. Local $state, effects,
  * input state and context all SURVIVE prop updates (no rebuild).
  */
-export function child(Comp, propsFn, slot) {
+export function child(Comp, propsFn, slot, slots) {
   const build = Comp.__build ?? Comp;
   const pSig = derived(propsFn);
   return region(() => {
@@ -640,6 +640,7 @@ export function child(Comp, propsFn, slot) {
     // the per-prop deriveds own the updates
     const props = { ...untrack(() => pSig.get()), __sig: pSig };
     if (slot) props.children = slot;
+    if (slots) props.__slots = slots;
     return build(props);
   });
 }

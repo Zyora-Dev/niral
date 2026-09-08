@@ -320,7 +320,10 @@ if (cmd === "compile") {
   const [what, target] = positionals();
   const root = resolve(target ?? ".");
   try {
-    if (what === "tailwind") {
+    if (what === "api") {
+      const { addApi } = await import("../src/add/api.js");
+      addApi({ root });
+    } else if (what === "tailwind") {
       const { addTailwind } = await import("../src/add/tailwind.js");
       const recipe = await addTailwind({ root });
       console.log(`niral · tailwind ready — use classes in your .niral files; styles compile to /${recipe.output}`);
@@ -352,6 +355,7 @@ if (cmd === "compile") {
       await addLlm({ root, modelUrl: flag("--model") ?? null });
     } else {
       die(`niral add — available recipes:
+  api               native Request/Response HTTP endpoint (zero deps)
   tailwind          standalone Tailwind CSS (binary, no npm)
   sqlite            database-backed notes route (stdlib, nothing to install)
   fonts [--family]  self-hosted Google Fonts (default: Inter)

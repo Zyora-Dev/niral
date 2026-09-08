@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parse, NiralError, compileClient, rewriteScript, rewriteExpr, collectDeclarations } from "../src/index.js";
 import { signal, derived, effect, root, batch } from "../src/runtime/signals.js";
+import { registerApiTests } from "./api-routes.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -20,6 +21,8 @@ const queue = [];
 function test(name, fn) {
   queue.push({ name, fn });
 }
+
+registerApiTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {
@@ -798,6 +801,224 @@ test("codegen: <slot/> renders parent-provided children", () => {
   ok(code.includes("__props.children ? __props.children() : []"), "slot compiled");
 });
 
+test("component slots: static names are required in Niral and JSX", () => {
+  for (const template of [
+    '<slot name={name}/>', '<slot name=""/>', '<slot name/>',
+    '<Card><h1 slot={name}>Title</h1></Card>', '<Card><h1 slot="">Title</h1></Card>',
+  ]) {
+    expectError("NIRAL060", () => compileClient(template));
+    expectError("NIRAL060", () => compileClient(`export default function Page() { return (${template}) }`, { filename: "Page.jsx" }));
+  }
+});
+
+test("component slots: named content, fallback, forwarding and SSR byte identity", async () => {
+  const { renderComponent } = await import("../src/server/render.js");
+  const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
+  const moduleUrl = (source, filename = "Card.niral") =>
+    "data:text/javascript;base64," + Buffer.from(compileClient(source, { runtime, filename }).code).toString("base64");
+  const card = moduleUrl('<header><slot name="header">Untitled</slot></header><main><slot>Empty</slot></main><footer><slot name="footer">Footer</slot></footer>');
+  const cases = [
+    ['<h1 slot="header">Title</h1><p>Body</p>', '<header><h1>Title</h1></header><main><p>Body</p></main><footer>Footer</footer>'],
+    ['<template slot="header"><b>One</b><b>Two</b></template><b slot="header">Three</b>', '<header><b>One</b><b>Two</b><b>Three</b></header><main>Empty</main><footer>Footer</footer>'],
+    ['', '<header>Untitled</header><main>Empty</main><footer>Footer</footer>'],
+    ['\n  <h1 slot="header">Title</h1>\n', '<header><h1>Title</h1></header><main>Empty</main><footer>Footer</footer>'],
+    ['<template slot="header"></template><p slot="default">Body</p>', '<header></header><main><p>Body</p></main><footer>Footer</footer>'],
+    ['<b slot="unused">Hidden</b>', '<header>Untitled</header><main>Empty</main><footer>Footer</footer>'],
+    ['<template slot="footer">{#if true}<b>Done</b>{/if}</template>', '<header>Untitled</header><main>Empty</main><footer><!--niral:start--><b>Done</b><!--niral:end--></footer>'],
+  ];
+  for (const [content, expected] of cases) {
+    const source = `<script>import Card from ${JSON.stringify(card)}</script><Card>${content}</Card>`;
+    const { default: Component } = await import(moduleUrl(source));
+    const fast = renderComponent(Component);
+    eq(fast, renderComponent((target, props) => Component(target, props)), "DOM and string SSR agree");
+    eq(fast, `<!--niral:start-->${expected}<!--niral:end-->`, "content reaches the correct outlet");
+    ok(!fast.includes(' slot='), "slot assignment is not a DOM attribute");
+  }
+  const wrapper = moduleUrl(`<script>import Card from ${JSON.stringify(card)}</script><Card><template slot="header"><slot name="heading">Wrapper</slot></template><slot/></Card>`);
+  const badge = moduleUrl('<strong>Badge</strong>');
+  const forwarded = moduleUrl(`<script>
+import Wrapper from ${JSON.stringify(wrapper)}
+import Badge from ${JSON.stringify(badge)}
+</script><Wrapper><Badge slot="heading"/><p>Body</p></Wrapper>`);
+  const { default: Forwarded } = await import(forwarded);
+  const forwardedHtml = renderComponent(Forwarded);
+  eq(forwardedHtml, renderComponent((target, props) => Forwarded(target, props)), "forwarded slots match SSR");
+  ok(forwardedHtml.includes('<header><!--niral:start--><strong>Badge</strong><!--niral:end--></header>'), "component content forwards into a named outlet");
+  ok(forwardedHtml.includes('<main><p>Body</p></main>'), "default content forwards too");
+
+  const special = moduleUrl('<slot name="__proto__">Missing</slot><slot name="constructor">Safe</slot>');
+  const { default: Special } = await import(moduleUrl(`<script>import Special from ${JSON.stringify(special)}</script><Special><b slot="__proto__">Own</b></Special>`));
+  eq(renderComponent(Special), '<!--niral:start--><b>Own</b>Safe<!--niral:end-->', "slot names cannot resolve inherited object properties");
+
+  for (const filename of ["Page.jsx", "Page.tsx"]) {
+    const { default: Jsx } = await import(moduleUrl(`import Card from ${JSON.stringify(card)}\nexport default function Page() { return <Card><h1 slot="header">JSX</h1><p>Body</p></Card> }`, filename));
+    const html = renderComponent(Jsx);
+    eq(html, renderComponent((target, props) => Jsx(target, props)), `${filename} agrees with DOM SSR`);
+    ok(html.includes('<header><h1>JSX</h1></header><main><p>Body</p></main>'), `${filename} uses the same slot contract`);
+  }
+});
+
+test("component slots: hydration preserves nodes and parent updates stay reactive", async () => {
+  const { createDocument, serializeChildren } = await import("../src/server/dom-shim.js");
+  const { _hydrateNext } = await import("../src/runtime/dom.js");
+  const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
+  const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(compileClient(source, { runtime }).code).toString("base64");
+  const card = moduleUrl('<script>let count = $state(0)</script><section><button on:click={() => count++}>{count}</button><slot name="header"/><slot>Fallback</slot></section>');
+  const source = `<script>
+import Card from ${JSON.stringify(card)}
+let label = $state("First")
+</script><button on:click={() => label = "Second"}>Update</button><Card><b slot="header">{label}</b></Card>`;
+  const { default: Component } = await import(moduleUrl(source));
+  const previous = globalThis.document;
+  globalThis.document = createDocument();
+  let initial, hydrated;
+  try {
+    const target = document.createElement("div");
+    initial = Component(target);
+    const section = target.childNodes.find((node) => node.tagName === "section");
+    const label = section.childNodes.find((node) => node.tagName === "b");
+    const before = serializeChildren(target);
+    _hydrateNext(target);
+    hydrated = Component(target);
+    eq(serializeChildren(target), before, "hydration does not duplicate slot content");
+    ok(target.childNodes.includes(section) && section.childNodes.includes(label), "hydration claims existing slot nodes");
+    section.childNodes.find((node) => node.tagName === "button")._listeners.click({});
+    target.childNodes.find((node) => node.tagName === "button")._listeners.click({});
+    ok(serializeChildren(target).includes('<button>1</button><b>Second</b>Fallback'), "parent slot updates preserve child state");
+    ok(section.childNodes.includes(label), "reactive updates reuse slot nodes");
+  } finally {
+    hydrated?.destroy();
+    initial?.destroy();
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  }
+});
+
+test("component bindings: write-through, forwarding, paths and SSR parity", async () => {
+  const { createDocument, serializeChildren } = await import("../src/server/dom-shim.js");
+  const { renderComponent } = await import("../src/server/render.js");
+  const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
+  const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(compileClient(source, { runtime }).code).toString("base64");
+  const editor = moduleUrl('<script>let { value = 0 } = $props; let count = $state(0)</script><button on:click={() => { value++; count++ }}>{value}:{count}</button>');
+  const wrapper = moduleUrl(`<script>
+import Editor from ${JSON.stringify(editor)}
+let { value } = $props
+</script><Editor bind:value={value}/>`);
+  for (const targetExpr of ["value", "form.value", "form[key]"]) {
+    const { default: Component } = await import(moduleUrl(`<script>
+import Wrapper from ${JSON.stringify(wrapper)}
+let value = $state(1)
+let form = $state({ value: 1 })
+const key = "value"
+</script><Wrapper bind:value={${targetExpr}}/><button on:click={() => ${targetExpr === "value" ? "value = 8" : "form = { value: 8 }"}}>Parent</button><b>{${targetExpr}}</b>`));
+    eq(renderComponent(Component), renderComponent((target, props) => Component(target, props)), "binding SSR paths agree");
+    const previous = globalThis.document;
+    globalThis.document = createDocument();
+    let instance;
+    try {
+      const target = document.createElement("div");
+      instance = Component(target);
+      const buttons = target.childNodes.filter((node) => node.tagName === "button");
+      buttons[0]._listeners.click({});
+      ok(serializeChildren(target).includes("<button>2:1</button>"), "child updates bound value and its local state");
+      ok(serializeChildren(target).includes("<b>2</b>"), "child update reaches parent through wrapper");
+      buttons[1]._listeners.click({});
+      ok(serializeChildren(target).includes("<button>8:1</button>"), "parent updates preserve child local state");
+      ok(target.childNodes.includes(buttons[0]), "binding updates retain child DOM");
+    } finally {
+      instance?.destroy();
+      if (previous === undefined) delete globalThis.document;
+      else globalThis.document = previous;
+    }
+  }
+});
+
+test("component bindings: invalid targets fail at compile time", () => {
+  for (const expression of ["total", "plain", "value + 1", "value()", "form?.value"]) {
+    expectError("NIRAL061", () => compileClient(`<script>let value = $state(1); let form = $state({ value: 1 }); let total = $derived(value * 2); let plain = 0</script><Editor bind:value={${expression}}/>`));
+  }
+});
+
+test("component lifecycle: cleanup ownership, effects and failed setup", async () => {
+  const { root, signal, effect, onDestroy, onMount } = await import("../src/runtime/signals.js");
+  const events = [];
+  const [value, dispose] = root(() => {
+    const state = signal(0);
+    effect(() => {
+      const current = state.get();
+      events.push(`run:${current}`);
+      return () => events.push(`clean:${current}`);
+    });
+    onMount(() => events.push("mounted"));
+    onDestroy(() => events.push("destroy"));
+    return state;
+  });
+  value.set(1);
+  dispose();
+  dispose();
+  value.set(2);
+  eq(events.join(","), "run:0,clean:0,run:1,clean:1,destroy", "effect cleanup runs before rerun and once on disposal; SSR never mounts");
+  let cleaned = 0;
+  try {
+    root(() => { onDestroy(() => cleaned++); throw new Error("setup failed"); });
+  } catch (error) { eq(error.message, "setup failed"); }
+  eq(cleaned, 1, "failed setup releases resources");
+  const [, disposeErrors] = root(() => {
+    onDestroy(() => cleaned++);
+    onDestroy(() => { throw new Error("cleanup failed"); });
+  });
+  try { disposeErrors(); } catch (error) { eq(error.message, "cleanup failed"); }
+  disposeErrors();
+  eq(cleaned, 2, "one failing cleanup does not skip other cleanups");
+});
+
+test("component lifecycle: mount after attachment, conditional removal and cancellation", async () => {
+  const { createDocument, serializeChildren } = await import("../src/server/dom-shim.js");
+  const { renderComponent } = await import("../src/server/render.js");
+  const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
+  const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(compileClient(source, { runtime }).code).toString("base64");
+  const leaf = moduleUrl('<script>let { report } = $props; onMount(() => { report("mount"); return () => report("cleanup") }); onDestroy(() => report("destroy"))</script><b>Child</b>');
+  const { default: Component } = await import(moduleUrl(`<script>
+import Leaf from ${JSON.stringify(leaf)}
+let { report } = $props
+let visible = $state(true)
+</script><button on:click={() => visible = !visible}>Toggle</button>{#if visible}<Leaf report={report}/>{/if}`));
+  const events = [];
+  renderComponent(Component, { report: (event) => events.push(event) });
+  eq(events.join(","), "destroy", "SSR disposes setup but skips browser mounts");
+  events.length = 0;
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  globalThis.document = createDocument();
+  globalThis.window = {};
+  let instance;
+  try {
+    const target = document.createElement("div");
+    const report = (event) => {
+      if (event === "mount") ok(serializeChildren(target).includes("<b>Child</b>"), "mount runs after DOM attachment");
+      events.push(event);
+    };
+    instance = Component(target, { report });
+    eq(events.length, 0, "mount callback is deferred");
+    await Promise.resolve();
+    eq(events.join(","), "mount");
+    const button = target.childNodes.find((node) => node.tagName === "button");
+    button._listeners.click({});
+    eq(events.join(","), "mount,cleanup,destroy", "conditional removal releases the child");
+    button._listeners.click({});
+    instance.destroy();
+    instance.destroy();
+    await Promise.resolve();
+    eq(events.join(","), "mount,cleanup,destroy,destroy", "destroy cancels pending mounts and never repeats cleanup");
+  } finally {
+    instance?.destroy();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
 test("SSR: parent renders imported child component with props + slot content", async () => {
   const { renderFile } = await import("../src/server/render.js");
   const { mkdtempSync, writeFileSync, mkdirSync } = await import("node:fs");
@@ -828,13 +1049,13 @@ test("build + prod: component compiled into assets with rewritten specifier", as
   const dir = mkdtempSync(join(tmpdir(), "niral-compbuild-"));
   mkdirSync(join(dir, "routes"), { recursive: true });
   mkdirSync(join(dir, "components"), { recursive: true });
-  writeFileSync(join(dir, "components", "Hello.niral"), `<script>let { who } = $props</script><em>hi {who}</em>`);
+  writeFileSync(join(dir, "components", "Hello.niral"), `<script>let { who } = $props</script><em>hi {who}</em><slot name="footer">Fallback</slot><slot>Default</slot>`);
   writeFileSync(
     join(dir, "routes", "index.niral"),
     `<script>
       import Hello from "../components/Hello.niral"
     </script>
-    <Hello who="prod" />`
+    <Hello who="prod"><b slot="footer">Built slot</b></Hello>`
   );
 
   const r = build({ root: dir });
@@ -848,6 +1069,7 @@ test("build + prod: component compiled into assets with rewritten specifier", as
   try {
     const html = await (await fetch(`http://localhost:${port}/`)).text();
     ok(html.includes("<em>hi prod</em>"), `prod SSR renders the child — got: ${html.slice(0, 400)}`);
+    ok(html.includes("<b>Built slot</b>Default"), "production build renders named slots and default fallback");
     eq((await fetch(`http://localhost:${port}/assets/components/Hello.js`)).status, 200, "component asset served");
   } finally {
     prod.close();

@@ -18,6 +18,39 @@ export const SRC_EXT_RE = /\.(niral|jsx|tsx)$/;
 
 /** Scan a routes directory → sorted route table. */
 export function scanRoutes(routesDir) {
+  return scanFiles(routesDir, SRC_EXT_RE);
+}
+
+export function scanEndpoints(routesDir) {
+  const endpoints = scanFiles(routesDir, /\.server\.js$/);
+  for (const route of endpoints) {
+    if (["@niral", "assets"].includes(route.segments[0]?.static)) throw new Error(`Reserved endpoint path: ${route.rel}`);
+    const names = new Set();
+    for (const [index, segment] of route.segments.entries()) {
+      const name = segment.param ?? segment.rest;
+      if (segment.rest && index !== route.segments.length - 1) throw new Error(`Endpoint catch-all must be last: ${route.rel}`);
+      if (name && names.has(name)) throw new Error(`Duplicate endpoint parameter: ${route.rel}`);
+      if (name) names.add(name);
+    }
+  }
+  endpoints.sort((left, right) => {
+    for (let index = 0; index < Math.min(left.segments.length, right.segments.length); index++) {
+      const rank = (segment) => segment.static !== undefined ? 0 : segment.param ? 1 : 2;
+      const difference = rank(left.segments[index]) - rank(right.segments[index]);
+      if (difference) return difference;
+    }
+    return right.segments.length - left.segments.length;
+  });
+  const patterns = new Map();
+  for (const route of [...scanRoutes(routesDir), ...endpoints]) {
+    const pattern = route.segments.map((segment) => segment.static ?? (segment.rest ? "*" : ":")).join("/");
+    if (patterns.has(pattern)) throw new Error(`Route collision: ${patterns.get(pattern)} and ${route.rel}`);
+    patterns.set(pattern, route.rel);
+  }
+  return endpoints;
+}
+
+function scanFiles(routesDir, extension) {
   const routes = [];
   if (!existsSync(routesDir)) return routes;
 
@@ -29,8 +62,8 @@ export function scanRoutes(routesDir) {
       const abs = join(dir, name);
       if (statSync(abs).isDirectory()) {
         walk(abs, [...prefix, name]);
-      } else if (SRC_EXT_RE.test(name)) {
-        const base = name.replace(SRC_EXT_RE, "");
+      } else if (extension.test(name)) {
+        const base = name.replace(extension, "");
         const segs = base === "index" ? [...prefix] : [...prefix, base];
         routes.push({
           file: abs,

@@ -13,6 +13,7 @@ import { gzipSync } from "node:zlib";
 import { extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { matchRoute } from "./router.js";
+import { handleEndpoint } from "./endpoints.js";
 import { renderComponent, composeComponent } from "./render.js";
 import { callServerFn, pooledCall, authFailure, streamRpc } from "./rpc.js";
 import { satisfiesAuth } from "./auth.js";
@@ -267,7 +268,9 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
 
   async function handle(req, res) {
     const reqUrl = new URL(req.url, "http://x");
-    const urlPath = decodeURIComponent(reqUrl.pathname);
+    let urlPath;
+    try { urlPath = decodeURIComponent(reqUrl.pathname); }
+    catch { return send(res, 400, "text/plain", "invalid URL encoding"); }
 
     // Shield: inspect BEFORE routing — bans, probe/injection blocks, lockdown.
     const verdict = shield.inspect(req);
@@ -289,8 +292,16 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
         const r = await applyHooks(hooks, req, res, urlPath, store, sessionSecret);
         if (r.handled) return;
         req.__niralLocals = r.locals;
+        req.__niralStore = store;
       }
     }
+
+    const endpoint = !urlPath.startsWith("/@niral/") && !urlPath.startsWith("/assets/") && matchRoute(manifest.endpoints ?? [], reqUrl.pathname);
+    if (endpoint) return handleEndpoint(req, res, {
+      load: () => import(pathToFileURL(join(releaseDir, "server", "endpoints", "routes", endpoint.route.rel)).href),
+      params: endpoint.params, store: req.__niralStore, secret: sessionSecret,
+      locals: req.__niralLocals,
+    });
 
     /* ── form actions: POST ?/name (works with AND without JS) ── */
     if (req.method === "POST" && actionName(reqUrl.search)) {

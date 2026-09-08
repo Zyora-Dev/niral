@@ -129,6 +129,12 @@ export function effect(fn) {
   const e = {
     deps: [],
     disposed: false,
+    cleanup: null,
+    clean() {
+      const cleanup = e.cleanup;
+      e.cleanup = null;
+      if (cleanup) untrack(cleanup);
+    },
     run() {
       if (e.disposed) return;
       unlink(e);
@@ -137,7 +143,9 @@ export function effect(fn) {
       activeEffect = e;
       activeScope = e.scope; // children created during run belong to this effect's scope
       try {
-        fn();
+        e.clean();
+        const cleanup = fn();
+        if (typeof cleanup === "function") e.cleanup = cleanup;
       } catch (err) {
         _reportError(err, "an effect");
       } finally {
@@ -149,7 +157,11 @@ export function effect(fn) {
       if (e.disposed) return;
       e.disposed = true;
       unlink(e);
-      disposeScope(e.scope);
+      try {
+        e.clean();
+      } finally {
+        disposeScope(e.scope);
+      }
     },
     scope: makeScope(),
   };
@@ -170,6 +182,12 @@ export function root(fn) {
   let result;
   try {
     result = fn();
+  } catch (error) {
+    try {
+      disposeScope(scope);
+    } finally {
+      throw error;
+    }
   } finally {
     activeScope = prev;
   }
@@ -177,15 +195,59 @@ export function root(fn) {
 }
 
 function makeScope() {
-  return { children: [], parent: activeScope, ctx: null };
+  return { children: [], cleanups: [], disposed: false, parent: activeScope, ctx: null };
 }
 
 function disposeScope(scope) {
-  for (const child of scope.children) {
-    if (typeof child.dispose === "function") child.dispose();
-    else disposeScope(child);
+  if (scope.disposed) return;
+  scope.disposed = true;
+  const errors = [];
+  while (scope.children.length) {
+    const child = scope.children.pop();
+    try {
+      if (typeof child.dispose === "function") child.dispose();
+      else disposeScope(child);
+    } catch (error) {
+      errors.push(error);
+    }
   }
-  scope.children.length = 0;
+  while (scope.cleanups.length) {
+    try {
+      untrack(scope.cleanups.pop());
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  const index = scope.parent?.children.indexOf(scope) ?? -1;
+  if (index !== -1) scope.parent.children.splice(index, 1);
+  if (errors.length) throw errors[0];
+}
+
+export function onDestroy(fn) {
+  if (!activeScope) throw new Error("onDestroy() must run during component setup");
+  if (typeof fn !== "function") throw new TypeError("onDestroy() requires a function");
+  if (activeScope.disposed) untrack(fn);
+  else activeScope.cleanups.push(fn);
+}
+
+export function onMount(fn) {
+  if (!activeScope) throw new Error("onMount() must run during component setup");
+  if (typeof fn !== "function") throw new TypeError("onMount() requires a function");
+  if (typeof window === "undefined") return;
+  const scope = activeScope;
+  queueMicrotask(() => {
+    if (scope.disposed) return;
+    const previous = activeScope;
+    activeScope = scope;
+    try {
+      const cleanup = untrack(fn);
+      if (typeof cleanup === "function") onDestroy(cleanup);
+    } catch (error) {
+      _reportError(error, "onMount");
+    } finally {
+      activeScope = previous;
+    }
+  });
 }
 
 function unlink(e) {
@@ -215,18 +277,24 @@ const propWrite = () => {
 };
 
 export function prop(props, key, fallback) {
+  const binding = props?.__bindings && Object.hasOwn(props.__bindings, key) ? props.__bindings[key] : null;
+  const writable = {
+    set: binding ? (value) => binding.set(value) : propWrite,
+    update: binding ? function (fn) { this.set(fn(this.get())); } : propWrite,
+    touch: binding ? () => binding.touch() : propWrite,
+  };
   if (props && props.__sig) {
     const src = props.__sig;
     const d = derived(() => {
       const v = src.get()[key];
       return v === undefined && fallback ? fallback() : v;
     });
-    return { get: d.get, set: propWrite, update: propWrite, touch: propWrite };
+    return { get: d.get, ...writable };
   }
   let v = props ? props[key] : undefined;
   if (v === undefined && fallback) v = fallback();
   const val = v;
-  return { get: () => val, set: propWrite, update: propWrite, touch: propWrite };
+  return { get: () => val, ...writable };
 }
 
 /* ── context ──────────────────────────────────────────────────

@@ -16,7 +16,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileClient } from "../compiler/codegen.js";
 import { NiralError, codeFrame } from "../compiler/errors.js";
 import { attachWebSocket } from "./websocket.js";
-import { scanRoutes, matchRoute, layoutChain } from "../server/router.js";
+import { scanRoutes, scanEndpoints, matchRoute, layoutChain } from "../server/router.js";
+import { handleEndpoint } from "../server/endpoints.js";
+import { collectEndpointModules, loadDevEndpoint } from "../server/endpoint-modules.js";
 import { renderPage, renderFile, loadComponent, collectCss, preparePage, renderComponent } from "../server/render.js";
 import { hydrationScript, assemblePageParts, renderHead, preloadLinks } from "../server/page.js";
 import { streamBody } from "../server/stream.js";
@@ -433,7 +435,9 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
 
   async function handle(req, res) {
     const reqUrl = new URL(req.url, "http://x");
-    const urlPath = decodeURIComponent(reqUrl.pathname);
+    let urlPath;
+    try { urlPath = decodeURIComponent(reqUrl.pathname); }
+    catch { return send(res, 400, "text/plain", "invalid URL encoding"); }
 
     // hooks.js middleware — auth guards, redirects, locals (framework paths exempt)
     if (!urlPath.startsWith("/@niral/")) {
@@ -443,8 +447,18 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
         const r = await applyHooks(hooks, req, res, urlPath, store, sessionSecret);
         if (r.handled) return;
         req.__niralLocals = r.locals;
+        req.__niralStore = store;
       }
     }
+
+    const endpoints = scanEndpoints(routesDir);
+    const endpointFiles = collectEndpointModules(dir, endpoints);
+    const endpoint = !urlPath.startsWith("/@niral/") && !urlPath.startsWith("/assets/") && matchRoute(endpoints, reqUrl.pathname);
+    if (endpoint) return handleEndpoint(req, res, {
+      load: () => loadDevEndpoint(dir, endpoint.route, endpointFiles),
+      params: endpoint.params, store: req.__niralStore, secret: sessionSecret,
+      locals: req.__niralLocals, development: true,
+    });
 
     // form actions: POST ?/name — works with AND without JS
     if (req.method === "POST" && actionName(reqUrl.search)) {
@@ -570,6 +584,9 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     const PRIVATE_DIRS = new Set(["data", "migrations", "tests", "deploy"]);
     if (
       PRIVATE_DIRS.has(segs[0]) ||
+      endpointFiles.has(segs.join("/")) ||
+      /\.server\.(js|mjs|ts)$/.test(urlPath) ||
+      segs[0] === "dist" ||
       segs.some((s) => s.startsWith(".")) ||
       /^(hooks|jobs)\.js$|\.env$/.test(segs[segs.length - 1] ?? "")
     ) {

@@ -34,6 +34,8 @@ declare function live(channel: string, cb: (data: any) => void): { send: (d: any
 declare function t(key: string, params?: Record<string, unknown>): string;
 declare function setContext(key: unknown, value: unknown): void;
 declare function getContext<T = unknown>(key: unknown, fallback?: T): T;
+declare function onMount(fn: () => void | (() => void)): void;
+declare function onDestroy(fn: () => void): void;
 declare const session: { get(k: string, d?: any): any; set(k: string, v: any): void; delete(k: string): void; clear(): void; all(): Record<string, any> };
 declare function publish(channel: string, data: unknown): void;
 declare function user(): any;
