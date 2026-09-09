@@ -98,9 +98,15 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
   still works without TypeScript. No runtime validation or serialization changes.
 - Five focused inference, unsaved-editor and installer-cache tests passed.
   Full suite: 195 passed, 0 failed with TypeScript 5.7.3 explicitly enabled.
-  Local docs build passed: `d890655607dc` (3 routes); no production changes.
-  Commit and site deployment authorized on 2026-09-09; deployment pending.
+  Local and production docs builds passed: `d890655607dc` (3 routes).
+  Commit and site deployment authorized and completed on 2026-09-09.
   Pre-deployment health 200, both services active on release `b56a025ac2ea`.
+  Feature commit `f18532c`; private source/release/environment checkpoint at
+  `/root/niral-upgrade-checkpoints/20260909-f18532c` created before transfer.
+  Remote focused tests passed on Node22.22.2. Release integrity passed (49 files),
+  both services active, local health and public homepage/TypeScript guide 200.
+  Public guide confirmed updated; production environment/data preserved.
+  No Git push or npm publication in this deployment.
   Prior API commits were pushed through `f6dcd19`.
 
 ## Component Pitfalls

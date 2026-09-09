@@ -21,7 +21,22 @@
   passed; local docs build produced release `d890655607dc` (3 routes).
 - Commit and site deployment authorized on 2026-09-09. Pre-deployment inspection:
   Node 22.22.2, both services active, health 200, active release `b56a025ac2ea`.
-  Deployment pending; preserve environment/data and checkpoint before transfer.
+  Feature commit: `f18532c`. Deployment checkpoint created at
+  `/root/niral-upgrade-checkpoints/20260909-f18532c`: source, previous release
+  `b56a025ac2ea`, release path and environment backup. Targeted rsync dry run
+  reviewed. Environment/data were excluded from transfer.
+- Targeted production transfer completed. All five inference/installer/LSP test
+  groups passed on Node 22.22.2 using a private compiler copy in the checkpoint.
+  Docs source syntax passed and environment matched its backup byte-for-byte.
+- Deployment completed: release `d890655607dc` built on Node 22.22.2 and passed
+  integrity checks for all 49 release files before service restart. Both
+  `niral-demo` and `niral-demo-watchdog` are active; logs show normal restart.
+- Local health, homepage and TypeScript guide returned 200. Public
+  `https://niral.site/` and `https://niral.site/docs/typescript` returned 200;
+  the guide includes inferred server contracts, component contracts, unsaved
+  editor diagnostics and the documented limitations. Environment/data preserved.
+- No Git push or npm publication in this deployment; unrelated instruction/spec
+  changes remain untouched. The feature and deployment record are committed locally.
 - Previous API/component commits were successfully pushed to `origin/main`
   through `f6dcd19` on 2026-09-08; prior no-push statements record earlier checkpoints.
 
