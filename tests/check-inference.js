@@ -138,6 +138,39 @@ double("bad");
       rmSync(root, { recursive: true, force: true });
     }
   });
+  test("checker infers form action names, results and schema field errors", () => {
+    const root = mkdtempSync(join(tmpdir(), "niral-form-types-"));
+    try {
+      mkdirSync(join(root, "routes"));
+      const filename = join(root, "routes", "index.niral");
+      const source = `<server lang="ts">
+export const save = withSchema({ title: v.string(), age: v.int(), bio: v.optional(v.string()), address: v.object({ city: v.string() }) }, async (fields) => {
+  const age: number = fields.age;
+  const bio: string | undefined = fields.bio;
+  return { id: age, title: fields.title, bio };
+});
+export async function remove(fields: { id: string }) { return { removed: fields.id }; }
+</server>
+<script lang="ts">
+const saving = formAction("save");
+const removing = formAction("remove");
+const identifier: number | undefined = saving.result?.id;
+const titleError: string | undefined = saving.errors.title;
+const addressError = saving.errors.address;
+if (addressError && typeof addressError !== "string") { const city: string | undefined = addressError.city; }
+const removed: string | undefined = removing.result?.removed;
+</script>
+<form method="post" action="?/save" on:submit={saving.submit}><button disabled={saving.pending}>Save</button></form>
+{#if saving.result}<p>{saving.result.id.toFixed()}</p>{/if}`;
+      writeFileSync(filename, source);
+      assert.deepEqual(check({ root }).errors, []);
+      writeFileSync(filename, source.replace('const identifier: number | undefined', 'const identifier: string | undefined').replace('saving.errors.title;', 'saving.errors.missing;').replace('formAction("remove")', 'formAction("missing")'));
+      const errors = check({ root }).errors;
+      assert.ok(errors.some((entry) => entry.code === "TS2322"));
+      assert.ok(errors.some((entry) => entry.code === "TS2339" && entry.message.includes("missing")));
+      assert.ok(errors.some((entry) => entry.code === "TS2345" && entry.message.includes("missing")));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   test("checker validates component props, events and bidirectional bindings", () => {
     const root = mkdtempSync(join(tmpdir(), "niral-component-types-"));
     try {

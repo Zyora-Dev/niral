@@ -24,7 +24,7 @@ import { join } from "node:path";
 
 // dependency order — router last (it namespaces index). ssr.js is SERVER-ONLY
 // (installed as globalThis.__niralSSR by render.js) and never bundled.
-const ORDER = ["signals.js", "dom.js", "rpc.js", "live.js", "i18n.js", "index.js", "router.js"];
+const ORDER = ["signals.js", "dom.js", "rpc.js", "live.js", "i18n.js", "forms.js", "index.js", "router.js"];
 
 const modVar = (f) => "$niral_" + f.replace(/\.js$/, "").replace(/[^\w$]/g, "_");
 

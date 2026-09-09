@@ -1,0 +1,43 @@
+<server>
+  let submissions = 0;
+  let loads = 0;
+  export async function load() { loads++; return { loads }; }
+  export const save = withSchema({ title: v.string({ min: 3 }), upload: v.optional(v.file()), intent: v.optional(v.string()) }, async (fields) => {
+    submissions++;
+    session.set("lastTitle", fields.title);
+    return { saved: fields.title, size: fields.upload?.size ?? 0, bytes: fields.upload?.data.toString() ?? "", intent: fields.intent ?? "", submissions, loads };
+  });
+  export async function echo(fields) { return { fields }; }
+  export async function leave() { return { redirect: "/done" }; }
+  export async function fail() { throw new Error("private failure detail"); }
+</server>
+
+<script>
+  let { form } = $props;
+  let title = $state("");
+  const saving = formAction("save");
+  const other = formAction("save");
+  const leaving = formAction("leave");
+</script>
+
+<h1>Form Actions</h1>
+<form id="editor" method="post" action="?/save" enctype="multipart/form-data" on:submit={saving.submit}>
+  <label>Title <input name="title" bind:value={title} /></label>
+  <label>Attachment <input name="upload" type="file" /></label>
+  <button name="intent" value="save" disabled={saving.pending}>Save</button>
+</form>
+<p id="status">{saving.status}</p>
+<p id="field-error">{saving.errors.title ?? form?.errors?.title ?? ""}</p>
+<p id="error">{saving.error ?? form?.error ?? ""}</p>
+<p id="result">{saving.result?.saved ?? form?.saved ?? ""}</p>
+<p id="size">{saving.result?.size ?? ""}</p>
+<p id="intent">{saving.result?.intent ?? ""}</p>
+<p id="count">{saving.result?.submissions ?? ""}</p>
+<p id="bound-title">{title}</p>
+<button id="reset" on:click={saving.reset}>Reset</button>
+<form id="other" method="post" action="?/save" on:submit={other.submit}>
+  <label>Other title <input name="title" value="Other draft" /></label>
+  <button>Save other</button>
+</form>
+<p id="other-status">{other.status}</p>
+<form id="leave" method="post" action="?/leave" on:submit={leaving.submit}><button>Leave</button></form>

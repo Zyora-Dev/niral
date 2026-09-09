@@ -19,7 +19,13 @@ asserting the things only a real browser can prove:
 npm install                 # playwright — dev-only, isolated here
 npx playwright install chromium   # one-time browser download
 npm test
+npm run test:forms
 ```
 
 The framework itself never depends on Playwright — this folder has its own
 `package.json`, exactly like `bench/`. Keeps the zero-dependency promise intact.
+
+`test:forms` starts isolated dev and production apps on available ports. It
+checks reactive pending/error/success state, focus and file retention, submitter
+values, duplicate protection, independent forms, reset races, redirects, and
+JavaScript-disabled submission. Temporary app files and servers are cleaned up.

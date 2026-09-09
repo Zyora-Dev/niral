@@ -142,7 +142,7 @@ export function compileClient(source, options = {}) {
     }
   }
   // context — share values with any descendant component, no prop drilling
-  for (const fn of ["setContext", "getContext", "onMount", "onDestroy"]) {
+  for (const fn of ["setContext", "getContext", "onMount", "onDestroy", "formAction"]) {
     if (new RegExp(`\\b${fn}\\s*\\(`).test(scriptCode) && !new RegExp(`\\b(?:let|const|var|function)\\s+${fn}\\b`).test(scriptCode) && !imports.some((line) => new RegExp(`\\b${fn}\\b`).test(line)) && !serverFns.includes(fn)) {
       body.push(`  const ${fn} = __n.${fn};`);
     }

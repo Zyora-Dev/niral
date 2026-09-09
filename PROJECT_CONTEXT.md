@@ -111,6 +111,13 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
 
 ## Component Pitfalls
 
+- Reactive forms verified locally (2026-09-09): `formAction("save")` plus
+  `on:submit={saving.submit}` opts into per-form reactive state and result-only
+  responses without remounting or rerunning `load()`. Results and schema errors
+  are inferred in TS clients. Multipart, duplicate protection, reset/abort and
+  native fallback verified against dev/prod; full suite 200/0 and both Chromium
+  groups pass. Docs build `f3432dab528d` is local only. No deployment/push authorized.
+
 - Named slots use `<slot name="header">fallback</slot>` and direct children with
   `slot="header"`. `<template slot="header">` groups content without a DOM wrapper.
   Names must be static non-empty strings; default slots remain backward compatible.

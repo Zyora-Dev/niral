@@ -22,7 +22,7 @@ import { collectEndpointModules, loadDevEndpoint } from "../server/endpoint-modu
 import { renderPage, renderFile, loadComponent, collectCss, preparePage, renderComponent } from "../server/render.js";
 import { hydrationScript, assemblePageParts, renderHead, preloadLinks } from "../server/page.js";
 import { streamBody } from "../server/stream.js";
-import { parseFormBody, actionName, actionRedirect } from "../server/forms.js";
+import { parseFormBody, actionName, actionRedirect, sendFormResult, allowFormOrigin } from "../server/forms.js";
 import { multipartBoundary, parseMultipart, encodeFilesForWorker, DEFAULT_MAX_UPLOAD } from "../server/uploads.js";
 import { createJobRunner } from "../server/jobs.js";
 import { attachLive } from "../server/live.js";
@@ -462,6 +462,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
 
     // form actions: POST ?/name — works with AND without JS
     if (req.method === "POST" && actionName(reqUrl.search)) {
+      if (!allowFormOrigin(req)) return sendJson(res, 403, { ok: false, error: "cross-origin request rejected" });
       const action = actionName(reqUrl.search);
       const match = matchRoute(scanRoutes(routesDir), urlPath);
       if (!match) return send(res, 404, "text/plain", "not found");
@@ -489,6 +490,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
         return sendJson(res, 415, { ok: false, error: "form actions take urlencoded or multipart/form-data" });
       }
       const out = await executeRpc(match.route.file, action, [form], req.headers.cookie, sessionSecret, pool);
+      if (sendFormResult(req, res, out, { development: true })) return;
       if (out.status === 404 || out.status === 403) return sendJson(res, out.status, out.body);
       if (out.status === 401) {
         if (req.headers["x-niral-form"] === "1") return sendJson(res, 401, out.body);

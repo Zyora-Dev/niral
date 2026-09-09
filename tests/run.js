@@ -10,6 +10,7 @@ import { parse, NiralError, compileClient, rewriteScript, rewriteExpr, collectDe
 import { signal, derived, effect, root, batch } from "../src/runtime/signals.js";
 import { registerApiTests } from "./api-routes.js";
 import { registerInferenceTests } from "./check-inference.js";
+import { registerFormTests } from "./form-actions.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -25,6 +26,7 @@ function test(name, fn) {
 
 registerApiTests(test);
 registerInferenceTests(test);
+registerFormTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {

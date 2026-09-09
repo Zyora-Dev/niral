@@ -597,6 +597,19 @@ instead of a number to \`save\`, or reading a missing property from its result,
 reports a type error at that expression. Plain JavaScript servers infer from
 their implementation and JSDoc; add JSDoc for otherwise untyped parameters.
 
+## Typed form actions
+
+\`formAction("save")\` infers its result from the local server export and its
+field errors from the action's first argument. \`withSchema\` infers validated
+values too: \`v.int()\` becomes a number, optional rules stay optional, and nested
+objects retain their field names. Unknown action names and missing result/error
+properties are diagnostics in TypeScript client blocks.
+
+\`saving.result\` is initially undefined; guard it before reading success data.
+These types do not replace runtime validation. Form payloads still pass through
+the existing server schema, including string coercion and upload checks.
+See [Reactive form actions](/docs/server#reactive-form-actions) for a complete example.
+
 ## Component contracts
 
 Annotate the existing props destructure when a component needs an explicit contract:
@@ -693,9 +706,83 @@ for await (const chunk of stream) text += chunk
 </form>
 \`\`\`
 
-\`save(fields)\` runs on the server. With JS the page updates in place; without JS
-the browser does a classic POST and re-render. Multipart uploads arrive as
+\`save(fields)\` runs on the server. Ordinary enhanced forms rerun the page loader
+and replace the page component; without JS the browser does a classic POST and
+re-render. The action result becomes \`$props.form\`. Multipart uploads arrive as
 \`{ filename, type, size, data }\` buffers, capped and sanitized.
+
+## Reactive form actions
+
+Opt in to per-form state without replacing the page DOM:
+
+\`\`\`html
+<server>
+  export const save = withSchema({ title: v.string({ min: 3 }) }, async ({ title }) => {
+    session.set("title", title)
+    return { title }
+  })
+</server>
+<script lang="ts">
+  const saving = formAction("save")
+</script>
+<form method="post" action="?/save" on:submit={saving.submit}>
+  <label>Title <input name="title" /></label>
+  {#if saving.errors.title}<p role="alert">{saving.errors.title}</p>{/if}
+  <button disabled={saving.pending}>{saving.pending ? "Saving..." : "Save"}</button>
+</form>
+{#if saving.error}<p role="alert">{saving.error}</p>{/if}
+{#if saving.result}<p>Saved: {saving.result.title}</p>{/if}
+\`\`\`
+
+Create one controller per form in the component script. The action name must
+match the form's \`?/name\`. Reactive getters update templates without another
+\`$state\` wrapper; read them from the controller, not a one-time destructure.
+
+| Member | Meaning |
+|--------|---------|
+| \`pending\` | True while this controller is submitting |
+| \`status\` | \`idle\`, \`pending\`, \`success\`, or \`error\` |
+| \`result\` | The successful action return value, otherwise undefined |
+| \`errors\` | Field messages from validation, initially an empty object |
+| \`error\` | General failure message, otherwise null |
+| \`statusCode\` | Response HTTP status, or 0 before a response/after transport failure |
+| \`submit\` | Attach to \`on:submit\`; preserves submitter name/value |
+| \`reset()\` | Abort the active fetch and clear controller state, not input values |
+
+Pending starts with cleared previous results/errors. On validation failure,
+inputs, focus, and selected files remain intact. Success also leaves inputs in
+place. Reactive submissions **do not rerun \`load()\` or update \`$props.form\`**;
+render the returned result or update your own state. Successful actions returning
+\`{ redirect: "/done" }\` navigate normally. Each controller is independent.
+
+\`withSchema\` returns field errors with HTTP 400. For business validation, an
+action can return \`{ errors: { title: "Already taken" } }\` or
+\`{ error: "Unable to save" }\`; these reserved result fields mark failure.
+Nested object errors may contain nested maps; narrow them before rendering.
+Unexpected production server failures use a generic message.
+
+For uploads add \`enctype="multipart/form-data"\` and a named file input.
+Enhanced forms preserve file bytes and let the browser set the multipart
+boundary; the encoding attribute also makes uploads work without JavaScript.
+Submit buttons can override the action, method, target and encoding using
+standard form attributes. Only same-origin POST actions targeting the current
+window are enhanced. A different action name falls back to ordinary enhancement.
+
+JavaScript-disabled submissions keep the classic server-rendered behavior.
+Render \`$props.form\` as well when no-JS users need inline results or field
+messages; the controller itself starts idle and has no client state without JS.
+
+Concurrent submissions of the same form are suppressed while its request is
+in flight. This is not a server-side idempotency guarantee. Network failures
+never trigger an automatic native resubmission: check whether the operation
+completed before retrying. Ordinary enhanced forms dispatch a bubbling
+\`niral:form-error\` event with \`event.detail.error\` when their response cannot
+be applied. Resetting or leaving a component aborts the client fetch and ignores
+late controller results, but cannot undo an action already executing on the server.
+
+Form writes reject mismatched Origin hosts and cross-site Fetch Metadata when
+Origin is absent. Reverse-proxy deployments can set \`NIRAL_ORIGIN\` to their
+canonical public URL. Session authentication and server validation still apply.
 
 ## Python, Ruby, Go backends
 
@@ -924,11 +1011,18 @@ export const signup = withSchema(
 
 - **RPC callers** get a 400 with \`{ errors: { field: message } }\` — the thrown
   client error carries \`.errors\` for form UIs
-- **Form actions** surface it as \`form.errors.field\` in props
+- **Ordinary form actions** surface it as \`form.errors.field\` in props
+- **Reactive form actions** expose \`saving.errors.field\` on the
+  \`formAction("signup")\` controller without remounting the form
 - \`v.file()\` validates uploads (size, types — \`image/*\` wildcards work)
 
 Rules: \`string\`, \`email\`, \`int\`, \`number\`, \`bool\`, \`oneOf\`, \`array\`, \`file\`,
 \`object\`, \`optional\`.
+
+TypeScript infers \`withSchema\` handler values and return types, as well as
+\`validate(shape, data)\` results. Check \`result.ok\` before using its fully
+validated value. Nested object errors retain their field structure; array
+validation errors are a single message for the field.
 `,
   },
 

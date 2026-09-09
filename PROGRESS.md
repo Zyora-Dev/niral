@@ -1,5 +1,31 @@
 # Niral Progress
 
+## 2026-09-09: Reactive Form Actions
+
+- Added opt-in `formAction("save")` with reactive status, pending, result, field
+  errors, transport error and reset. Result-only dev/prod responses preserve the
+  form DOM instead of reloading loader data. Existing native form actions remain.
+- Shared submission transport preserves multipart files and submitter values,
+  blocks concurrent submissions per form, and never retries uncertain writes
+  automatically. Controller cleanup aborts fetches on component disposal.
+- Compiler and production runtime bundler expose the new ambient. Real TypeScript
+  checks infer local action names/results and validator schema field errors.
+- Focused runtime/bundle and six inference regression groups passed. HTTP and
+  Chromium tests now pass against dev and production: exact multipart bytes,
+  cookies, validation, native fallback, focus/file retention, duplicate POST
+  suppression, controller isolation, reset races and redirects. Form actions
+  reject cross-host writes; result-only production 500s conceal exception details.
+- Server, TypeScript and Validation guides now document reactive forms and their
+  limits. Full suite: **200 passed, 0 failed**, with real TypeScript enabled.
+  Both dev/prod Chromium groups pass via `npm run test:forms --prefix tests/browser`.
+  Editor diagnostics and documentation syntax checks are clean; local docs build
+  produced release `f3432dab528d` (3 routes). Optional external image-tool and live
+  Postgres checks remain environment-gated. Framework runtime dependencies remain
+  empty; Playwright stays isolated in browser tooling.
+- Verification note: an initial full run with `NIRAL_LOG=off` failed the expected
+  access-log assertion; rerunning with default logging passed the entire suite.
+  Local commit authorized. No production changes or Git push for this upgrade.
+
 ## 2026-09-09: End-to-End Type Inference
 
 - Installed the existing pinned TypeScript 5.7.3 development tool in `.niral/`.

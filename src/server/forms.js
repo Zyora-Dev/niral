@@ -39,3 +39,26 @@ export function actionName(search) {
 export function actionRedirect(result) {
   return result && typeof result === "object" && typeof result.redirect === "string" ? result.redirect : null;
 }
+
+export function allowFormOrigin(req) {
+  if (!req.headers.origin) return req.headers["sec-fetch-site"] !== "cross-site";
+  try {
+    const target = new URL(req.url, process.env.NIRAL_ORIGIN ?? `${req.socket.encrypted ? "https" : "http"}://${req.headers.host}`);
+    return new URL(req.headers.origin).host === target.host;
+  } catch { return false; }
+}
+
+export function sendFormResult(req, res, out, { development = false } = {}) {
+  if (req.headers["x-niral-form"] !== "1" || req.headers["x-niral-result"] !== "1") return false;
+  const result = out.body.result;
+  const rejected = out.body.ok && result && typeof result === "object" && (result.error || result.errors);
+  const status = rejected ? 400 : out.status;
+  const body = out.status >= 500 && !development ? { ok: false, error: "Internal server error" } : rejected
+    ? { ok: false, error: result.error ?? "Validation failed", errors: result.errors }
+    : out.body.ok ? { ok: true, result, redirect: actionRedirect(result) } : out.body;
+  const headers = { "content-type": "application/json", "cache-control": "no-store" };
+  if (out.setCookie) headers["set-cookie"] = out.setCookie;
+  res.writeHead(status, headers);
+  res.end(JSON.stringify(body));
+  return true;
+}

@@ -24,7 +24,7 @@ import { createWorkerPool } from "./workers.js";
 import { createLimiter } from "./ratelimit.js";
 import { LANG_EXT, materialize } from "./polyglot.js";
 import { collectServerExports } from "../compiler/codegen.js";
-import { parseFormBody, actionName, actionRedirect } from "./forms.js";
+import { parseFormBody, actionName, actionRedirect, sendFormResult, allowFormOrigin } from "./forms.js";
 import { multipartBoundary, parseMultipart, encodeFilesForWorker, DEFAULT_MAX_UPLOAD } from "./uploads.js";
 import { createJobRunner } from "./jobs.js";
 import { attachLive } from "./live.js";
@@ -305,6 +305,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
 
     /* ── form actions: POST ?/name (works with AND without JS) ── */
     if (req.method === "POST" && actionName(reqUrl.search)) {
+      if (!allowFormOrigin(req)) return sendJson(res, 403, { ok: false, error: "cross-origin request rejected" });
       const action = actionName(reqUrl.search);
       const match = matchRoute(manifest.routes, urlPath);
       if (!match || !match.route.hasServer) return send(res, 404, "text/plain", "not found");
@@ -330,6 +331,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
         return sendJson(res, 415, { ok: false, error: "form actions take urlencoded or multipart/form-data" });
       }
       const out = await runServerCall(match.route, action, [form], req.headers.cookie);
+      if (sendFormResult(req, res, out)) return;
       if (out.status === 404 || out.status === 403) return sendJson(res, out.status, out.body);
       if (out.status === 401) {
         if (req.headers["x-niral-form"] === "1") return sendJson(res, 401, out.body);

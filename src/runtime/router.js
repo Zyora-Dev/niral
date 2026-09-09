@@ -9,6 +9,7 @@
  */
 
 import * as __n from "./index.js";
+import { configureForms, formRequest, postForm } from "./forms.js";
 
 let current = null; // mounted instance for the active page
 let installed = false;
@@ -86,32 +87,23 @@ export async function navigate(url, { push = true } = {}) {
 }
 
 /** Progressive form enhancement: POST ?/action without a reload. */
-async function submitForm(form, action) {
-  const url = new URL(action, location.href);
-  const body = new URLSearchParams(new FormData(form)).toString();
-  let data = null;
+async function submitForm(form, request) {
   try {
-    const res = await fetch(url.pathname + url.search, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", "x-niral-form": "1" },
-      body,
-    });
-    data = await res.json();
+    const response = await postForm(form, request);
+    if (!response) return;
+    const { data } = response;
+    if (!data.ok) throw new Error(data.error ?? "Submission failed");
+    if (data.redirect) return navigate(data.redirect);
+    await applyPage(data);
   } catch {
-    /* transport failed — fall back to a native submit */
+    form.dispatchEvent(new CustomEvent("niral:form-error", { bubbles: true, detail: { error: "The response could not be received. Check whether the change was saved before retrying." } }));
   }
-  if (!data?.ok) {
-    form.submit();
-    return;
-  }
-  if (data.redirect) return navigate(data.redirect);
-  navCache.clear(); // the action changed server state — stale prefetches lie
-  await applyPage(data); // fresh load() data + props.form, no reload
 }
 
 function install() {
   if (installed) return;
   installed = true;
+  configureForms({ changed: () => navCache.clear(), redirect: (url) => navigate(url) });
   // prefetch on hover — by the time the click lands, the payload is usually here
   addEventListener("mouseover", (e) => {
     const a = e.target.closest?.("a");
@@ -142,11 +134,11 @@ function install() {
   addEventListener("submit", (e) => {
     if (e.defaultPrevented) return;
     const form = e.target;
-    const action = form?.getAttribute?.("action") ?? "";
-    if (!action.includes("?/")) return;
-    if ((form.getAttribute("method") ?? "get").toLowerCase() !== "post") return;
+    if (!form?.getAttribute) return;
+    const request = formRequest(form, e.submitter);
+    if (!request) return;
     e.preventDefault();
-    submitForm(form, action);
+    submitForm(form, request);
   });
 }
 

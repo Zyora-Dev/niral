@@ -43,9 +43,43 @@ declare const auth: any;
 declare function mail(opts: { to: string; from?: string; subject: string; text: string; html?: string; smtpUrl?: string }): Promise<any>;
 declare function enqueue(name: string, data?: unknown, opts?: { delay?: number; maxAttempts?: number }): Promise<any>;
 declare function env(key: string, fallback?: string): string | undefined;
-declare const v: any;
-declare function validate(shape: any, data: any): { ok: boolean; value: any; errors: Record<string, string> };
-declare function withSchema(shape: any, fn: (value: any, ...rest: any[]) => any): (...args: any[]) => any;
+type __niral_Rule<Value> = { __rule: (value: unknown, field: string) => { value?: Value; error?: string } };
+type __niral_Shape = Record<string, __niral_Rule<any>>;
+type __niral_Value<Rule> = Rule extends __niral_Rule<infer Value> ? Value : never;
+type __niral_Values<Shape extends __niral_Shape> = {
+  [Key in keyof Shape as undefined extends __niral_Value<Shape[Key]> ? never : Key]: __niral_Value<Shape[Key]>
+} & {
+  [Key in keyof Shape as undefined extends __niral_Value<Shape[Key]> ? Key : never]?: __niral_Value<Shape[Key]>
+};
+type __niral_Upload = { filename: string; type: string; size: number; data: Uint8Array };
+type __niral_Errors<Input> = {
+  [Key in Extract<keyof Input, string>]?: NonNullable<Input[Key]> extends readonly any[] | __niral_Upload ? string : NonNullable<Input[Key]> extends object ? string | __niral_Errors<NonNullable<Input[Key]>> : string
+};
+declare const v: {
+  string(options?: { min?: number; max?: number; pattern?: RegExp; trim?: boolean }): __niral_Rule<string>;
+  email(): __niral_Rule<string>;
+  int(options?: { min?: number; max?: number }): __niral_Rule<number>;
+  number(options?: { min?: number; max?: number }): __niral_Rule<number>;
+  bool(): __niral_Rule<boolean>;
+  oneOf<const Value>(options: readonly Value[]): __niral_Rule<Value>;
+  optional<Value>(rule: __niral_Rule<Value>): __niral_Rule<Value | undefined>;
+  array<Value>(rule: __niral_Rule<Value>, options?: { min?: number; max?: number }): __niral_Rule<Value[]>;
+  file(options?: { maxSize?: number; types?: string[] }): __niral_Rule<__niral_Upload>;
+  object<Shape extends __niral_Shape>(shape: Shape): __niral_Rule<__niral_Values<Shape>>;
+};
+declare function validate<Shape extends __niral_Shape>(shape: Shape, data: unknown): { ok: true; value: __niral_Values<Shape>; errors: null } | { ok: false; value: Partial<__niral_Values<Shape>>; errors: __niral_Errors<__niral_Values<Shape>> };
+declare function withSchema<Shape extends __niral_Shape, Rest extends any[], Result>(shape: Shape, fn: (value: __niral_Values<Shape>, ...rest: Rest) => Result): (value: __niral_Values<Shape>, ...rest: Rest) => Promise<Awaited<Result>>;
+type __niral_FormAction<Fn extends (...args: any[]) => any> = {
+  readonly pending: boolean;
+  readonly status: "idle" | "pending" | "success" | "error";
+  readonly result: Awaited<ReturnType<Fn>> | undefined;
+  readonly errors: __niral_Errors<Parameters<Fn>[0]>;
+  readonly error: string | null;
+  readonly statusCode: number;
+  submit(event: SubmitEvent): Promise<void>;
+  reset(): void;
+};
+declare function formAction(name: string): __niral_FormAction<(...args: any[]) => any>;
 declare const log: { debug(m: unknown, f?: object): void; info(m: unknown, f?: object): void; warn(m: unknown, f?: object): void; error(m: unknown, f?: object): void };
 declare function projectImport(p: string): Promise<any>;
 `;
@@ -239,6 +273,10 @@ export function collectVirtualFiles(root, { ts = loadTypescript(root), documents
     append(code, ast.script ? source.indexOf(code, ast.script.start) : 0, true);
     append(`\ntype __niral_RPC<Fn extends (...args: any[]) => any> = ReturnType<Fn> extends PromiseLike<any> ? Fn : (...args: Parameters<Fn>) => Promise<Awaited<ReturnType<Fn>>>;\n${stubs}\n`);
     const contract = componentContract(ts, code, append);
+    const actions = serverExports.filter((name) => name !== "load");
+    if (actions.length && !/\b(?:let|const|var|function|import)\s+(?:\{[^}]*\b)?formAction\b/.test(code)) {
+      append(`\ntype __niral_Actions = { ${actions.map((name) => `${JSON.stringify(name)}: typeof ${name}`).join("; ")} };\ndeclare function formAction<Name extends keyof __niral_Actions>(name: Name): __niral_FormAction<__niral_Actions[Name]>;\n`);
+    }
     const loader = `Awaited<ReturnType<typeof import(${serverModule}).load>>`;
     const props = typedServer && serverExports.includes("load")
       ? `Omit<${routeParams}, keyof ${loader}> & ${loader}`
