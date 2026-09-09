@@ -24,7 +24,22 @@
   empty; Playwright stays isolated in browser tooling.
 - Verification note: an initial full run with `NIRAL_LOG=off` failed the expected
   access-log assertion; rerunning with default logging passed the entire suite.
-  Local commit authorized. No production changes or Git push for this upgrade.
+  Feature committed as `7b2b7c1`. Push and deployment subsequently authorized.
+- Push to `origin/main` succeeded through `7b2b7c1`. Production preflight on
+  Node 22.22.2: both services active, health 200, release `d890655607dc`.
+  Checksum dry run reviewed; unrelated `src/create.js` difference excluded.
+  Private checkpoint `/root/niral-upgrade-checkpoints/20260909-7b2b7c1` preserves
+  framework/docs source, previous release and environment. Targeted transfer
+  completed; four form and six inference regression groups passed on Node 22.22.2.
+  Docs syntax passed; environment matches its backup byte-for-byte.
+- Deployment completed: production release `f3432dab528d` built on the host and
+  passed integrity checks for all 50 files before application restart. Watchdog
+  briefly stopped for build/activation and restored. Both services active;
+  startup logs show normal shutdown/restart and health returns 200 on the new release.
+- Local and public HTTPS homepage, Server, TypeScript and Validation guides all
+  returned 200 with the updated content. Production environment/data preserved;
+  unrelated remote `src/create.js` and local instruction/spec files untouched.
+  Feature pushed through `7b2b7c1`; no npm publication.
 
 ## 2026-09-09: End-to-End Type Inference
 

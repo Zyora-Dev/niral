@@ -116,7 +116,14 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
   responses without remounting or rerunning `load()`. Results and schema errors
   are inferred in TS clients. Multipart, duplicate protection, reset/abort and
   native fallback verified against dev/prod; full suite 200/0 and both Chromium
-  groups pass. Docs build `f3432dab528d` is local only. No deployment/push authorized.
+  groups pass. Docs build `f3432dab528d` verified locally. Push/deployment then
+  authorized and completed: `origin/main` pushed through `7b2b7c1`; production
+  release `f3432dab528d` passes integrity (50 files), both services active, health
+  and public homepage/Server/TypeScript/Validation guides 200 with updated content.
+  Four form and six inference groups pass remotely on Node22.22.2. Checkpoint:
+  `/root/niral-upgrade-checkpoints/20260909-7b2b7c1`, preserving source, prior
+  release `d890655607dc` and environment. Data/environment unchanged; unrelated
+  remote `src/create.js` excluded from transfer. No npm publication.
 
 - Named slots use `<slot name="header">fallback</slot>` and direct children with
   `slot="header"`. `<template slot="header">` groups content without a DOM wrapper.
