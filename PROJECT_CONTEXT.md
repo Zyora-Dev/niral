@@ -84,6 +84,25 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
   signed webhooks, response streaming, session persistence and private-source blocking
   in dev and production. Docs module syntax passed.
 
+## Type Inference: 2026-09-09
+
+- Development compiler is cached at `.niral/lib/typescript/`; its package scope
+  must be CommonJS even though the framework is ESM. No runtime dependency added.
+- `niral check` uses type-only virtual server contracts for JS/JSDoc and TS RPCs,
+  page-local loader results and URL parameters. Async generic signatures survive;
+  synchronous generic/overloaded RPCs use Parameters/ReturnType projection.
+- `.niral` component annotations/defaults define prop contracts. Template checks
+  include callbacks, binding write-back and control-flow scopes; unannotated props
+  without defaults stay permissive. Plain JS scripts stay unchecked.
+- LSP uses debounced project checks and open-document overlays. Syntax checking
+  still works without TypeScript. No runtime validation or serialization changes.
+- Five focused inference, unsaved-editor and installer-cache tests passed.
+  Full suite: 195 passed, 0 failed with TypeScript 5.7.3 explicitly enabled.
+  Local docs build passed: `d890655607dc` (3 routes); no production changes.
+  Commit and site deployment authorized on 2026-09-09; deployment pending.
+  Pre-deployment health 200, both services active on release `b56a025ac2ea`.
+  Prior API commits were pushed through `f6dcd19`.
+
 ## Component Pitfalls
 
 - Named slots use `<slot name="header">fallback</slot>` and direct children with

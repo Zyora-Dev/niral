@@ -34,6 +34,7 @@ export async function addTypescript({ root, version = DEFAULT_TS_VERSION }) {
   const dir = resolve(root);
   const dest = join(dir, ".niral", "lib", "typescript");
   if (existsSync(join(dest, "typescript.js"))) {
+    writeFileSync(join(dest, "package.json"), '{"type":"commonjs"}\n');
     console.log("niral · typescript already installed — .niral/lib/typescript/");
     return dest;
   }
@@ -50,6 +51,7 @@ export async function addTypescript({ root, version = DEFAULT_TS_VERSION }) {
   const tarball = gunzipSync(Buffer.from(await res.arrayBuffer()));
 
   mkdirSync(dest, { recursive: true });
+  writeFileSync(join(dest, "package.json"), '{"type":"commonjs"}\n');
   let wrote = 0;
   for (const { name, data } of untar(tarball)) {
     // compiler + its standard libraries — same dir so default-lib lookup works

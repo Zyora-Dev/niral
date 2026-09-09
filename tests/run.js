@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { parse, NiralError, compileClient, rewriteScript, rewriteExpr, collectDeclarations } from "../src/index.js";
 import { signal, derived, effect, root, batch } from "../src/runtime/signals.js";
 import { registerApiTests } from "./api-routes.js";
+import { registerInferenceTests } from "./check-inference.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -23,6 +24,7 @@ function test(name, fn) {
 }
 
 registerApiTests(test);
+registerInferenceTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {
@@ -4474,7 +4476,7 @@ export async function save(x) { return { ok: true } }
 
   const { virtual } = collectVirtualFiles(dir);
   const vf = virtual.get(join(dir, "routes", "index.niral.ts"));
-  ok(vf && vf.text.includes("declare function save"), "server exports become RPC stub declarations");
+  ok(vf && vf.text.includes("declare const save: __niral_RPC"), "server exports become inferred RPC declarations");
 
   const result = check({ root: dir });
   const scriptErr = result.errors.find((e) => e.file.endsWith("index.niral") && e.code === "TS2322");

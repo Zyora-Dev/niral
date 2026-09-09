@@ -121,7 +121,7 @@ const DIRECTIVES = [
   snip("use:", "use:${1:action}", "action directive"),
 ];
 const SCRIPT_ATTRS = [
-  kw('lang="ts"', "TypeScript in this script (types stripped, not checked)"),
+  kw('lang="ts"', "TypeScript with inferred contracts (install with niral add typescript)"),
   kw('mode="static"', "zero JS — SSR only, no hydration"),
   kw("stream", "streaming SSR — head flushes early; {#await} branches stream in as they resolve"),
 ];

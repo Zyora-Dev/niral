@@ -553,7 +553,13 @@ niral check             # strict by default; your tsconfig.json is respected
   diagnostics point at the **original line** in your .niral file
 - runes (\`$state\`, \`$props\` …) and server ambients (\`session\`, \`log\`, \`v\` …) are
   pre-declared — no setup
-- server exports become typed RPC stubs automatically
+- JavaScript/TypeScript server exports supply RPC argument and result types;
+  calls always return promises, and generic async signatures are preserved
+- page props combine URL parameters with the return value of the page's own
+  \`load()\`; TypeScript loaders receive inferred \`params\` and \`locals\` context
+- component tags check required props, value types, callback props and both
+  directions of \`bind:prop\`; template loops, conditionals and await branches
+  retain their local scopes
 
 \`\`\`html
 <script lang="ts">
@@ -563,6 +569,63 @@ niral check             # strict by default; your tsconfig.json is respected
 \`\`\`
 
 If the project already has \`node_modules/typescript\`, that install is used.
+
+## Inferred server contracts
+
+\`load()\` determines page data without a separate client interface:
+
+\`\`\`html
+<server lang="ts">
+  export async function load({ params }) {
+    return { title: params.slug, count: 1 }
+  }
+  export async function save(id: number, title: string) {
+    return { id, title }
+  }
+</server>
+<script lang="ts">
+  let { title, count } = $props
+  async function submit() {
+    const saved = await save(count, title)
+    console.log(saved.title.toUpperCase())
+  }
+</script>
+\`\`\`
+
+On a \`routes/[slug].niral\` page, \`params.slug\` is a string. Passing a string
+instead of a number to \`save\`, or reading a missing property from its result,
+reports a type error at that expression. Plain JavaScript servers infer from
+their implementation and JSDoc; add JSDoc for otherwise untyped parameters.
+
+## Component contracts
+
+Annotate the existing props destructure when a component needs an explicit contract:
+
+\`\`\`html
+<script lang="ts">
+  type Props = { value: number; label: string; onSave?: (value: number) => void }
+  let { value, label, onSave }: Props = $props
+</script>
+<input type="number" bind:value={value} />
+<button on:click={() => onSave?.(value)}>{label}</button>
+\`\`\`
+
+An unannotated default such as \`let { value = 0 } = $props\` infers an optional
+numeric input. Parent bindings also check the child's write-back type, so a
+child accepting \`string | number\` cannot bind to number-only parent state.
+Props with neither an annotation nor a default remain \`any\`.
+
+The Niral language server publishes these same diagnostics after edits, including
+unsaved parent/child contracts. Install TypeScript in the app with
+\`niral add typescript\`; without it, compiler diagnostics still work. Type
+checking does not emit browser code or add runtime dependencies.
+
+Inference currently covers \`.niral\` contracts. Plain-JavaScript client blocks
+remain unchecked; polyglot RPCs keep permissive signatures. Loader inference is
+page-local, not an aggregation of ancestor layout loaders. Synchronous generic
+or overloaded RPCs use TypeScript's \`Parameters\`/\`ReturnType\` projection;
+use async exported functions to preserve those call signatures. Type contracts
+are not runtime validation or a guarantee that a value is JSON-serializable.
 `,
   },
 

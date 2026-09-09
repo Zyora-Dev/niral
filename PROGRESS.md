@@ -1,5 +1,30 @@
 # Niral Progress
 
+## 2026-09-09: End-to-End Type Inference
+
+- Installed the existing pinned TypeScript 5.7.3 development tool in `.niral/`.
+  Fixed its cache package scope so CommonJS TypeScript loads inside ESM projects.
+- Checker uses virtual server modules for JS/JSDoc and TS RPC signatures, async
+  results and page-local loader data; route parameters are strings. Generic async
+  RPC signatures are preserved. Untyped TS loader parameters receive context.
+- Component contracts infer annotated props and default values. Template checks
+  cover prop values, required props, callbacks, binding write-back, and local
+  loop/conditional/await scopes, with diagnostics mapped to original source.
+- LSP performs debounced checks using unsaved document overlays and refreshes
+  parent diagnostics after child contract edits. No compiler means existing
+  syntax diagnostics remain available; it never auto-downloads a compiler.
+- Five focused inference/LSP/installer regression groups passed with the real
+  compiler. Full suite: **195 passed, 0 failed**, with TypeScript explicitly enabled.
+  Optional external image-tool and live Postgres checks remain environment-gated.
+  Updated the TypeScript guide with examples and limitations, and corrected the
+  editor's outdated "not checked" hint. Docs syntax and completion-hint checks
+  passed; local docs build produced release `d890655607dc` (3 routes).
+- Commit and site deployment authorized on 2026-09-09. Pre-deployment inspection:
+  Node 22.22.2, both services active, health 200, active release `b56a025ac2ea`.
+  Deployment pending; preserve environment/data and checkpoint before transfer.
+- Previous API/component commits were successfully pushed to `origin/main`
+  through `f6dcd19` on 2026-09-08; prior no-push statements record earlier checkpoints.
+
 ## 2026-09-08: Native HTTP API Routes
 
 - Added `.server.js` method endpoints with native Request/Response, dynamic and

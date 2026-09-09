@@ -12,7 +12,7 @@
  *   · every <script lang="ts"> block in .niral files — extracted into a
  *     virtual `<file>.niral.ts` module with:
  *       – ambient declarations for runes + server ambients (niral-ambient.d.ts)
- *       – `declare function <fn>(…): Promise<any>` per <server> export (RPC stubs)
+ *       – server-derived RPC signatures and loader props (type-only references)
  *       – `.niral` import specifiers mapped to their virtual .ts twins
  *     Diagnostics map back to the ORIGINAL .niral line/column.
  *   · <server lang="ts"> blocks the same way (`<file>.server.ts`)
@@ -88,57 +88,190 @@ function lineOf(source, index) {
   return line;
 }
 
+function routeParamType(root, filename) {
+  const route = relative(join(resolve(root), "routes"), filename);
+  if (route.startsWith("..")) return "{}";
+  const names = [...route.matchAll(/\[(?:\.\.\.)?([^\]]+)\]/g)].map((match) => match[1]);
+  return `{ ${[...new Set(names)].map((name) => `${JSON.stringify(name)}: string`).join("; ")} }`;
+}
+
+function sourceView(source, origin) {
+  const view = { text: "", source, origin, mappings: [] };
+  const append = (text, offset, exact = false) => {
+    if (offset !== undefined) view.mappings.push({ start: view.text.length, end: view.text.length + text.length, offset, exact });
+    view.text += text;
+  };
+  return { view, append };
+}
+
+function componentContract(ts, script, append) {
+  const tree = ts.createSourceFile("component.ts", script, ts.ScriptTarget.Latest, true);
+  const fields = [];
+  const bindings = [];
+  let annotation;
+  for (const statement of tree.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (declaration.initializer?.getText(tree) !== "$props") continue;
+      if (declaration.type) annotation = declaration.type.getText(tree);
+      if (!ts.isObjectBindingPattern(declaration.name)) return { props: annotation ?? "any", bindings: "{}" };
+      for (const element of declaration.name.elements) {
+        if (element.dotDotDotToken) continue;
+        const property = element.propertyName ?? element.name;
+        if (!ts.isIdentifier(property) && !ts.isStringLiteral(property)) continue;
+        if (ts.isIdentifier(element.name)) bindings.push(`${JSON.stringify(property.text)}: typeof ${element.name.text}`);
+        let type = "any";
+        if (element.initializer) {
+          const identifier = `__niral_default_${fields.length}`;
+          append(`\nlet ${identifier} = (${element.initializer.getText(tree)});`);
+          type = `typeof ${identifier}`;
+        }
+        fields.push(`${JSON.stringify(property.text)}${element.initializer ? "?" : ""}: ${type}`);
+      }
+    }
+  }
+  return { props: annotation ?? `{ ${fields.join("; ")} }`, bindings: `{ ${bindings.join("; ")} }` };
+}
+
+function templateChecks(nodes, append) {
+  const expression = (value) => append(value.raw, value.start, true);
+  for (const node of nodes) {
+    if (node.type === "Element") {
+      if (/^[A-Z]/.test(node.tag)) {
+        append(`\n${node.tag}({`, node.start);
+        for (const attribute of node.attrs) {
+          if (!["Attr", "On", "Bind"].includes(attribute.type) || attribute.name === "slot") continue;
+          const name = attribute.type === "On" ? "on" + attribute.event[0].toUpperCase() + attribute.event.slice(1) : attribute.name;
+          append(`\n${JSON.stringify(name)}: `, attribute.expr?.start ?? node.start);
+          if (attribute.type === "Attr" && typeof attribute.value !== "object") {
+            append(JSON.stringify(attribute.value), node.start);
+          } else {
+            expression(attribute.expr ?? attribute.value);
+          }
+          append(",");
+        }
+        append("\n});", node.start);
+        for (const attribute of node.attrs.filter((entry) => entry.type === "Bind")) {
+          append(`\n((__niral_value: typeof ${node.tag}.__bindings[${JSON.stringify(attribute.name)}]) => { `, node.start);
+          expression(attribute.expr);
+          append(" = __niral_value; });", attribute.expr.start);
+        }
+      } else {
+        for (const attribute of node.attrs) {
+          if (attribute.type === "Attr" && typeof attribute.value === "object") {
+            append("\nvoid ("); expression(attribute.value); append(");");
+          }
+        }
+      }
+      templateChecks(node.children, append);
+    } else if (node.type === "Mustache" || node.type === "RawHtml") {
+      append("\nvoid ("); expression(node.expr); append(");");
+    } else if (node.type === "IfBlock") {
+      node.branches.forEach((branch, index) => {
+        append(index ? " else " : "\n");
+        if (branch.expr) { append("if ("); expression(branch.expr); append(") "); }
+        append("{\n"); templateChecks(branch.children, append); append("\n}");
+      });
+    } else if (node.type === "ForBlock") {
+      append("\n{\n");
+      if (node.index) append(`let ${node.index} = 0;\n`);
+      append(`for (const ${node.item} of (`); expression(node.iterable); append(")) {\n");
+      if (node.keyExpr) { append("void ("); expression(node.keyExpr); append(");\n"); }
+      templateChecks(node.children, append);
+      if (node.index) append(`\n${node.index}++;`);
+      append("\n}}\n");
+    } else if (node.type === "AwaitBlock") {
+      templateChecks(node.pending, append);
+      append("\nPromise.resolve("); expression(node.expr);
+      append(`).then((${node.thenVar ?? "__niral_result"}) => {\n`);
+      templateChecks(node.thenChildren ?? [], append);
+      append(`\n}, (${node.catchVar ?? "__niral_error"}: any) => {\n`);
+      templateChecks(node.catchChildren ?? [], append); append("\n});\n");
+    }
+  }
+}
+
 /** Build the virtual TS view of a project. */
-export function collectVirtualFiles(root) {
+export function collectVirtualFiles(root, { ts = loadTypescript(root), documents = new Map() } = {}) {
   const virtual = new Map(); // abs virtual path → { text, origin, originLine, realLen }
   const rootNames = [];
   const ambientPath = join(resolve(root), "__niral-ambient.d.ts");
   virtual.set(ambientPath, { text: AMBIENT, origin: null });
   rootNames.push(ambientPath);
 
-  for (const abs of walkFiles(resolve(root))) {
+  const files = new Set([...walkFiles(resolve(root)), ...documents.keys()]);
+  for (const abs of files) {
     if (/\.(ts|tsx)$/.test(abs)) {
+      if (documents.has(abs)) {
+        const { view, append } = sourceView(documents.get(abs), abs);
+        append(view.source, 0, true);
+        virtual.set(abs, view);
+      }
       rootNames.push(abs); // real file — TS reads it from disk
       continue;
     }
     // .niral — extract lang="ts" blocks
     let ast;
-    const source = readFileSync(abs, "utf8");
+    if (!abs.endsWith(".niral")) continue;
+    const source = documents.get(abs) ?? readFileSync(abs, "utf8");
     try {
       ast = parse(source, abs);
     } catch {
       continue; // compile errors are the dev server/build's job, not check's
     }
     const serverLang = ast.server?.attrs?.lang ?? "js";
+    const typedServer = ast.server && ["js", "ts", "javascript", "typescript"].includes(serverLang);
+    const serverExtension = ["ts", "typescript"].includes(serverLang) ? "ts" : "js";
+    const serverModule = JSON.stringify("./" + abs.split(sep).pop() + ".server." + serverExtension);
+    const serverExports = ast.server ? collectServerExports(ast.server.code, serverLang) : [];
     const stubs = ast.server
-      ? collectServerExports(ast.server.code, serverLang)
+      ? serverExports
           .filter((f) => f !== "load")
-          .map((f) => `declare function ${f}(...args: any[]): Promise<any>;`)
+          .map((f) => typedServer
+            ? `declare const ${f}: __niral_RPC<typeof import(${serverModule}).${f}>;`
+            : `declare function ${f}(...args: any[]): Promise<any>;`)
           .join("\n")
       : "";
-
-    if (ast.script?.attrs?.lang === "ts") {
-      const code = ast.script.code;
-      // imports of sibling .niral components → their virtual .ts twins
-      const mapped = code.replace(/(from\s*")([^"]+)\.niral(")/g, "$1$2.niral.ts$3");
-      const tail = `\n${stubs}\ndeclare const __niral_component: any;\nexport default __niral_component;\nexport {};`;
-      virtual.set(abs + ".ts", {
-        text: mapped + tail,
-        origin: abs,
-        originLine: lineOf(source, source.indexOf(code)),
-        realLen: mapped.length,
-      });
-      rootNames.push(abs + ".ts");
+    const routeParams = routeParamType(root, abs);
+    const { view, append } = sourceView(source, abs);
+    const code = ast.script?.code ?? "";
+    view.checked = ast.script?.attrs?.lang === "ts";
+    append(code, ast.script ? source.indexOf(code, ast.script.start) : 0, true);
+    append(`\ntype __niral_RPC<Fn extends (...args: any[]) => any> = ReturnType<Fn> extends PromiseLike<any> ? Fn : (...args: Parameters<Fn>) => Promise<Awaited<ReturnType<Fn>>>;\n${stubs}\n`);
+    const contract = componentContract(ts, code, append);
+    const loader = `Awaited<ReturnType<typeof import(${serverModule}).load>>`;
+    const props = typedServer && serverExports.includes("load")
+      ? `Omit<${routeParams}, keyof ${loader}> & ${loader}`
+      : relative(join(resolve(root), "routes"), abs).startsWith("..") ? contract.props : `${routeParams} & ${contract.props}`;
+    append(`\ntype __niral_Props = ${props};\ndeclare const $props: __niral_Props;\ndeclare const __niral_component: { (props: __niral_Props): unknown; __bindings: Omit<__niral_Props, keyof ${contract.bindings}> & ${contract.bindings} };\nexport default __niral_component;\n`);
+    if (view.checked) {
+      append("\nfunction __niral_template() {\n");
+      templateChecks(ast.template, append);
+      append("\n}\n__niral_template();\n");
     }
-    if (ast.server && serverLang === "ts") {
-      const code = ast.server.code;
-      virtual.set(abs + ".server.ts", {
-        text: code + "\nexport {};",
-        origin: abs,
-        originLine: lineOf(source, source.indexOf(code)),
-        realLen: code.length,
-      });
-      rootNames.push(abs + ".server.ts");
+    virtual.set(abs + ".ts", view);
+    rootNames.push(abs + ".ts");
+    if (typedServer) {
+      const { view: serverView, append: appendServer } = sourceView(source, abs);
+      const serverCode = ast.server.code;
+      serverView.checked = serverExtension === "ts";
+      const tree = ts.createSourceFile(abs + ".server." + serverExtension, serverCode, ts.ScriptTarget.Latest, true);
+      const offset = source.indexOf(serverCode, ast.server.start);
+      let cursor = 0;
+      if (serverView.checked) {
+        for (const statement of tree.statements) {
+          if (!ts.isFunctionDeclaration(statement) || statement.name?.text !== "load") continue;
+          const parameter = statement.parameters[0];
+          if (!parameter || parameter.type) continue;
+          appendServer(serverCode.slice(cursor, parameter.name.end), offset + cursor, true);
+          appendServer(`: { params: ${routeParams}; locals: Record<string, any> }`);
+          cursor = parameter.name.end;
+        }
+      }
+      appendServer(serverCode.slice(cursor), offset + cursor, true);
+      appendServer("\nexport {};\n");
+      virtual.set(abs + ".server." + serverExtension, serverView);
+      rootNames.push(abs + ".server." + serverExtension);
     }
   }
   return { virtual, rootNames };
@@ -147,9 +280,9 @@ export function collectVirtualFiles(root) {
 /**
  * Type-check the project. Returns { errors: [{file, line, col, code, message}], checked }.
  */
-export function check({ root = "." } = {}) {
+export function check({ root = ".", documents = new Map() } = {}) {
   const ts = loadTypescript(root);
-  const { virtual, rootNames } = collectVirtualFiles(root);
+  const { virtual, rootNames } = collectVirtualFiles(root, { ts, documents });
 
   // project tsconfig compilerOptions are respected when present
   let userOptions = {};
@@ -164,6 +297,8 @@ export function check({ root = "." } = {}) {
     strict: true,
     noEmit: true,
     skipLibCheck: true,
+    allowJs: true,
+    checkJs: false,
     allowImportingTsExtensions: true,
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
@@ -180,6 +315,13 @@ export function check({ root = "." } = {}) {
   const realExists = host.fileExists.bind(host);
   host.readFile = (f) => virtual.get(norm(f))?.text ?? realRead(f);
   host.fileExists = (f) => virtual.has(norm(f)) || realExists(f);
+  host.resolveModuleNames = (names, containingFile) => names.map((name) => {
+    if (name.endsWith(".niral") && name.startsWith(".")) {
+      const filename = resolve(dirname(containingFile), name) + ".ts";
+      if (virtual.has(filename)) return { resolvedFileName: filename, extension: ts.Extension.Ts };
+    }
+    return ts.resolveModuleName(name, containingFile, options, host).resolvedModule;
+  });
 
   const program = ts.createProgram(rootNames, options, host);
   const diags = ts.getPreEmitDiagnostics(program);
@@ -195,11 +337,15 @@ export function check({ root = "." } = {}) {
     const vf = virtual.get(norm(d.file.fileName));
     const pos = ts.getLineAndCharacterOfPosition(d.file, d.start ?? 0);
     if (vf?.origin) {
-      if ((d.start ?? 0) >= vf.realLen) continue; // our appended tail — not user code
+      if (vf.checked === false) continue;
+      const mapping = vf.mappings.find((entry) => (d.start ?? 0) >= entry.start && (d.start ?? 0) < entry.end);
+      if (!mapping) continue;
+      const offset = mapping.offset + (mapping.exact ? (d.start ?? 0) - mapping.start : 0);
+      const line = lineOf(vf.source, offset);
       errors.push({
         file: vf.origin,
-        line: pos.line + vf.originLine + 1,
-        col: pos.character + 1,
+        line: line + 1,
+        col: offset - vf.source.lastIndexOf("\n", offset - 1),
         code: `TS${d.code}`,
         message,
       });
@@ -207,7 +353,7 @@ export function check({ root = "." } = {}) {
       errors.push({ file: d.file.fileName, line: pos.line + 1, col: pos.character + 1, code: `TS${d.code}`, message });
     }
   }
-  const checked = rootNames.filter((f) => !f.endsWith("__niral-ambient.d.ts")).length;
+  const checked = rootNames.filter((f) => !f.endsWith("__niral-ambient.d.ts") && virtual.get(f)?.checked !== false).length;
   return { errors, checked };
 }
 
