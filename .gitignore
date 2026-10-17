@@ -12,6 +12,8 @@ node_modules/
 .env
 *.env
 app.env
+aws-key/
+aws-keys/
 
 # OS noise
 .DS_Store

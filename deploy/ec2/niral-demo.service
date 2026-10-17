@@ -1,0 +1,22 @@
+[Unit]
+Description=Niral documentation website
+After=network.target
+
+[Service]
+Type=simple
+User=niral
+Group=niral
+WorkingDirectory=/opt/niral-demo
+ExecStart=/usr/bin/node /opt/niral/bin/niral.js start /opt/niral-demo -p 8199
+EnvironmentFile=/opt/niral-demo/app.env
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/niral-demo/data /opt/niral-demo/dist
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

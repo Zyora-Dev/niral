@@ -610,6 +610,11 @@ These types do not replace runtime validation. Form payloads still pass through
 the existing server schema, including string coercion and upload checks.
 See [Reactive form actions](/docs/server#reactive-form-actions) for a complete example.
 
+\`pageRefresh().refresh()\` returns \`Promise<boolean>\`: true only when new
+loader props were applied. The inferred loader prop types remain unchanged.
+\`formAction("save", { refresh: true })\` keeps the same inferred action result
+and adds typed \`refreshing\` and \`refreshError\` getters.
+
 ## Component contracts
 
 Annotate the existing props destructure when a component needs an explicit contract:
@@ -746,13 +751,15 @@ match the form's \`?/name\`. Reactive getters update templates without another
 | \`errors\` | Field messages from validation, initially an empty object |
 | \`error\` | General failure message, otherwise null |
 | \`statusCode\` | Response HTTP status, or 0 before a response/after transport failure |
+| \`refreshing\` | True during an opted-in loader refresh after success |
+| \`refreshError\` | Loader refresh failure, separate from the saved action result |
 | \`submit\` | Attach to \`on:submit\`; preserves submitter name/value |
 | \`reset()\` | Abort the active fetch and clear controller state, not input values |
 
 Pending starts with cleared previous results/errors. On validation failure,
 inputs, focus, and selected files remain intact. Success also leaves inputs in
-place. Reactive submissions **do not rerun \`load()\` or update \`$props.form\`**;
-render the returned result or update your own state. Successful actions returning
+place. By default, reactive submissions **do not rerun \`load()\` or update \`$props.form\`**;
+render the returned result or opt in to page refresh below. Successful actions returning
 \`{ redirect: "/done" }\` navigate normally. Each controller is independent.
 
 \`withSchema\` returns field errors with HTTP 400. For business validation, an
@@ -783,6 +790,71 @@ late controller results, but cannot undo an action already executing on the serv
 Form writes reject mismatched Origin hosts and cross-site Fetch Metadata when
 Origin is absent. Reverse-proxy deployments can set \`NIRAL_ORIGIN\` to their
 canonical public URL. Session authentication and server validation still apply.
+
+## State-preserving page refresh
+
+Use \`pageRefresh()\` in a hydrated page or component to rerun the current page's
+loader and update page/layout props without remounting:
+
+\`\`\`html
+<server>
+  export async function load() {
+    return { title: session.get("title") ?? "Untitled" }
+  }
+  export async function save(fields) {
+    session.set("title", fields.title)
+    return { saved: true }
+  }
+</server>
+<script>
+  let { title } = $props
+  let draft = $state(title)
+  const data = pageRefresh()
+  const saving = formAction("save", { refresh: true })
+</script>
+<h1>{title}</h1>
+<form method="post" action="?/save" on:submit={saving.submit}>
+  <label>Title <input name="title" bind:value={draft} /></label>
+  <button disabled={saving.pending || saving.refreshing}>Save</button>
+</form>
+<button on:click={data.refresh} disabled={data.pending}>Refresh</button>
+{#if data.error}<p role="alert">{data.error}</p>{/if}
+{#if saving.error}<p role="alert">{saving.error}</p>{/if}
+{#if saving.refreshError}<p role="alert">Saved, but the page could not refresh.</p>{/if}
+\`\`\`
+
+| Member | Meaning |
+|--------|---------|
+| \`pending\` | True while this controller refreshes |
+| \`status\` | \`idle\`, \`pending\`, \`success\`, or \`error\` |
+| \`error\` | Read failure message, otherwise null |
+| \`refresh()\` | Returns true when fresh props were applied, false on failure/cancellation |
+| \`reset()\` | Abort this request and clear status/error; retain currently displayed data |
+
+Refresh uses the current URL, including query parameters, bypasses prefetched
+navigation data, and keeps the existing DOM and component instances. Destructured
+\`$props\` bindings update reactively; local \`$state\` is not reinitialized.
+In the example, \`title\` updates but \`draft\` stays as the user typed it.
+Keyed lists keep surviving rows; removed rows or changed conditional branches
+are still removed normally. Focus, selected files and scroll remain untouched
+unless application rendering itself removes or changes their elements.
+
+Create the controller during component setup and read its getters directly.
+Repeated calls on one pending controller are ignored. Across controllers, only
+the latest-started refresh may apply. Navigation, reset or component disposal
+prevents stale results from updating the page. Requests are not retried automatically.
+Read failures retain the previous props and can be retried with \`refresh()\`.
+
+The form option refreshes only after a successful, non-redirecting action. A
+failed refresh does not turn a saved action into a failed write: \`status\`
+remains \`success\`, with \`refreshError\` reported separately. Redirecting
+actions navigate normally; failed validation does not trigger a refresh.
+\`saving.reset()\` cancels its refresh too, but cannot undo server work.
+
+This is page-level loader refresh, not selective queries, polling or optimistic
+updates. It does not reload component code, styles or document head. Non-client
+or redirected responses are reported as refresh errors rather than silently
+remounting the page. Static/no-JavaScript pages keep their existing behavior.
 
 ## Python, Ruby, Go backends
 

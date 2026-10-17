@@ -76,10 +76,19 @@ type __niral_FormAction<Fn extends (...args: any[]) => any> = {
   readonly errors: __niral_Errors<Parameters<Fn>[0]>;
   readonly error: string | null;
   readonly statusCode: number;
+  readonly refreshing: boolean;
+  readonly refreshError: string | null;
   submit(event: SubmitEvent): Promise<void>;
   reset(): void;
 };
-declare function formAction(name: string): __niral_FormAction<(...args: any[]) => any>;
+declare function formAction(name: string, options?: { refresh?: boolean }): __niral_FormAction<(...args: any[]) => any>;
+declare function pageRefresh(): {
+  readonly pending: boolean;
+  readonly status: "idle" | "pending" | "success" | "error";
+  readonly error: string | null;
+  refresh(): Promise<boolean>;
+  reset(): void;
+};
 declare const log: { debug(m: unknown, f?: object): void; info(m: unknown, f?: object): void; warn(m: unknown, f?: object): void; error(m: unknown, f?: object): void };
 declare function projectImport(p: string): Promise<any>;
 `;
@@ -275,7 +284,7 @@ export function collectVirtualFiles(root, { ts = loadTypescript(root), documents
     const contract = componentContract(ts, code, append);
     const actions = serverExports.filter((name) => name !== "load");
     if (actions.length && !/\b(?:let|const|var|function|import)\s+(?:\{[^}]*\b)?formAction\b/.test(code)) {
-      append(`\ntype __niral_Actions = { ${actions.map((name) => `${JSON.stringify(name)}: typeof ${name}`).join("; ")} };\ndeclare function formAction<Name extends keyof __niral_Actions>(name: Name): __niral_FormAction<__niral_Actions[Name]>;\n`);
+      append(`\ntype __niral_Actions = { ${actions.map((name) => `${JSON.stringify(name)}: typeof ${name}`).join("; ")} };\ndeclare function formAction<Name extends keyof __niral_Actions>(name: Name, options?: { refresh?: boolean }): __niral_FormAction<__niral_Actions[Name]>;\n`);
     }
     const loader = `Awaited<ReturnType<typeof import(${serverModule}).load>>`;
     const props = typedServer && serverExports.includes("load")

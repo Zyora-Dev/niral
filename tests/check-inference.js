@@ -152,8 +152,13 @@ export const save = withSchema({ title: v.string(), age: v.int(), bio: v.optiona
 export async function remove(fields: { id: string }) { return { removed: fields.id }; }
 </server>
 <script lang="ts">
-const saving = formAction("save");
+const saving = formAction("save", { refresh: true });
 const removing = formAction("remove");
+const data = pageRefresh();
+const refreshResult: Promise<boolean> = data.refresh();
+const refreshing: boolean = saving.refreshing;
+const refreshError: string | null = saving.refreshError;
+const refreshStatus: "idle" | "pending" | "success" | "error" = data.status;
 const identifier: number | undefined = saving.result?.id;
 const titleError: string | undefined = saving.errors.title;
 const addressError = saving.errors.address;
@@ -169,6 +174,8 @@ const removed: string | undefined = removing.result?.removed;
       assert.ok(errors.some((entry) => entry.code === "TS2322"));
       assert.ok(errors.some((entry) => entry.code === "TS2339" && entry.message.includes("missing")));
       assert.ok(errors.some((entry) => entry.code === "TS2345" && entry.message.includes("missing")));
+      writeFileSync(filename, source.replace('refresh: true', 'refresh: "yes"').replace('const refreshResult: Promise<boolean>', 'const refreshResult: Promise<string>'));
+      assert.ok(check({ root }).errors.filter((entry) => entry.code === "TS2322").length >= 2);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
   test("checker validates component props, events and bidirectional bindings", () => {

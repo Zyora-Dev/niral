@@ -1,4 +1,5 @@
 import { signal, onDestroy } from "./signals.js";
+import { pageRefresh } from "./refresh.js";
 
 const submitting = new WeakSet();
 let changed = () => {};
@@ -45,8 +46,9 @@ export async function postForm(form, request, { signal: abortSignal, resultOnly 
   }
 }
 
-export function formAction(name) {
+export function formAction(name, { refresh = false } = {}) {
   if (!/^[A-Za-z_]\w*$/.test(name)) throw new Error("Invalid form action name");
+  const reloading = refresh ? pageRefresh() : null;
   const empty = () => ({ status: "idle", result: undefined, errors: {}, error: null, statusCode: 0 });
   const state = signal(empty());
   let controller = null;
@@ -59,9 +61,12 @@ export function formAction(name) {
     get errors() { return state.get().errors; },
     get error() { return state.get().error; },
     get statusCode() { return state.get().statusCode; },
+    get refreshing() { return reloading?.pending ?? false; },
+    get refreshError() { return reloading?.error ?? null; },
     reset() {
       controller?.abort();
       controller = null;
+      reloading?.reset();
       state.set(empty());
     },
     async submit(event) {
@@ -81,6 +86,7 @@ export function formAction(name) {
         const success = data.ok && status >= 200 && status < 300;
         state.set({ status: success ? "success" : "error", result: success ? data.result : undefined, errors: data.errors ?? {}, error: success ? null : data.error ?? "Submission failed", statusCode: status });
         if (success && data.redirect) await redirect(data.redirect);
+        else if (success && reloading) await reloading.refresh();
       } catch {
         if (!disposed && controller === active) state.set({ ...empty(), status: "error", error: "The response could not be received. Check whether the change was saved before retrying." });
       } finally {

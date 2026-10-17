@@ -4,8 +4,8 @@ import { startFormTestApp } from "../form-actions.js";
 
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const mode of ["dev", "prod"]) {
-    const app = await startFormTestApp(mode);
+  for (const mode of ["dev", "prod"]) for (const layout of [true, false]) {
+    const app = await startFormTestApp(mode, { layout });
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
@@ -55,7 +55,59 @@ try {
       assert.equal(calls, 2);
       await page.locator("#other button").click();
       await page.waitForFunction(() => document.querySelector("#other-status").textContent === "success");
+      await page.waitForFunction(() => document.querySelector("#loads").textContent === "2");
+      if (layout) assert.equal(await page.locator("#layout-loads").textContent(), "2");
+      assert.equal(await page.locator("#entries li").count(), 2);
+      await page.evaluate(() => { globalThis.originalEntry = document.querySelector("#entries li"); });
       assert.equal(await page.locator("#status").textContent(), "success");
+      if (layout) await page.locator("#layout-toggle").click();
+      await input.focus();
+      let refreshRelease;
+      let refreshRequested;
+      const refreshSeen = new Promise((accept) => { refreshRequested = accept; });
+      const refreshGate = new Promise((accept) => { refreshRelease = accept; });
+      let refreshCalls = 0;
+      const isRefresh = (url) => url.pathname === "/" && !url.search;
+      await page.route(isRefresh, async (route) => {
+        refreshCalls++;
+        assert.equal(route.request().headers()["x-niral-nav"], "1");
+        refreshRequested();
+        await refreshGate;
+        await route.continue();
+      });
+      await page.evaluate(() => {
+        document.body.style.minHeight = "2000px";
+        scrollTo(0, 100);
+        document.querySelector("#refresh").click();
+        document.querySelector("#refresh").click();
+      });
+      await refreshSeen;
+      assert.equal(await page.locator("#refresh-status").textContent(), "pending");
+      refreshRelease();
+      await page.waitForFunction(() => document.querySelector("#refresh-status").textContent === "success");
+      assert.equal(refreshCalls, 1);
+      assert.equal(await page.locator("#loads").textContent(), "3");
+      if (layout) {
+        assert.equal(await page.locator("#layout-loads").textContent(), "3");
+        assert.equal(await page.locator("#layout-state").textContent(), "true");
+      }
+      assert.equal(await page.evaluate(() => document.querySelector("#entries li") === globalThis.originalEntry), true);
+      assert.equal(await input.inputValue(), "Browser title");
+      assert.equal(await page.evaluate(() => document.activeElement === globalThis.originalInput && document.querySelector('#editor input[name="title"]') === globalThis.originalInput && scrollY === 100), true);
+      assert.equal(await page.locator('input[type="file"]').evaluate((element) => element.files[0].name), "note.txt");
+      await page.unroute(isRefresh);
+      await page.route(isRefresh, (route) => route.fulfill({ status: 500, json: { ok: false, error: "private detail" } }));
+      await page.locator("#refresh").click();
+      await page.waitForFunction(() => document.querySelector("#refresh-status").textContent === "error");
+      assert.match(await page.locator("#refresh-error").textContent(), /could not be refreshed/);
+      assert.equal(await page.locator("#loads").textContent(), "3");
+      await page.locator("#other button").click();
+      await page.waitForFunction(() => document.querySelector("#other-refresh-error").textContent !== "");
+      assert.equal(await page.locator("#other-status").textContent(), "success");
+      await page.unroute(isRefresh);
+      await page.locator("#refresh").click();
+      await page.waitForFunction(() => document.querySelector("#refresh-status").textContent === "success");
+      assert.equal(await page.locator("#entries li").count(), 3);
       await page.locator("#reset").click();
       assert.equal(await page.locator("#status").textContent(), "idle");
       assert.equal(await input.inputValue(), "Browser title");
@@ -76,9 +128,24 @@ try {
       await page.unrouteAll({ behavior: "wait" });
       assert.equal(await page.locator("#status").textContent(), "idle");
       assert.equal(await page.locator("#result").textContent(), "");
+      let releaseStaleRefresh;
+      let staleRefreshRequested;
+      const staleRefreshSeen = new Promise((accept) => { staleRefreshRequested = accept; });
+      const staleRefreshGate = new Promise((accept) => { releaseStaleRefresh = accept; });
+      await page.route(isRefresh, async (route) => {
+        const response = await route.fetch();
+        staleRefreshRequested();
+        await staleRefreshGate;
+        await route.fulfill({ response });
+      });
+      await page.locator("#refresh").click();
+      await staleRefreshSeen;
       await page.locator("#leave button").click();
       await page.waitForURL(app.base + "/done");
+      releaseStaleRefresh();
+      await page.unrouteAll({ behavior: "wait" });
       assert.equal(await page.locator("#done").textContent(), "Saved");
+      assert.equal(await page.locator("#entries").count(), 0);
       assert.deepEqual(errors, []);
       const native = await browser.newContext({ javaScriptEnabled: false });
       try {
@@ -88,7 +155,7 @@ try {
         await Promise.all([nativePage.waitForNavigation(), nativePage.locator("#editor button").click()]);
         assert.equal(await nativePage.locator("#result").textContent(), "Native browser");
       } finally { await native.close(); }
-      console.log(`PASS ${mode} browser forms: hydration, focus/files, pending, duplicates, isolation, reset, redirects and no-JS`);
+      console.log(`PASS ${mode} browser forms (layout=${layout}): refresh, keyed lists, focus/files/scroll, errors, retry, navigation races, forms and no-JS`);
     } finally { await context.close(); app.close(); }
   }
 } finally { await browser.close(); }

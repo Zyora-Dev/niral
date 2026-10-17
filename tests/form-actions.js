@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formAction, configureForms } from "../src/runtime/forms.js";
+import { pageRefresh, configureRefresh } from "../src/runtime/refresh.js";
 import { root, effect } from "../src/runtime/signals.js";
 import { compileClient } from "../src/index.js";
 import { sendFormResult } from "../src/server/forms.js";
@@ -12,14 +13,16 @@ import { build } from "../src/build/build.js";
 import { createDevServer } from "../src/dev/server.js";
 import { createProdServer } from "../src/server/prod.js";
 
-export async function startFormTestApp(mode) {
+export async function startFormTestApp(mode, { layout = true } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "niral-forms-"));
   const previousRoot = globalThis.__niralProjectRoot;
   let app;
   try {
     mkdirSync(join(directory, "routes"));
-    writeFileSync(join(directory, "routes", "index.niral"), readFileSync(new URL("./fixtures/forms.niral", import.meta.url)));
+    const source = readFileSync(new URL("./fixtures/forms.niral", import.meta.url), "utf8");
+    writeFileSync(join(directory, "routes", "index.niral"), source.replace("<server>", "<server>\n  const fixtureId = " + JSON.stringify(directory) + ";"));
     writeFileSync(join(directory, "routes", "done.niral"), '<h1 id="done">Saved</h1>');
+    if (layout) writeFileSync(join(directory, "routes", "_layout.niral"), '<script>let { loads } = $props; let expanded = $state(false);</script><button id="layout-toggle" on:click={() => expanded = !expanded}>Toggle</button><p id="layout-state">{expanded}</p><p id="layout-loads">{loads}</p><slot/>');
     if (mode === "prod") build({ root: directory });
     app = mode === "dev" ? createDevServer({ root: directory, port: 0, watch: false }) : createProdServer({ dist: join(directory, "dist"), port: 0, cwd: directory });
     const port = await new Promise((accept) => app.listen(accept));
@@ -33,6 +36,48 @@ export async function startFormTestApp(mode) {
 }
 
 export function registerFormTests(test) {
+  test("page refresh tracks status, errors, duplicates and disposal", async () => {
+    let resolveRefresh;
+    let calls = 0;
+    let aborted;
+    configureRefresh((abortSignal) => {
+      calls++;
+      aborted = abortSignal;
+      return new Promise((accept) => { resolveRefresh = accept; });
+    });
+    const [refreshing, dispose] = root(() => pageRefresh());
+    try {
+      const first = refreshing.refresh();
+      assert.equal(refreshing.pending, true);
+      assert.equal(await refreshing.refresh(), false);
+      assert.equal(calls, 1);
+      resolveRefresh(true);
+      assert.equal(await first, true);
+      assert.equal(refreshing.status, "success");
+      configureRefresh(async () => { throw new Error("private detail"); });
+      assert.equal(await refreshing.refresh(), false);
+      assert.equal(refreshing.status, "error");
+      assert.match(refreshing.error, /could not be refreshed/);
+      configureRefresh(async () => false);
+      assert.equal(await refreshing.refresh(), false);
+      assert.equal(refreshing.status, "idle");
+      configureRefresh((abortSignal) => {
+        aborted = abortSignal;
+        return new Promise((accept) => { resolveRefresh = accept; });
+      });
+      const last = refreshing.refresh();
+      refreshing.reset();
+      assert.equal(aborted.aborted, true);
+      assert.equal(refreshing.status, "idle");
+      resolveRefresh(true);
+      assert.equal(await last, false);
+      const disposed = refreshing.refresh();
+      dispose();
+      assert.equal(aborted.aborted, true);
+      resolveRefresh(true);
+      assert.equal(await disposed, false);
+    } finally { dispose(); configureRefresh(async () => false); }
+  });
   for (const mode of ["dev", "prod"]) test(`${mode} form results: validation, cookies, files, redirects and native fallback`, async () => {
     const app = await startFormTestApp(mode);
     const headers = { "x-niral-form": "1", "x-niral-result": "1" };
@@ -83,6 +128,8 @@ export function registerFormTests(test) {
     const bundled = bundleRuntime(fileURLToPath(new URL("../src/runtime", import.meta.url)));
     const runtime = await import("data:text/javascript;base64," + Buffer.from(bundled).toString("base64"));
     assert.equal(typeof runtime.formAction, "function");
+    assert.equal(typeof runtime.pageRefresh, "function");
+    assert.match(compileClient('<script>const data = pageRefresh()</script><button on:click={data.refresh}>{data.status}</button>').code, /const pageRefresh = __n.pageRefresh/);
     let status;
     let body;
     let headers;

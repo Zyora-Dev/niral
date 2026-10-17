@@ -28,4 +28,7 @@ The framework itself never depends on Playwright — this folder has its own
 `test:forms` starts isolated dev and production apps on available ports. It
 checks reactive pending/error/success state, focus and file retention, submitter
 values, duplicate protection, independent forms, reset races, redirects, and
-JavaScript-disabled submission. Temporary app files and servers are cleaned up.
+JavaScript-disabled submission. With and without layouts, it also verifies
+loader refresh, keyed-row identity, focus/files/scroll and layout state,
+separate save/read errors, retry, and delayed refresh responses after navigation.
+Temporary app files and servers are cleaned up.

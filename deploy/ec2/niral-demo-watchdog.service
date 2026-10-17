@@ -1,0 +1,19 @@
+[Unit]
+Description=Niral documentation watchdog
+After=network.target niral-demo.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/niral-demo
+ExecStart=/usr/bin/node /opt/niral/bin/niral.js watchdog /opt/niral-demo -p 8199
+EnvironmentFile=/opt/niral-demo/app.env
+Environment="NIRAL_RESTART_CMD=/usr/bin/systemctl restart niral-demo"
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

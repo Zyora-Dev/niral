@@ -10,9 +10,13 @@
 
 import * as __n from "./index.js";
 import { configureForms, formRequest, postForm } from "./forms.js";
+import { configureRefresh } from "./refresh.js";
 
 let current = null; // mounted instance for the active page
 let installed = false;
+let pageProps = null;
+let navigationVersion = 0;
+let refreshVersion = 0;
 
 function styleTag() {
   let el = document.querySelector("style[data-niral-style]");
@@ -46,18 +50,36 @@ async function mountPage(root, component, layoutRefs, props) {
   const loaded = refs.some((r) => typeof r === "string") ? await Promise.all(refs.map(resolveMod)) : refs;
   const Page = loaded[loaded.length - 1];
   const layouts = loaded.slice(0, -1);
-  if (!layouts.length) return Page(root, props);
+  pageProps = __n.signal(props);
+  const propsSignal = pageProps;
+  const reactiveProps = { ...props, __sig: propsSignal };
+  if (!layouts.length) return Page(root, reactiveProps);
   return __n.mount(root, () => {
     const chain = (i) =>
       i === layouts.length
-        ? (Page.__build ?? Page)(props)
-        : __n.child(layouts[i], () => ({ ...props }), () => [chain(i + 1)]);
+        ? (Page.__build ?? Page)(reactiveProps)
+        : __n.child(layouts[i], () => propsSignal.get(), () => [chain(i + 1)]);
     return [chain(0)];
   });
 }
 
+async function refreshPage(abortSignal) {
+  const propsSignal = pageProps;
+  const version = navigationVersion;
+  const request = ++refreshVersion;
+  const url = location.href;
+  navCache.clear();
+  const response = await fetch(url, { headers: { "x-niral-nav": "1" }, cache: "no-store", signal: abortSignal });
+  const data = await response.json();
+  if (abortSignal.aborted || version !== navigationVersion || request !== refreshVersion || propsSignal !== pageProps || url !== location.href) return false;
+  if (!response.ok || response.redirected || !data?.ok || data.mode !== "client" || !data.props || !propsSignal) throw new Error("Invalid refresh response");
+  propsSignal.set(data.props);
+  return true;
+}
+
 /** Swap the current page for a nav payload's component/props/styles. */
 async function applyPage(data) {
+  navigationVersion++;
   const root = document.getElementById("niral-root");
   current?.destroy?.();
   root.replaceChildren();
@@ -71,6 +93,7 @@ async function applyPage(data) {
 
 /** Navigate without a page load. Falls back to location.href when needed. */
 export async function navigate(url, { push = true } = {}) {
+  navigationVersion++;
   let data = null;
   try {
     data = await fetchNav(url);
@@ -103,6 +126,7 @@ async function submitForm(form, request) {
 function install() {
   if (installed) return;
   installed = true;
+  configureRefresh(refreshPage);
   configureForms({ changed: () => navCache.clear(), redirect: (url) => navigate(url) });
   // prefetch on hover — by the time the click lands, the payload is usually here
   addEventListener("mouseover", (e) => {

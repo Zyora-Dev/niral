@@ -1,9 +1,11 @@
 <server>
   let submissions = 0;
   let loads = 0;
-  export async function load() { loads++; return { loads }; }
+  let entries = [];
+  export async function load() { loads++; return { loads, entries }; }
   export const save = withSchema({ title: v.string({ min: 3 }), upload: v.optional(v.file()), intent: v.optional(v.string()) }, async (fields) => {
     submissions++;
+    entries.push({ id: submissions, title: fields.title });
     session.set("lastTitle", fields.title);
     return { saved: fields.title, size: fields.upload?.size ?? 0, bytes: fields.upload?.data.toString() ?? "", intent: fields.intent ?? "", submissions, loads };
   });
@@ -13,14 +15,20 @@
 </server>
 
 <script>
-  let { form } = $props;
+  let { form, loads, entries } = $props;
   let title = $state("");
   const saving = formAction("save");
-  const other = formAction("save");
+  const other = formAction("save", { refresh: true });
   const leaving = formAction("leave");
+  const data = pageRefresh();
 </script>
 
 <h1>Form Actions</h1>
+<button id="refresh" on:click={data.refresh}>Refresh</button>
+<p id="refresh-status">{data.status}</p>
+<p id="refresh-error">{data.error ?? ""}</p>
+<p id="loads">{loads}</p>
+<ul id="entries">{#for entry of entries key entry.id}<li>{entry.title}</li>{/for}</ul>
 <form id="editor" method="post" action="?/save" enctype="multipart/form-data" on:submit={saving.submit}>
   <label>Title <input name="title" bind:value={title} /></label>
   <label>Attachment <input name="upload" type="file" /></label>
@@ -40,4 +48,5 @@
   <button>Save other</button>
 </form>
 <p id="other-status">{other.status}</p>
+<p id="other-refresh-error">{other.refreshError ?? ""}</p>
 <form id="leave" method="post" action="?/leave" on:submit={leaving.submit}><button>Leave</button></form>

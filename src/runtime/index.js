@@ -6,5 +6,6 @@ export {
 } from "./dom.js";
 export { rpc } from "./rpc.js";
 export { formAction } from "./forms.js";
+export { pageRefresh } from "./refresh.js";
 export { live } from "./live.js";
 export { t, _setI18n, currentLocale } from "./i18n.js";
