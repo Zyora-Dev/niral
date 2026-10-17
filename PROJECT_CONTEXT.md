@@ -12,6 +12,9 @@ are historical unless explicitly marked as verified with a date.
 - Former root: `/Users/redfoxhotels/zyorabyte/niral`; moved intact, not copied or recreated.
 - Git remote: `git@github-zyorabyte:Zyora-Dev/niral.git` (verified 2026-09-08).
 - Branch: `main`; relocation HEAD: `7cc0e03` (`fix: make npm launcher scaffold reliably`).
+- Refresh upgrade and EC2 configuration committed as `1d41d44` and pushed to
+  `origin/main` on 2026-10-17 with user approval. Live changelog uses GitHub
+  history with a 10-minute cache. Private keys and unrelated local work excluded.
 - The existing untracked `.kiro/` specifications were preserved unchanged.
 - Read `AGENTS.md` for the compiler, runtime, routing, security, CLI and contribution rules.
 - The framework must retain zero runtime dependencies. Do not apply the parent
@@ -31,6 +34,24 @@ are historical unless explicitly marked as verified with a date.
   not changed as part of relocation.
 
 ## Production Reference
+
+- New EC2 deployment authorized 2026-10-17: `ubuntu@13.126.45.97`, local key
+  `aws-key/dream.pem` (ignored, mode 600). Node 22.23.3/nginx/UFW provisioned;
+  app `/opt/niral-demo`, framework `/opt/niral`, units `niral-demo` and
+  `niral-demo-watchdog`. Release `76cdffd10467` active; integrity49/49, five form
+  and six TS regression groups pass remotely. Public homepage/docs/assets/health
+  verified200; private paths404; desktop/mobile rendering and Geist verified.
+  App runs as `niral`; framework/source root-owned, data/dist writable by app.
+  Watchdog runs as root. Services enabled at boot; UFW allows22/80 only.
+  Checkpoint `/root/niral-upgrade-checkpoints/20261017T141510Z-ec2` includes system
+  configuration and the generated env backup; env stays at `/opt/niral-demo/app.env`.
+  HTTP-by-IP only (`NIRAL_SECURE=0`); enable secure cookies when TLS is configured.
+  Reusable config: `deploy/ec2/`; no DNS change or old-host migration performed.
+  Later source transfers require sudo rsync or staging because source is root-owned.
+  Subsequent user-managed orange-proxy DNS cutover verified on 2026-10-17:
+  `https://niral.site` serves EC2 release `76cdffd10467` through Cloudflare;
+  homepage/docs/health200. Origin still HTTP; no origin certificate installed
+  and secure-cookie setting remains0. Old server unchanged.
 
 - Historical host: `139.59.38.116`, SSH alias `zyora-prod`.
 - Framework: `/opt/niral`; separately deployed docs app: `/opt/niral-demo`.
@@ -110,6 +131,15 @@ authorized service restart; verify health, `systemctl is-active` and recent logs
   Prior API commits were pushed through `f6dcd19`.
 
 ## Component Pitfalls
+
+- State-preserving refresh (2026-10-17, verified locally): `pageRefresh()` updates
+  page/layout prop signals without remounting; local `$state` drafts are retained.
+  `formAction("save", { refresh: true })` refreshes after non-redirect success,
+  exposing `refreshing`/`refreshError` separately from write status. Reset/disposal
+  cancels reads, navigation invalidates them, and latest-started refresh wins.
+  Full suite 201/0 with real TypeScript; four dev/prod layout/no-layout Chromium
+  combinations pass. Local docs build `e9924fec9201`; subsequently deployed to
+  new EC2 as `76cdffd10467` (see above), without a Git commit or push.
 
 - Reactive forms verified locally (2026-09-09): `formAction("save")` plus
   `on:submit={saving.submit}` opts into per-form reactive state and result-only

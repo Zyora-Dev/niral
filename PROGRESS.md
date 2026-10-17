@@ -1,5 +1,66 @@
 # Niral Progress
 
+## 2026-10-17: Refresh Upgrade Published
+
+- User authorized commit and push. Feature and EC2 configuration committed as
+  `1d41d44` and pushed successfully to `origin/main`.
+- Pre-commit recheck: all five focused form/refresh groups pass; deployment script
+  shell syntax and Git whitespace checks pass. Private keys and unrelated
+  `AGENTS.md`, `.kiro/` and `CLAUDE.md` changes excluded.
+- Live changelog confirmed to use GitHub history, not the release fallback.
+  New commits become visible after its existing 10-minute cache expires.
+  No production restart, configuration change or npm publication in this step.
+
+## 2026-10-17: New EC2 Website Deployment
+
+- Authorized target: `ubuntu@13.126.45.97`, Ubuntu 24.04 x86_64. SSH key is
+  `aws-key/dream.pem`; permissions restricted to 600 and key directories ignored.
+- Installed Node 22.23.3, nginx and UFW. SSH/HTTP allowed, other inbound ports
+  denied by UFW. Added non-root app and separate watchdog service definitions.
+- Checkpoint: `/root/niral-upgrade-checkpoints/20261017T141510Z-ec2`.
+  Generated the application secret only on the server; existing env/data preserved.
+- Configuration lives in `deploy/ec2/`. Allowlisted source transferred without
+  keys, environment files, local data or build artifacts. Five form/refresh and
+  six real-TypeScript checks passed on EC2. Release `76cdffd10467` built on the
+  server, integrity 49/49 files clean; systemd unit validation passed.
+- Activated release `76cdffd10467`; nginx, app and watchdog active, both Niral
+  services with zero restarts. An immediate post-start health request raced the
+  listener; logs confirmed normal startup and subsequent public health was 200.
+- Public `http://13.126.45.97` homepage, Server/TypeScript guides, health, image,
+  Geist CSS/font, robots and sitemap return 200. New refresh documentation is
+  present. Environment, database and private-key URL probes return 404.
+- Browser verification: Server guide renders at 1440px and 390px without horizontal
+  overflow; self-hosted Geist loads at both widths. Environment matches private
+  checkpoint backup. Source is root-owned; app runs as `niral`, with writable
+  data/dist only; watchdog runs separately with restart authority.
+- HTTP only: `NIRAL_SECURE=0` until HTTPS is configured. Domain/DNS cutover and TLS
+  still require confirmation. Existing production host/DNS untouched. No Git
+  commit, push, npm publication or old-server data migration performed.
+- Subsequent user-managed Cloudflare cutover verified: `https://niral.site`
+  homepage, Server guide and health return200 through Cloudflare (`DYNAMIC`),
+  health reports EC2 release `76cdffd10467`. Browser-facing HTTPS is active;
+  origin remains HTTP and `NIRAL_SECURE=0`. No server or Cloudflare settings
+  changed during this verification; end-to-end origin TLS remains unconfigured.
+
+## 2026-10-17: State-Preserving Page Refresh
+
+- Added `pageRefresh()` and reactive page/layout props using the existing signal
+  mechanism. Refresh bypasses the navigation cache and rejects stale responses.
+- Added opt-in `formAction("save", { refresh: true })`; refresh errors remain
+  separate from successful writes. Five focused lifecycle/form/bundle groups pass.
+- Six TypeScript inference groups pass. All four Chromium combinations (dev/prod,
+  with/without layouts) pass for reactive loader data, keyed-row identity,
+  focus/files/scroll preservation, separate save/read failures, retry and stale
+  responses after navigation. Controller reset/disposal cancels reads.
+- Full suite: **201 passed, 0 failed**, with real TypeScript enabled. Editor
+  diagnostics, documentation syntax and whitespace checks are clean. Local docs
+  build produced release `e9924fec9201` (3 routes). Optional external image-tool
+  and live Postgres checks remain environment-gated; runtime dependencies stay empty.
+- Temporary app fixtures use distinct server source to avoid Node data-URL module
+  caching carrying counters between repeated runs in one process.
+- Initially verified locally; subsequently deployed to the new EC2 host above.
+  No commit or push. Unrelated local work preserved.
+
 ## 2026-09-09: Reactive Form Actions
 
 - Added opt-in `formAction("save")` with reactive status, pending, result, field
