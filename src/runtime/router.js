@@ -11,12 +11,58 @@
 import * as __n from "./index.js";
 import { configureForms, formRequest, postForm } from "./forms.js";
 import { configureRefresh } from "./refresh.js";
+import { _setNavigation } from "./navigation.js";
 
 let current = null; // mounted instance for the active page
 let installed = false;
 let pageProps = null;
 let navigationVersion = 0;
 let refreshVersion = 0;
+let routeTree = [];
+let renderedUrl = null;
+let historySequence = 0;
+let activeHistoryId = null;
+const scrollPositions = new Map();
+
+function historyEntry() {
+  return { id: `${Date.now()}:${++historySequence}`, scroll: [0, 0] };
+}
+
+function saveScroll() {
+  if (!activeHistoryId) return;
+  const position = [scrollX, scrollY];
+  scrollPositions.set(activeHistoryId, position);
+  if (history.state?.__niral?.id === activeHistoryId) {
+    history.replaceState({ ...history.state, __niral: { id: activeHistoryId, scroll: position } }, "");
+  }
+}
+
+function finishNavigation(target, push, restore) {
+  if (push) history.pushState({ __niral: historyEntry() }, "", target.href);
+  const entry = history.state?.__niral ?? historyEntry();
+  if (!history.state?.__niral) history.replaceState({ ...history.state, __niral: entry }, "");
+  activeHistoryId = entry.id;
+  renderedUrl = target.href;
+  let anchor = null;
+  if (target.hash) {
+    let name = target.hash.slice(1);
+    try { name = decodeURIComponent(name); } catch {}
+    anchor = document.getElementById(name) ?? document.getElementsByName(name)[0];
+  }
+  const root = document.getElementById("niral-root");
+  const focusTarget = anchor ?? root.querySelector("main h1") ?? root.querySelector("h1") ?? root;
+  if (!focusTarget.hasAttribute("tabindex")) {
+    focusTarget.setAttribute("tabindex", "-1");
+    focusTarget.addEventListener("blur", () => focusTarget.removeAttribute("tabindex"), { once: true });
+  }
+  focusTarget.focus({ preventScroll: true });
+  if (restore) {
+    const position = scrollPositions.get(entry.id) ?? entry.scroll;
+    scrollTo(...position);
+  } else if (anchor) anchor.scrollIntoView();
+  else scrollTo(0, 0);
+  saveScroll();
+}
 
 function styleTag() {
   let el = document.querySelector("style[data-niral-style]");
@@ -48,17 +94,18 @@ const resolveMod = (p) => (typeof p === "string" ? import(p).then((m) => m.defau
 async function mountPage(root, component, layoutRefs, props) {
   const refs = [...layoutRefs, component];
   const loaded = refs.some((r) => typeof r === "string") ? await Promise.all(refs.map(resolveMod)) : refs;
-  const Page = loaded[loaded.length - 1];
-  const layouts = loaded.slice(0, -1);
   pageProps = __n.signal(props);
   const propsSignal = pageProps;
-  const reactiveProps = { ...props, __sig: propsSignal };
-  if (!layouts.length) return Page(root, reactiveProps);
+  routeTree = loaded.map((component) => ({ component, view: __n.signal({ component }) }));
   return __n.mount(root, () => {
-    const chain = (i) =>
-      i === layouts.length
-        ? (Page.__build ?? Page)(reactiveProps)
-        : __n.child(layouts[i], () => propsSignal.get(), () => [chain(i + 1)]);
+    const chain = (depth) => {
+      const entry = routeTree[depth];
+      return __n._routeChild(
+        () => entry.view.get().component,
+        () => propsSignal.get(),
+        () => depth + 1 < routeTree.length ? () => chain(depth + 1) : undefined,
+      );
+    };
     return [chain(0)];
   });
 }
@@ -78,35 +125,63 @@ async function refreshPage(abortSignal) {
 }
 
 /** Swap the current page for a nav payload's component/props/styles. */
-async function applyPage(data) {
-  navigationVersion++;
+async function applyPage(data, version = ++navigationVersion) {
+  const loaded = await Promise.all([...(data.layouts ?? []), data.component].map(resolveMod));
+  if (version !== navigationVersion) return false;
   const root = document.getElementById("niral-root");
-  current?.destroy?.();
-  root.replaceChildren();
   styleTag().textContent = data.style ?? "";
   if (data.head) {
     const t = data.head.match(/<title>([^<]*)<\/title>/);
     if (t) document.title = t[1];
   }
-  current = await mountPage(root, data.component, data.layouts ?? [], data.props ?? {});
+  if (!current || !routeTree.length) {
+    root.replaceChildren();
+    current = await mountPage(root, loaded[loaded.length - 1], loaded.slice(0, -1), data.props ?? {});
+  } else {
+    let shared = 0;
+    while (shared < Math.min(routeTree.length, loaded.length) - 1 && routeTree[shared].component === loaded[shared]) shared++;
+    const changed = routeTree[shared];
+    routeTree = loaded.map((component, depth) => depth < shared ? routeTree[depth] : depth === shared ? changed : { component, view: __n.signal({ component }) });
+    changed.component = loaded[shared];
+    __n.batch(() => {
+      pageProps.set(data.props ?? {});
+      changed.view.set({ component: loaded[shared] });
+    });
+  }
+  return true;
 }
 
 /** Navigate without a page load. Falls back to location.href when needed. */
-export async function navigate(url, { push = true } = {}) {
-  navigationVersion++;
-  let data = null;
+export async function navigate(url, { push = true, restore = false } = {}) {
+  const version = ++navigationVersion;
+  const target = new URL(url, location.href);
+  const previous = new URL(renderedUrl ?? location.href);
+  saveScroll();
+  _setNavigation({ from: previous.href, to: target.href });
   try {
-    data = await fetchNav(url);
+    if (target.origin !== location.origin) {
+      location.href = target.href;
+      return false;
+    }
+    if (target.pathname === previous.pathname && target.search === previous.search && (target.hash || previous.hash)) {
+      finishNavigation(target, push, restore);
+      return true;
+    }
+    const data = await fetchNav(target.pathname + target.search);
+    if (version !== navigationVersion) return false;
+    if (!data?.ok || data.mode !== "client") {
+      location.href = target.href;
+      return false;
+    }
+    if (!await applyPage(data, version) || version !== navigationVersion) return false;
+    finishNavigation(target, push, restore);
+    return true;
   } catch {
-    /* non-JSON response → hard navigation below */
+    if (version === navigationVersion) location.href = target.href;
+    return false;
+  } finally {
+    if (version === navigationVersion) _setNavigation(null);
   }
-  if (!data?.ok || data.mode !== "client") {
-    location.href = url;
-    return;
-  }
-  await applyPage(data);
-  if (push) history.pushState({}, "", url);
-  scrollTo(0, 0);
 }
 
 /** Progressive form enhancement: POST ?/action without a reload. */
@@ -126,12 +201,21 @@ async function submitForm(form, request) {
 function install() {
   if (installed) return;
   installed = true;
+  renderedUrl = location.href;
+  const entry = history.state?.__niral ?? historyEntry();
+  activeHistoryId = entry.id;
+  history.replaceState({ ...history.state, __niral: entry }, "");
+  history.scrollRestoration = "manual";
+  addEventListener("scroll", () => {
+    if (activeHistoryId) scrollPositions.set(activeHistoryId, [scrollX, scrollY]);
+  }, { passive: true });
+  addEventListener("pagehide", saveScroll);
   configureRefresh(refreshPage);
   configureForms({ changed: () => navCache.clear(), redirect: (url) => navigate(url) });
   // prefetch on hover — by the time the click lands, the payload is usually here
   addEventListener("mouseover", (e) => {
     const a = e.target.closest?.("a");
-    if (!a || a.target || a.hasAttribute("download")) return;
+    if (!a || a.target || a.hasAttribute("download") || a.relList.contains("external")) return;
     try {
       const url = new URL(a.href);
       if (url.origin !== location.origin) return;
@@ -144,16 +228,15 @@ function install() {
   addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = e.target.closest?.("a");
-    if (!a || a.target || a.hasAttribute("download") || a.getAttribute("rel") === "external") return;
+    if (!a || a.target || a.hasAttribute("download") || a.relList.contains("external")) return;
     const href = a.getAttribute("href");
-    if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+    if (!href || href.startsWith("mailto:")) return;
     const url = new URL(a.href);
     if (url.origin !== location.origin) return;
-    if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
     e.preventDefault();
-    navigate(url.pathname + url.search);
+    navigate(url.pathname + url.search + url.hash);
   });
-  addEventListener("popstate", () => navigate(location.pathname + location.search, { push: false }));
+  addEventListener("popstate", () => navigate(location.href, { push: false, restore: true }));
   // form actions: <form method="post" action="?/save"> enhance in place
   addEventListener("submit", (e) => {
     if (e.defaultPrevented) return;

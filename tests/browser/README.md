@@ -31,4 +31,9 @@ values, duplicate protection, independent forms, reset races, redirects, and
 JavaScript-disabled submission. With and without layouts, it also verifies
 loader refresh, keyed-row identity, focus/files/scroll and layout state,
 separate save/read errors, retry, and delayed refresh responses after navigation.
+Navigation coverage includes delayed fetch and module-import races, reactive
+loading state, shared and nested layout identity, context inheritance, lifecycle
+cleanup, page-local state resets and destination prop initialization. It also
+checks slot fallbacks, hydration warnings, heading/anchor focus, same-page hashes,
+cross-route anchors, Back/Forward window scroll restoration and custom history state.
 Temporary app files and servers are cleaned up.

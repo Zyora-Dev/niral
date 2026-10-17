@@ -1,5 +1,23 @@
 # Niral Progress
 
+## 2026-10-17: State-Preserving Navigation (Verified Locally)
+
+- Navigation responses are version-guarded across fetch and module loading.
+  Shared layout prefixes retain DOM, local state and context; changed branches
+  dispose cleanly and page leaves remount with destination loader props.
+- Added read-only reactive `pageNavigation()` (`pending`, `from`, `to`), compiler
+  ambient/type support, hash navigation, heading/anchor focus and per-history-entry
+  window scroll restoration. Existing history state is preserved.
+- All four dev/prod and layout/no-layout Chromium combinations pass, covering
+  fetch/import races, nested layout lifecycle/context, local state, slot fallbacks,
+  destination state initialization, hydration, anchors and Back/Forward. Six real
+  TypeScript inference groups pass. Routing and browser-test docs updated.
+- Final full regression recheck: **201 passed, 0 failed**, with real TypeScript.
+  Documentation syntax, editor diagnostics and whitespace checks are clean.
+  Optional external image-tool and live Postgres checks remain environment-gated.
+- User authorized commit, push and deployment to the existing EC2 site on
+  2026-10-17. Publication and checkpointed deployment are in progress.
+
 ## 2026-10-17: Refresh Upgrade Published
 
 - User authorized commit and push. Feature and EC2 configuration committed as

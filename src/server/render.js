@@ -107,12 +107,11 @@ export async function renderFile(absPath, props = {}) {
  * `runtime` must be the SAME runtime module instance the components import.
  */
 export function composeComponent(runtime, layouts, Page) {
-  if (!layouts.length) return Page;
   function Composed(target, props = {}) {
     return runtime.mount(target, () => {
       const chain = (i) =>
         i === layouts.length
-          ? (Page.__build ?? Page)(props)
+          ? runtime.child(Page, () => ({ ...props }))
           : runtime.child(layouts[i], () => ({ ...props }), () => [chain(i + 1)]);
       return [chain(0)];
     });
@@ -122,7 +121,7 @@ export function composeComponent(runtime, layouts, Page) {
     Composed.__ssr = (props = {}) => {
       const chain = (i) =>
         i === layouts.length
-          ? Page.__ssr(props)
+          ? ssrHelpers.sChild(Page, { ...props })
           : ssrHelpers.sChild(layouts[i], { ...props }, () => chain(i + 1));
       return chain(0);
     };

@@ -474,6 +474,14 @@ File-based routing under \`routes/\`:
 each has a \`<slot/>\`, and each can have its own \`<server>\` block with \`load()\` —
 layout data merges into every page's props.
 
+Client-side navigation preserves the shared outer layout chain, including local
+state, DOM nodes and context. Loader props update reactively. Layouts outside that
+shared chain are disposed, and their lifecycle cleanup runs; returning creates
+fresh instances. The page itself remounts, including when only its route parameter
+or query changes. Use \`pageRefresh()\` to update loader data while keeping page-local
+state. A retained layout's \`$state(prop)\` stays local; read the prop directly or use
+\`$derived\` when its value should follow loader updates.
+
 ## Page modes
 
 \`\`\`html
@@ -487,6 +495,35 @@ layout data merges into every page's props.
 Same-origin links become client-side navigations automatically — \`load()\` runs on
 the server per navigation, JSON comes back, the page swaps without a reload.
 Links prefetch on hover. Non-JS visitors get normal full-page navigation.
+
+Only the latest navigation may replace the page: late responses and module imports
+from superseded navigations are ignored. Links with \`target\`, \`download\` or
+\`rel="external"\`, and modifier-key clicks, retain browser behavior. Static and
+streaming destinations use a full-page navigation.
+
+\`pageNavigation()\` exposes read-only reactive state in any page or layout:
+
+\`\`\`html
+<script>
+  const navigation = pageNavigation();
+</script>
+
+{#if navigation.pending}
+  <p role="status">Loading...</p>
+{/if}
+<slot/>
+\`\`\`
+
+- \`pending\`: true while a client navigation fetches data and loads modules.
+- \`from\`, \`to\`: absolute URL strings while pending; otherwise \`null\`.
+- Server-rendered state is idle. This tracks navigation, not \`pageRefresh()\` or
+  form submission; those expose their own pending state.
+
+New navigations scroll to the top and focus the first heading in \`main\`, then the
+first page heading, or the page root when no heading exists. Hash links scroll to
+and focus the matching ID or named anchor. Same-page hash changes keep the page
+instance. Back/Forward restores the stored window scroll position for that history
+entry, including across routes. Nested scroll containers are not restored.
 
 ## Head and shell
 

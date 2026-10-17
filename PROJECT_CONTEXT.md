@@ -22,6 +22,16 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Navigation upgrade implemented locally on 2026-10-17: shared layout prefixes
+  persist, changed route branches dispose, and pages remount with new loader data.
+  `pageNavigation()` reports read-only pending/from/to; latest navigation wins
+  across fetch/import races. Hash focus and Back/Forward window scroll are handled
+  by the router. `pageRefresh()` still preserves page-local state. Four Chromium
+  dev/prod layout/no-layout combinations and six real-TypeScript groups pass.
+  Final framework suite: 201 passed, 0 failed; docs syntax and editor checks clean.
+  User authorized navigation commit, push and deployment to the existing EC2
+  site on 2026-10-17; publication and deployment are in progress.
+
 - Historical local PATH setup: `export PATH="$HOME/homebrew/bin:$PATH"`.
 - Build docs from this root: `node bin/niral.js build apps/docs`.
 - Preview docs: `node bin/niral.js start apps/docs -p 5917`.

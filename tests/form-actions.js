@@ -21,8 +21,36 @@ export async function startFormTestApp(mode, { layout = true } = {}) {
     mkdirSync(join(directory, "routes"));
     const source = readFileSync(new URL("./fixtures/forms.niral", import.meta.url), "utf8");
     writeFileSync(join(directory, "routes", "index.niral"), source.replace("<server>", "<server>\n  const fixtureId = " + JSON.stringify(directory) + ";"));
-    writeFileSync(join(directory, "routes", "done.niral"), '<h1 id="done">Saved</h1>');
+    writeFileSync(join(directory, "routes", "done.niral"), '<script>const navigation = pageNavigation();</script><h1 id="done">Saved</h1><slot><span id="page-fallback">Page fallback</span></slot><output id="navigation-pending">{navigation.pending}</output><output id="navigation-from">{navigation.from ?? ""}</output><output id="navigation-to">{navigation.to ?? ""}</output><a id="section-link" href="/done#details">Details</a><div style="height: 1200px"></div><h2 id="details">Details</h2><div style="height: 1000px"></div>');
     if (layout) writeFileSync(join(directory, "routes", "_layout.niral"), '<script>let { loads } = $props; let expanded = $state(false);</script><button id="layout-toggle" on:click={() => expanded = !expanded}>Toggle</button><p id="layout-state">{expanded}</p><p id="layout-loads">{loads}</p><slot/>');
+    mkdirSync(join(directory, "routes", "section"));
+    writeFileSync(join(directory, "routes", "section", "_layout.niral"), `<script>
+let opened = $state(false);
+setContext("nav-owner", "section");
+onMount(() => {
+  globalThis.sectionMounts = (globalThis.sectionMounts ?? 0) + 1;
+  return () => { globalThis.sectionDisposals = (globalThis.sectionDisposals ?? 0) + 1; };
+});
+</script>
+<button id="section-toggle" on:click={() => opened = !opened}>Toggle section</button>
+<output id="section-state">{opened}</output><slot/>`);
+    writeFileSync(join(directory, "routes", "section", "[id].niral"), `<server>
+export function load({ params }) { return { loads: params.id, id: params.id }; }
+</server>
+<script>
+let { id } = $props;
+let draft = $state("");
+let initialId = $state(id);
+const owner = getContext("nav-owner");
+onMount(() => {
+  globalThis.routeMounts = (globalThis.routeMounts ?? 0) + 1;
+  return () => { globalThis.routeDisposals = (globalThis.routeDisposals ?? 0) + 1; };
+});
+</script>
+<main><h1 id="section-page">{id}</h1><output id="section-owner">{owner}</output>
+<output id="initial-id">{initialId}</output>
+<input id="page-draft" bind:value={draft}/><div style="height: 1200px"></div>
+<h2 id="section-anchor">Anchor</h2><div style="height: 1000px"></div></main>`);
     if (mode === "prod") build({ root: directory });
     app = mode === "dev" ? createDevServer({ root: directory, port: 0, watch: false }) : createProdServer({ dist: join(directory, "dist"), port: 0, cwd: directory });
     const port = await new Promise((accept) => app.listen(accept));
@@ -129,6 +157,10 @@ export function registerFormTests(test) {
     const runtime = await import("data:text/javascript;base64," + Buffer.from(bundled).toString("base64"));
     assert.equal(typeof runtime.formAction, "function");
     assert.equal(typeof runtime.pageRefresh, "function");
+    assert.equal(typeof runtime.pageNavigation, "function");
+    assert.equal(runtime.pageNavigation().pending, false);
+    assert.equal(runtime.pageNavigation().to, null);
+    assert.match(compileClient('<script>const navigation = pageNavigation()</script><p>{navigation.pending}</p>').code, /const pageNavigation = __n.pageNavigation/);
     assert.match(compileClient('<script>const data = pageRefresh()</script><button on:click={data.refresh}>{data.status}</button>').code, /const pageRefresh = __n.pageRefresh/);
     let status;
     let body;

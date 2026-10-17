@@ -89,6 +89,11 @@ declare function pageRefresh(): {
   refresh(): Promise<boolean>;
   reset(): void;
 };
+declare function pageNavigation(): {
+  readonly pending: boolean;
+  readonly from: string | null;
+  readonly to: string | null;
+};
 declare const log: { debug(m: unknown, f?: object): void; info(m: unknown, f?: object): void; warn(m: unknown, f?: object): void; error(m: unknown, f?: object): void };
 declare function projectImport(p: string): Promise<any>;
 `;

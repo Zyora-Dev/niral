@@ -633,12 +633,18 @@ function runOf(estart, eend) {
  * input state and context all SURVIVE prop updates (no rebuild).
  */
 export function child(Comp, propsFn, slot, slots) {
-  const build = Comp.__build ?? Comp;
+  return _routeChild(() => Comp, propsFn, () => slot, slots);
+}
+
+export function _routeChild(componentFn, propsFn, slotFn, slots) {
   const pSig = derived(propsFn);
   return region(() => {
+    const Comp = componentFn();
+    const build = Comp.__build ?? Comp;
     // untracked snapshot: the region must NOT re-run on prop changes —
     // the per-prop deriveds own the updates
     const props = { ...untrack(() => pSig.get()), __sig: pSig };
+    const slot = slotFn?.();
     if (slot) props.children = slot;
     if (slots) props.__slots = slots;
     return build(props);

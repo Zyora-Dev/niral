@@ -9,7 +9,9 @@ try {
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
+    const hydrationWarnings = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => { if (/hydration mismatch/.test(message.text())) hydrationWarnings.push(message.text()); });
     try {
       await page.goto(app.base);
       const input = page.locator('#editor input[name="title"]');
@@ -61,6 +63,7 @@ try {
       await page.evaluate(() => { globalThis.originalEntry = document.querySelector("#entries li"); });
       assert.equal(await page.locator("#status").textContent(), "success");
       if (layout) await page.locator("#layout-toggle").click();
+      if (layout) await page.evaluate(() => { globalThis.originalLayout = document.querySelector("#layout-toggle"); });
       await input.focus();
       let refreshRelease;
       let refreshRequested;
@@ -146,6 +149,116 @@ try {
       await page.unrouteAll({ behavior: "wait" });
       assert.equal(await page.locator("#done").textContent(), "Saved");
       assert.equal(await page.locator("#entries").count(), 0);
+      assert.equal(await page.locator("#page-fallback").textContent(), "Page fallback");
+      if (layout) {
+        assert.equal(await page.locator("#layout-state").textContent(), "true");
+        assert.equal(await page.evaluate(() => document.querySelector("#layout-toggle") === globalThis.originalLayout), true);
+      }
+      let releaseNavigation;
+      let navigationRequested;
+      const navigationSeen = new Promise((accept) => { navigationRequested = accept; });
+      const navigationGate = new Promise((accept) => { releaseNavigation = accept; });
+      await page.route((url) => url.search === "?race=slow", async (route) => {
+        const response = await route.fetch();
+        navigationRequested();
+        await navigationGate;
+        await route.fulfill({ response });
+      });
+      await page.evaluate(() => { globalThis.slowNavigation = window.__NIRAL_NAV__("/?race=slow"); });
+      await navigationSeen;
+      assert.equal(await page.locator("#navigation-pending").textContent(), "true");
+      assert.equal(await page.locator("#navigation-to").textContent(), app.base + "/?race=slow");
+      await page.evaluate(() => window.__NIRAL_NAV__("/done?race=fast"));
+      releaseNavigation();
+      await page.evaluate(() => globalThis.slowNavigation);
+      await page.unrouteAll({ behavior: "wait" });
+      assert.equal(page.url(), app.base + "/done?race=fast");
+      assert.equal(await page.locator("#done").textContent(), "Saved");
+      assert.equal(await page.locator("#navigation-pending").textContent(), "false");
+      assert.equal(await page.locator("#navigation-to").textContent(), "");
+      assert.equal(await page.evaluate(() => document.activeElement.id), "done");
+      const sectionResponse = await page.request.get(app.base + "/section/module-slow", { headers: { "x-niral-nav": "1" } });
+      const sectionPayload = await sectionResponse.json();
+      const sectionModule = new URL(sectionPayload.component, app.base).href;
+      let releaseModule;
+      let moduleRequested;
+      const moduleSeen = new Promise((accept) => { moduleRequested = accept; });
+      const moduleGate = new Promise((accept) => { releaseModule = accept; });
+      await page.route(sectionModule, async (route) => {
+        const response = await route.fetch();
+        moduleRequested();
+        await moduleGate;
+        await route.fulfill({ response });
+      });
+      await page.evaluate(() => { globalThis.slowModuleNavigation = window.__NIRAL_NAV__("/section/module-slow"); });
+      await moduleSeen;
+      assert.equal(await page.locator("#navigation-pending").textContent(), "true");
+      assert.equal(await page.locator("#done").textContent(), "Saved");
+      await page.evaluate(() => window.__NIRAL_NAV__("/done?module=fast"));
+      releaseModule();
+      assert.equal(await page.evaluate(() => globalThis.slowModuleNavigation), false);
+      await page.unrouteAll({ behavior: "wait" });
+      assert.equal(page.url(), app.base + "/done?module=fast");
+      assert.equal(await page.evaluate(() => globalThis.sectionMounts ?? 0), 0);
+      await page.evaluate(() => window.__NIRAL_NAV__("/done"));
+      await page.evaluate(() => { globalThis.originalDone = document.querySelector("#done"); scrollTo(0, 400); });
+      await page.evaluate(() => document.querySelector("#section-link").click());
+      await page.waitForURL(app.base + "/done#details");
+      assert.equal(await page.evaluate(() => document.querySelector("#done") === globalThis.originalDone), true);
+      assert.equal(await page.evaluate(() => document.activeElement.id), "details");
+      assert.ok(await page.evaluate(() => Math.abs(document.querySelector("#details").getBoundingClientRect().top) < 1));
+      await page.goBack();
+      await page.waitForFunction(() => location.hash === "" && Math.abs(scrollY - 400) < 1);
+      await page.goForward();
+      await page.waitForFunction(() => location.hash === "#details" && Math.abs(document.querySelector("#details").getBoundingClientRect().top) < 1);
+      await page.evaluate(() => {
+        history.replaceState({ ...history.state, userValue: "retained" }, "");
+        scrollTo(0, 500);
+      });
+      await page.evaluate(() => window.__NIRAL_NAV__("/section/one"));
+      assert.equal(await page.locator("#section-page").textContent(), "one");
+      assert.equal(await page.locator("#initial-id").textContent(), "one");
+      assert.equal(await page.locator("#section-owner").textContent(), "section");
+      assert.equal(await page.evaluate(() => document.activeElement.id), "section-page");
+      if (layout) {
+        assert.equal(await page.locator("#layout-loads").textContent(), "one");
+        assert.equal(await page.locator("#layout-state").textContent(), "true");
+        assert.equal(await page.evaluate(() => document.querySelector("#layout-toggle") === globalThis.originalLayout), true);
+      }
+      await page.locator("#section-toggle").click();
+      await page.locator("#page-draft").fill("local page state");
+      await page.evaluate(() => {
+        globalThis.originalSection = document.querySelector("#section-toggle");
+        globalThis.originalSectionPage = document.querySelector("#section-page");
+        scrollTo(0, 200);
+      });
+      await page.evaluate(() => window.__NIRAL_NAV__("/section/two"));
+      assert.equal(await page.locator("#section-page").textContent(), "two");
+      assert.equal(await page.locator("#initial-id").textContent(), "two");
+      assert.equal(await page.locator("#section-state").textContent(), "true");
+      assert.equal(await page.locator("#page-draft").inputValue(), "");
+      assert.equal(await page.evaluate(() => document.querySelector("#section-toggle") === globalThis.originalSection), true);
+      assert.equal(await page.evaluate(() => document.querySelector("#section-page") !== globalThis.originalSectionPage), true);
+      assert.deepEqual(await page.evaluate(() => [globalThis.sectionMounts, globalThis.sectionDisposals ?? 0, globalThis.routeMounts, globalThis.routeDisposals]), [1, 0, 2, 1]);
+      await page.goBack();
+      await page.waitForFunction(() => document.querySelector("#section-page")?.textContent === "one" && Math.abs(scrollY - 200) < 1);
+      assert.equal(await page.locator("#section-state").textContent(), "true");
+      await page.goBack();
+      await page.waitForFunction(() => document.querySelector("#done") && Math.abs(scrollY - 500) < 1);
+      assert.equal(await page.evaluate(() => history.state.userValue), "retained");
+      assert.equal(await page.evaluate(() => globalThis.sectionDisposals), 1);
+      await page.goForward();
+      await page.waitForFunction(() => document.querySelector("#section-page")?.textContent === "one");
+      assert.equal(await page.locator("#section-state").textContent(), "false");
+      assert.equal(await page.evaluate(() => globalThis.sectionMounts), 2);
+      await page.evaluate(() => window.__NIRAL_NAV__("/section/two#section-anchor"));
+      assert.equal(page.url(), app.base + "/section/two#section-anchor");
+      assert.equal(await page.evaluate(() => document.activeElement.id), "section-anchor");
+      assert.ok(await page.evaluate(() => Math.abs(document.querySelector("#section-anchor").getBoundingClientRect().top) < 1));
+      await page.evaluate(() => window.__NIRAL_NAV__("/done"));
+      assert.equal(await page.evaluate(() => globalThis.sectionDisposals), 2);
+      assert.deepEqual(errors, []);
+      assert.deepEqual(hydrationWarnings, []);
       assert.deepEqual(errors, []);
       const native = await browser.newContext({ javaScriptEnabled: false });
       try {
@@ -155,7 +268,7 @@ try {
         await Promise.all([nativePage.waitForNavigation(), nativePage.locator("#editor button").click()]);
         assert.equal(await nativePage.locator("#result").textContent(), "Native browser");
       } finally { await native.close(); }
-      console.log(`PASS ${mode} browser forms (layout=${layout}): refresh, keyed lists, focus/files/scroll, errors, retry, navigation races, forms and no-JS`);
+      console.log(`PASS ${mode} browser forms (layout=${layout}): refresh, forms, persistent layouts, lifecycle, navigation/module races, loading, focus, anchors, history and no-JS`);
     } finally { await context.close(); app.close(); }
   }
 } finally { await browser.close(); }

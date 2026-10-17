@@ -155,6 +155,10 @@ export async function remove(fields: { id: string }) { return { removed: fields.
 const saving = formAction("save", { refresh: true });
 const removing = formAction("remove");
 const data = pageRefresh();
+const navigation = pageNavigation();
+const navigating: boolean = navigation.pending;
+const destination: string | null = navigation.to;
+const origin: string | null = navigation.from;
 const refreshResult: Promise<boolean> = data.refresh();
 const refreshing: boolean = saving.refreshing;
 const refreshError: string | null = saving.refreshError;
@@ -176,6 +180,10 @@ const removed: string | undefined = removing.result?.removed;
       assert.ok(errors.some((entry) => entry.code === "TS2345" && entry.message.includes("missing")));
       writeFileSync(filename, source.replace('refresh: true', 'refresh: "yes"').replace('const refreshResult: Promise<boolean>', 'const refreshResult: Promise<string>'));
       assert.ok(check({ root }).errors.filter((entry) => entry.code === "TS2322").length >= 2);
+      writeFileSync(filename, source.replace('const destination: string | null', 'const destination: number').replace('const navigating: boolean = navigation.pending;', 'navigation.pending = true;'));
+      const navigationErrors = check({ root }).errors;
+      assert.ok(navigationErrors.some((entry) => entry.code === "TS2322"));
+      assert.ok(navigationErrors.some((entry) => entry.code === "TS2540"));
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
   test("checker validates component props, events and bidirectional bindings", () => {
