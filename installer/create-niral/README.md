@@ -35,8 +35,7 @@ The launcher downloads the framework from the official
 Subsequent commands reuse that framework; `npx create-niral@latest` selects the
 latest npm launcher but does not refresh a cached framework.
 
-Source-preview notice: this explicit update command is prepared for the next npm
-release, not verified as available in the currently published package:
+Use launcher 0.1.3 or newer for an explicit framework update:
 
 ```sh
 npx niral@latest update

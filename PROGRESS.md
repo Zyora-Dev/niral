@@ -41,8 +41,11 @@
   Public home, /docs/cli and /@niral/health return200 with the new release;
   browser rendered-text assertions confirm all five DI commands. Initial raw-HTML
   command matching was unsuitable for highlighted code; rendered checks passed.
-  Previous release cb55f099d593 retained. Npm publication remains the only release
-  blocker: user must complete npm login; neither 0.1.3 package has been published.
+  Previous release cb55f099d593 retained.
+- User completed npm login; whoami confirms zyoralabs, and 0.1.3 remains unused
+  for both packages. Removed source-preview notices in release documentation;
+  fifteen CLI groups, docs syntax/diagnostics and five-file package checks pass.
+  Publication is in progress; neither 0.1.3 package is published yet.
 
 ## 2026-10-18: Global CLI Update Preparation (Local)
 

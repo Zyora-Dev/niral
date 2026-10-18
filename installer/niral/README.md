@@ -46,8 +46,7 @@ The generated direct `niral` shim reports the framework version only.
 
 ## Update
 
-Source-preview notice: the update command is prepared locally for the next npm
-release. It is not a claim that the currently published version supports it.
+Launcher 0.1.3 supports explicit framework updates:
 
 ```sh
 npx niral@latest update

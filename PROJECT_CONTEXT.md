@@ -30,7 +30,8 @@ are historical unless explicitly marked as verified with a date.
   Six focused offline CLI groups and full suite240/0 pass; fifteen launcher groups,
   docs syntax and diagnostics pass. Command/safety docs cover site and npm packages.
   No shell/test execution, streaming or transcript persistence. Both npm manifests
-  prepared as0.1.3; registry latest remains0.1.2, publication blocked by npm401.
+  prepared as0.1.3; registry latest remains0.1.2. User restored npm authentication
+  (whoami zyoralabs), final package/docs checks pass, publication in progress.
   Actual packed entrypoint DI help/version checks pass for both five-file archives;
   local documentation build passed (8ca5f61663cc).
   Release source d2cf087 committed/pushed to main with matching remote revision.
@@ -39,7 +40,7 @@ are historical unless explicitly marked as verified with a date.
   and syntax pass, env unchanged. Docs release7bd11bf2707e built as niral and
   activated after integrity50/50; all services active, no automatic restarts,
   public home/CLI/health200 and browser verifies all five DI commands. Previous
-  cb55f099d593 retained. Only npm publication remains blocked on user login.
+  cb55f099d593 retained. Release-facing preview notices removed for publication.
 
 - Global CLI release prepared locally on 2026-10-18: successful side-effect-free
   help/version, explicit `niral update` and npm bootstrap updates of older cached

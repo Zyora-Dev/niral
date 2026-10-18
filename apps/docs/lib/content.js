@@ -1861,8 +1861,7 @@ change state; inspect the [security guide](/docs/security) before using them.
 
 ## Framework and launcher updates
 
-Source-preview notice: \`update\` is prepared locally for the next npm release.
-It is not yet a claim of availability in the published launcher.
+Launcher 0.1.3 supports explicit framework updates:
 
 \`\`\`sh
 npx niral@latest update

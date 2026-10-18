@@ -47,16 +47,15 @@ npx niral --help
 npx niral --version
 ```
 
-The next launcher release adds **explicit framework updates**:
+Launcher 0.1.3 adds **explicit framework updates**:
 
 ```sh
 npx niral@latest update
 niral update
 ```
 
-These commands are prepared locally, not published yet. The first form can
-upgrade an older cached framework without an update command. Normal commands
-reuse the cache; fetching the latest npm launcher alone does not refresh it.
+The first form can upgrade an older cached framework without an update command.
+Normal commands reuse the cache; fetching the latest npm launcher alone does not refresh it.
 Updates follow the official repository's `main` branch, not a pinned npm version.
 They do not modify app projects, deploy servers or update global npm packages.
 

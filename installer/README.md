@@ -2,8 +2,8 @@
 
 The two npm packages are self-contained launchers, not the framework runtime.
 They download `Zyora-Dev/niral` from `main`; the website deployment is independent.
-Both package manifests are prepared as 0.1.3. The registry still reports 0.1.2
-as of 2026-10-18; publication is pending npm authentication (whoami returned 401).
+Both package manifests are prepared as 0.1.3. Npm authentication was restored on
+2026-10-18 and the registry confirmed 0.1.3 is unused; publication is in progress.
 Do not treat a local version bump or a website deployment as npm publication.
 
 ## Validate Locally
@@ -31,7 +31,7 @@ bin scripts. Never include framework data, keys, environment files or local cach
 Both packages retain zero runtime dependencies. Keep their shared implementations
 identical; tests enforce this until packaging is generated from a single source.
 
-## Release Later, With Approval
+## Release Procedure
 
 1. Review the diff and run validation. Test Windows separately; local verification
    is on macOS, and POSIX shell/symlink tests do not establish Windows support.
