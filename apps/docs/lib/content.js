@@ -145,8 +145,24 @@ The fastest way — one command, like you'd expect:
 npx create-niral my-app
 \`\`\`
 
-That downloads the framework once to \`~/.niral\` (about 1 MB — it has zero
-dependencies) and installs a \`niral\` command. No npm? Use the installer:
+That downloads the framework once to \`~/.niral/framework\` (zero runtime
+dependencies) and installs a \`niral\` command. To start immediately in the
+same terminal:
+
+\`\`\`sh
+cd my-app
+npx niral dev
+\`\`\`
+
+Open a new terminal to use the generated \`niral\` command after its zsh/bash
+PATH update. For other shells, add the install's \`bin\` directory to PATH or
+keep using \`npx niral\`. Set \`NIRAL_HOME\` to choose another install directory;
+keep projects outside it. Normal commands reuse the cached framework.
+
+For a global npm launcher, choose either \`npm install -g niral\` or
+\`npm install -g create-niral\`, not both: they expose the same executable names.
+See [CLI updates](/docs/cli) for the separate framework update workflow.
+No npm? Use the installer:
 
 \`\`\`sh
 curl -fsSL https://niral.zyora.club/install.sh | bash
@@ -1668,8 +1684,22 @@ NIRAL_SHIELD=off              # disable entirely
 NIRAL_SHIELD_STRIKES=6        # strikes before a ban (probes weigh 3)
 NIRAL_SHIELD_BAN_MS=900000    # ban duration (15 min)
 NIRAL_SHIELD_LOCKDOWN=8       # distinct bans in 5 min → lockdown
-NIRAL_TRUST_PROXY=1           # read client IP from X-Forwarded-For (behind nginx)
+NIRAL_TRUST_PROXY=loopback    # accept a single visitor IP only from a local proxy
 \`\`\`
+
+Behind local nginx, use \`NIRAL_TRUST_PROXY=loopback\` and have nginx overwrite
+\`X-Forwarded-For\` with \`$remote_addr\`, not append client-supplied headers.
+With Cloudflare in front, configure nginx's real-IP module to accept
+\`CF-Connecting-IP\` only from Cloudflare's published proxy networks, then forward
+the resolved visitor address. Keep the app port inaccessible from the internet.
+Without correct visitor identity, a scanner can cause a shared proxy-IP ban.
+The legacy \`NIRAL_TRUST_PROXY=1\` trusts forwarded headers from any peer; do not
+use it on an app port reachable by untrusted clients.
+
+Public documentation can stay open to readers, search engines and AI crawlers.
+Shield checks request behavior, not user-agent names: normal page reads are
+allowed, while attack probes and repeated error responses accumulate strikes.
+Claiming to be Googlebot or an AI crawler does not bypass protection.
 
 ## Release integrity — tamper detection
 
@@ -1790,8 +1820,15 @@ codebase.
   cli: {
     title: "CLI reference",
     body: `
+Use \`niral <command>\` through the installed launcher, or
+\`npx niral <command>\` without configuring PATH. Node.js 22+ is required.
+
 \`\`\`text
-niral create <name>              new project
+niral --help                    show commands without running them
+niral --version                 installed framework version (npm also shows launcher)
+niral update                    explicitly update the managed framework
+niral di <command>              Developer Intelligence (setup/status/ask/chat/new)
+niral create <name|.>            new/empty project [--template minimal|blog|dashboard]
 niral dev [dir] [-p port]        dev server (HMR, overlays)      default 5199
 niral doctor [dir]               diagnose "why won't it start" problems
 niral check [dir]                TypeScript checking
@@ -1803,8 +1840,121 @@ niral deploy [dir]               generate deploy/ — systemd, nginx, Dockerfile
 niral export [dir] [-o out]      static site
 niral jobs [dir]                 standalone job/cron worker
 niral compile <file> [-o out]    compile one component
+niral serve [dir] [-p port]      static development server       default 4173
+niral add <recipe> [dir]         add a framework recipe
+niral shield <status|log|verify|integrity> [dir]
+niral watchdog [dir] [-p port]   independent health/integrity guardian
+niral snapshot [list] [dir]      local snapshots
+niral snapshot --remote [dir]    encrypted remote snapshot
+niral snapshot list --remote [dir]
+niral snapshot push <label|latest>
+niral restore <label|latest> [dir] [--remote]
+niral rollback [dir] [--to hash]  restore a previous built release
+niral rotate-secret [dir] [--env file]
 niral lsp                        language server (stdio)
 \`\`\`
+
+\`-h\` and \`-v\` alias \`--help\` and \`--version\`. Appending \`--help\`
+shows help without executing a command. Unknown commands and failed child
+commands return a nonzero exit status. Restore, rollback and secret rotation
+change state; inspect the [security guide](/docs/security) before using them.
+
+## Framework and launcher updates
+
+Source-preview notice: \`update\` is prepared locally for the next npm release.
+It is not yet a claim of availability in the published launcher.
+
+\`\`\`sh
+npx niral@latest update
+niral update
+\`\`\`
+
+The npm form handles updates before calling the cached CLI, so it can upgrade an
+older framework without an update command. The direct form works after that
+framework update. Both update only \`NIRAL_HOME/framework\` (default:
+\`~/.niral/framework\`) from the official repository's \`main\` branch.
+There is no automatic background update or per-command network refresh, and no
+version pinning to the npm launcher version. Git updates print the revision.
+
+\`npx create-niral@latest\` selects the npm launcher; it does not update an
+already cached framework. Update a globally installed npm launcher separately
+with \`npm install -g niral@latest\` or \`npm install -g create-niral@latest\`,
+whichever you installed. Installing both globally can cause executable conflicts.
+
+Stop active Niral development/build commands before updating. Git installs must
+be clean, on \`main\`, and use the official HTTPS origin; fast-forward failures
+stop without an archive fallback. Archive replacements are staged and the old
+directory is kept at the printed \`framework-backup-*/framework\` path. Local
+additions remain there, not merged into the new framework. Backups are not pruned.
+Concurrent installers and symlinked framework paths are refused. After an
+interruption, inspect other installers before removing a stale
+\`NIRAL_HOME/.framework-install-lock\` directory.
+
+Keep applications outside the framework installation. Source checkouts outside
+the managed path must be updated with Git. Updating the framework does not
+migrate projects, update npm packages or restart/deploy production servers.
+
+## Developer Intelligence - niral di
+
+DI is part of the local framework, available through the existing npm launcher.
+No Niral Cloud account is required. Choose your provider's exact protocol,
+endpoint and model; there is no default model, substitution or provisioning.
+
+\`\`\`sh
+niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
+niral di status
+niral di ask "Explain this project's routes" --root ./myapp --read-only
+niral di ask "Add a contact page" --root ./myapp
+niral di chat --root ./myapp
+niral di new myblog "Customize the home page" --template blog
+niral di ask "Explain server blocks" --no-tools
+\`\`\`
+
+Replace the endpoint/model placeholders, then supply the credential privately in
+the named environment variable. Do not paste keys into CLI arguments, project
+files, shell history or chat. \`setup\` stores settings and the variable name in
+\`NIRAL_HOME/di.json\` (default \`~/.niral/di.json\`, mode 0600), never the key.
+It makes no API request and requires \`--replace\` to overwrite existing settings.
+\`status\` stays offline and reports credential availability without printing it.
+DI does not load .env files or use app-side \`NIRAL_AI_*\` settings.
+
+Protocols: \`responses\`, \`chat-completions\`, \`anthropic\`. Explicit auth:
+\`bearer\`, \`api-key\`, \`x-api-key\`, \`none\`. The API base excludes the final
+operation path and query string; use \`--api-version VERSION\` when required.
+HTTPS is required except for loopback endpoints, which can use \`--auth none\`.
+Provider compatibility requires the selected protocol and function calling.
+
+Interactive sessions disclose the destination/model, then request approval for
+each tool with its JSON-escaped arguments. Only \`y\` approves; Enter denies.
+There is no auto-approve flag. \`--read-only\` removes writes, but still requires
+approval. Noninteractive runs require \`ask <prompt> --no-tools\`; no workspace
+content is attached in that mode. Ctrl-C cancels pending work, not completed edits.
+
+The tools list one directory (at most 100 entries), read UTF-8 source/text files
+(at most 24 KiB), and create/replace approved source files. Edits require the hash
+from the latest read; a changed file rejects the edit. Approval displays full new
+content, not a computed diff. Original content/path/hash are backed up as private
+JSON under \`NIRAL_HOME/di-backups/<run-id>/\` before writing; originals for new
+files are null. Backups are retained without pruning or automatic rollback.
+
+Workspace paths cannot escape the selected root. Dot paths, conventional data,
+dependency, build, backup and secret paths, symlinks, binary/unsupported files
+and hard-linked file reads/writes are blocked. NIRAL_HOME is excluded too.
+Supported extensions: .niral, .js, .mjs, .cjs, .ts, .jsx, .tsx, .css, .html, .md,
+.json, .txt, .sql. Gitignore rules are not interpreted. Ordinary source can still
+contain secrets: review every read before sending it to your provider. These
+checks are not an OS sandbox or a guarantee against prompt injection/concurrent
+hostile filesystem changes. The model is instructed to read applicable AGENTS.md
+files, but approval remains your responsibility.
+
+\`chat\` keeps up to eight user/assistant text exchanges and 32 KiB of context in
+memory; no transcripts are saved. Use \`/clear\` or \`/exit\`. Prompts are limited
+to 32 KiB. \`new\` accepts a simple directory name under the current directory,
+requires an empty/new target, and asks before scaffolding minimal/blog/dashboard.
+A later DI failure preserves the scaffold. No shell execution, dependency
+installation, automatic tests, streaming or deployment. Review changes, then run
+\`niral check\`, \`niral test\` and \`niral build\` yourself. Provider retention
+and charges depend on your chosen service; DI makes no blanket privacy guarantee.
 
 ## Testing — niral test
 
@@ -1846,6 +1996,7 @@ Recipes either scaffold code you own, or download one official binary. Never npm
 
 | Recipe | What you get |
 |--------|--------------|
+| \`api\` | native GET/POST Request/Response endpoint at /api |
 | \`auth\` | register/login/account pages — passkeys, 2FA, OAuth, guards |
 | \`tailwind\` | standalone Tailwind binary, wired and watched |
 | \`chat\` | streaming AI chat page |

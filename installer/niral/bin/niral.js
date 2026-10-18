@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 // niral <command> — forwards to the framework at ~/.niral/framework.
 // Available globally after `npm i -g create-niral`, or per-call via `npx niral dev`.
-import { ensureFramework, runNiral } from "../index.js";
+import { runLauncher } from "../index.js";
 
 async function main() {
-	await ensureFramework();
-	return runNiral(process.argv.slice(2));
+	return runLauncher(process.argv.slice(2));
 }
 
 main().then((code) => {

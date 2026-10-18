@@ -19,7 +19,7 @@ served 7.5× faster than Next.js. Auth, jobs, realtime, AI and deploys built in.
 ```sh
 npx create-niral my-app
 cd my-app
-niral dev                             # → http://localhost:5199
+npx niral dev                         # → http://localhost:5199
 ```
 
 No npm? `curl -fsSL https://niral.zyora.club/install.sh | bash` — or go direct:
@@ -32,6 +32,60 @@ node niral/bin/niral.js create my-app
 There is nothing to install. The framework is Node 22+ stdlib, end to end:
 parser, compiler, reactivity, SSR, WebSockets, sessions, crypto, SQLite.
 No account, no cloud, no telemetry — everything runs on your machine.
+
+## CLI Installation And Updates
+
+Use `npx niral <command>` in the current terminal, or open a new terminal after
+scaffolding to use the generated `niral` command. For a global npm install, choose
+either `npm install -g niral` or `npm install -g create-niral`; both provide the
+same executable names. The framework is cached in `~/.niral/framework`, or under
+`NIRAL_HOME` when configured. Keep apps outside the framework installation.
+
+```sh
+npx create-niral myblog --template blog
+npx niral --help
+npx niral --version
+```
+
+The next launcher release adds **explicit framework updates**:
+
+```sh
+npx niral@latest update
+niral update
+```
+
+These commands are prepared locally, not published yet. The first form can
+upgrade an older cached framework without an update command. Normal commands
+reuse the cache; fetching the latest npm launcher alone does not refresh it.
+Updates follow the official repository's `main` branch, not a pinned npm version.
+They do not modify app projects, deploy servers or update global npm packages.
+
+Stop development/build commands before updating. Dirty/non-main/custom-origin Git
+checkouts are refused; failed Git updates never trigger destructive replacement.
+Archive replacements are staged and the previous framework is retained as a backup,
+including any local additions (not merged into the new copy). Source checkouts
+outside the managed installation should be updated with Git.
+
+See the [launcher release checklist](installer/README.md) and
+[package usage](installer/niral/README.md).
+
+## Developer Intelligence
+
+Niral DI runs through the existing CLI, with your exact provider and model:
+
+```sh
+niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
+niral di status
+niral di ask "Explain the routes" --read-only
+niral di chat
+niral di new myblog "Customize the home page" --template blog
+```
+
+Set the named credential variable privately in your terminal. Setup stores no
+key; every workspace tool needs interactive approval. Writes check the current
+file hash and retain external backups. Use `--no-tools` with `ask` for prompt-only
+automation. No shell execution, automatic testing or cloud account requirement.
+Read the [DI command and safety guide](src/di/README.md) before granting file access.
 
 ## One file, whole feature
 

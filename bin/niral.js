@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, resolve, dirname, basename } from "node:path";
 import { compileClient, NiralError } from "../src/index.js";
+import { fileURLToPath } from "node:url";
 
 const [, , cmd, ...args] = process.argv;
 
@@ -32,7 +33,28 @@ function positionals() {
   return out;
 }
 
-if (cmd === "compile") {
+if (cmd === "di") {
+  try {
+    const { runDi } = await import("../src/di/cli.js");
+    process.exitCode = await runDi(args);
+  } catch (error) {
+    console.error(`niral: ${error.message}`);
+    process.exitCode = 1;
+  }
+} else if (!cmd || ["help", "--help", "-h"].includes(cmd) || args.includes("--help") || args.includes("-h")) {
+  printHelp();
+} else if (["version", "--version", "-v"].includes(cmd)) {
+  const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  console.log(`niral ${version}`);
+} else if (cmd === "update") {
+  if (args.length) die("usage: niral update");
+  try {
+    const { updateFramework } = await import("../installer/create-niral/index.js");
+    await updateFramework({ sourceRoot: fileURLToPath(new URL("../", import.meta.url)) });
+  } catch (error) {
+    die(`niral: ${error.message}`);
+  }
+} else if (cmd === "compile") {
   const file = positionals()[0];
   if (!file) die("usage: niral compile <file.niral> [-o out.js] [--runtime path]");
   const out = flag("-o") ?? file.replace(/\.niral$/, ".js");
@@ -371,7 +393,15 @@ if (cmd === "compile") {
     die(`niral · add ${what} failed — ${e.message}`);
   }
 } else {
-  die(`niral v0.1 — commands:
+  die(`niral: unknown command ${JSON.stringify(cmd)}. Run niral --help.`);
+}
+
+function printHelp() {
+  console.log(`niral — commands:
+  --help, -h                      show commands without running them
+  --version, -v                   show installed framework version
+  di <command>                    Developer Intelligence (niral di --help)
+  update                          update managed NIRAL_HOME/framework (not npm or servers)
   create <name>                    new project — zero to running in one command
                                    [--template minimal|blog|dashboard]
   compile <file.niral> [-o out.js] [--runtime path]
@@ -395,7 +425,7 @@ if (cmd === "compile") {
   test [dir]                       run the project's tests/ (ambient test/ok/eq/startApp)
   migrate [dir] [--db path]        apply pending migrations/ (also auto-runs at boot)
   deploy [dir]                     generate deploy/ (systemd + nginx + Dockerfile + script)
-  add <tailwind|sqlite|fonts|image|auth|typescript|chat|llm> [dir]
+  add <api|tailwind|sqlite|fonts|image|auth|typescript|chat|llm> [dir]
   jobs [dir]                       standalone job/cron worker
   lsp                              language server (stdio) — editor integration`);
 }

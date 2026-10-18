@@ -25,6 +25,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import { appendFileSync, existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -60,6 +61,7 @@ export function createShield(opts = {}) {
     lockdownWindowMs: opts.lockdownWindowMs ?? 5 * 60_000,
     lockdownMs: num(process.env.NIRAL_SHIELD_LOCKDOWN_MS, opts.lockdownMs ?? 10 * 60_000),
     trustProxy: process.env.NIRAL_TRUST_PROXY === "1" || opts.trustProxy === true,
+    trustLoopback: process.env.NIRAL_TRUST_PROXY === "loopback" || opts.trustProxy === "loopback",
     dataDir: opts.dataDir ?? join(opts.projectRoot ?? process.cwd(), "data"),
     alert: opts.alert ?? null, // async ({event, detail}) => void
     log: opts.log ?? { warn() {}, error() {}, info() {} },
@@ -73,6 +75,15 @@ export function createShield(opts = {}) {
   const alertsSent = new Map(); // key → lastSentAt (mail throttle)
 
   function ip(req) {
+    if (cfg.trustLoopback) {
+      const peer = req.socket?.remoteAddress;
+      const forwarded = req.headers["x-forwarded-for"];
+      if (["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) &&
+          typeof forwarded === "string" && isIP(forwarded.trim())) {
+        return forwarded.trim();
+      }
+      return peer ?? "?";
+    }
     if (cfg.trustProxy) {
       const xff = req.headers["x-forwarded-for"];
       if (xff) return String(xff).split(",")[0].trim();

@@ -9,6 +9,7 @@ Group=niral
 WorkingDirectory=/opt/niral-demo
 ExecStart=/usr/bin/node /opt/niral/bin/niral.js start /opt/niral-demo -p 8199
 EnvironmentFile=/opt/niral-demo/app.env
+Environment=NIRAL_TRUST_PROXY=loopback
 Restart=always
 RestartSec=2
 NoNewPrivileges=true

@@ -22,6 +22,50 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- DI commands implemented locally on 2026-10-18: `di setup/status/ask/chat/new`.
+  Existing npm launchers forward these; config references an environment variable
+  rather than storing credentials. Per-call approval gates bounded source-file
+  tools, private-path checks, hash-conflict detection and external backups.
+  `--read-only` removes writes; `--no-tools` allows prompt-only automation.
+  Six focused offline CLI groups and full suite240/0 pass; fifteen launcher groups,
+  docs syntax and diagnostics pass. Command/safety docs cover site and npm packages.
+  No shell/test execution, streaming or transcript persistence. Both npm manifests
+  prepared as0.1.3; registry latest remains0.1.2, publication blocked by npm401.
+  Actual packed entrypoint DI help/version checks pass for both five-file archives;
+  local documentation build passed (8ca5f61663cc).
+  Authorized EC2 preflight healthy on cb55f099d593; commit/push/deployment pending.
+
+- Global CLI release prepared locally on 2026-10-18: successful side-effect-free
+  help/version, explicit `niral update` and npm bootstrap updates of older cached
+  frameworks, strict create arguments and custom-home launcher preservation.
+  Git updates reject dirty/non-main/custom-origin installs and never destructively
+  fallback; staged archive replacements preserve the previous directory. No
+  automatic update or source-checkout/server update. Fifteen focused groups pass;
+  real template creation is tested for both packages. Docs, package READMEs,
+  allowlists and release checklist added. Final validation: 15 focused CLI groups,
+  full suite 234/0 with real TypeScript, clean diagnostics/docs syntax, and actual
+  local npm tarballs with five allowed files each. Extracted entry points pass
+  help/version without downloads; Windows runtime remains unverified.
+  Nothing version-bumped, published to npm or deployed in that earlier step.
+
+- Niral DI implementation started locally on 2026-10-18. `src/di/provider.js`
+  normalizes completed tool-calling responses for Chat Completions, Responses
+  and Anthropic while retaining protocol continuation payloads. `src/di/agent.js`
+  adds a bounded, cancellable loop with mandatory host validators and default-deny
+  authorization. Sixteen mock tests pass via `node tests/di.js`, registered in
+  the main harness. Live Azure Responses test passed on 2026-10-18 using exact
+  deployment `gpt-6.1-sol`, API version `2025-04-01-preview`: two turns, one
+  approved synthetic tool call, returned value verified; 245 input/51 output
+  tokens. Key supplied through hidden terminal input and not persisted; no
+  repository content sent or production changes. Other live protocols untested.
+  Contract and cancellation limitations are documented in `src/di/README.md`.
+  Full framework suite with cached TypeScript passes219/0; editor diagnostics
+  clean. Optional external image/live-Postgres coverage remains environment-gated.
+  Separate from app-side `ai`, zero runtime dependencies, exact user-selected
+  endpoint/model/credentials. CLI/workspace tools added above; streaming is pending.
+  DI belongs to the framework; Cloud and browser IDE are optional later work.
+  Existing agent instruction files remain intact; no "first AI framework" claim.
+
 - Navigation upgrade implemented locally on 2026-10-17: shared layout prefixes
   persist, changed route branches dispose, and pages remount with new loader data.
   `pageNavigation()` reports read-only pending/from/to; latest navigation wins
@@ -30,7 +74,23 @@ are historical unless explicitly marked as verified with a date.
   dev/prod layout/no-layout combinations and six real-TypeScript groups pass.
   Final framework suite: 201 passed, 0 failed; docs syntax and editor checks clean.
   User authorized navigation commit, push and deployment to the existing EC2
-  site on 2026-10-17; publication and deployment are in progress.
+  site on 2026-10-17; feature d8b4971 pushed and release206194d9f600 activated.
+  Integrity50/50, origin/public health and docs200; app/nginx/watchdog active.
+
+- Shield correction authorized 2026-10-18 after scanner probes banned nginx's
+  shared loopback identity for 15 minutes. Local fix supports
+  `NIRAL_TRUST_PROXY=loopback` with single-IP validation; EC2 nginx resolves
+  CF-Connecting-IP only for official Cloudflare networks and overwrites XFF.
+  Public docs allow search/AI crawling; no user-agent security bypass.
+  Full local suite203/0; deployed with checkpoint
+  `/root/niral-upgrade-checkpoints/20261018-shield-visitor-ip`. Live synthetic
+  attacker banned while other visitor/watchdog200; spoofed proxy headers ignored.
+  Real visitor identity confirmed through Cloudflare. All services active; env/data
+  preserved. Security guide and updated proxy-mode doctor checks published;
+  docs releasecb55f099d593 integrity50/50, origin/public health200. Prior release
+  206194d9f600 retained. Public docs200 with browser/search/AI user agents;
+  robots/sitemap200. No commit/push for this correction. Refresh Cloudflare's
+  trusted CIDR list in deploy/ec2/nginx.conf when its published networks change.
 
 - Historical local PATH setup: `export PATH="$HOME/homebrew/bin:$PATH"`.
 - Build docs from this root: `node bin/niral.js build apps/docs`.

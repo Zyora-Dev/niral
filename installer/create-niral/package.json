@@ -1,15 +1,16 @@
 {
   "name": "create-niral",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Create a niral app with one command — the zero-dependency full-stack framework by ZyoraLabs.",
   "bin": {
     "create-niral": "bin/create-niral.js",
     "niral": "bin/niral.js"
   },
   "type": "module",
+  "files": ["bin/", "index.js", "README.md"],
   "engines": { "node": ">=22" },
   "keywords": ["niral", "framework", "fullstack", "zero-dependencies", "ssr"],
-  "homepage": "https://niral.zyora.club",
+  "homepage": "https://niral.site",
   "repository": { "type": "git", "url": "git+https://github.com/Zyora-Dev/niral.git" },
   "license": "MIT",
   "dependencies": {}

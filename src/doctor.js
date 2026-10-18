@@ -107,9 +107,13 @@ export async function runDoctor({ root, security = false } = {}) {
     else add("ok", "Shield enabled (intrusion detection + bans active in production)");
 
     // behind a proxy without trust-proxy → bans would target the proxy's IP
-    if (process.env.NIRAL_TRUST_PROXY !== "1") {
-      add("warn", "NIRAL_TRUST_PROXY not set", "behind nginx/Cloudflare the Shield sees the proxy IP — set NIRAL_TRUST_PROXY=1 so bans hit the real client");
-    } else add("ok", "NIRAL_TRUST_PROXY=1 (Shield reads the real client IP)");
+    if (process.env.NIRAL_TRUST_PROXY === "loopback") {
+      add("ok", "NIRAL_TRUST_PROXY=loopback (only local proxy headers trusted)", "nginx must overwrite X-Forwarded-For with a verified visitor IP");
+    } else if (process.env.NIRAL_TRUST_PROXY === "1") {
+      add("warn", "NIRAL_TRUST_PROXY=1 trusts every peer", "prefer loopback behind local nginx; untrusted clients must not reach an app that trusts their forwarding headers");
+    } else {
+      add("warn", "NIRAL_TRUST_PROXY not configured", "behind local nginx use NIRAL_TRUST_PROXY=loopback and overwrite X-Forwarded-For with a verified visitor IP so bans do not target the shared proxy");
+    }
 
     // secure cookies in production
     if (process.env.NIRAL_SECURE !== "1") add("warn", "NIRAL_SECURE not set", "set NIRAL_SECURE=1 behind HTTPS so session cookies are Secure");

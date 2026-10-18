@@ -1,15 +1,16 @@
 {
   "name": "niral",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Niral — the zero-dependency full-stack framework by ZyoraLabs. This package is a tiny launcher; the framework itself lives at github.com/Zyora-Dev/niral and has zero dependencies.",
   "bin": {
     "niral": "bin/niral.js",
     "create-niral": "bin/create-niral.js"
   },
   "type": "module",
+  "files": ["bin/", "index.js", "README.md"],
   "engines": { "node": ">=22" },
   "keywords": ["niral", "framework", "fullstack", "zero-dependencies", "ssr", "zyoralabs"],
-  "homepage": "https://niral.zyora.club",
+  "homepage": "https://niral.site",
   "repository": { "type": "git", "url": "git+https://github.com/Zyora-Dev/niral.git" },
   "license": "MIT",
   "dependencies": {}

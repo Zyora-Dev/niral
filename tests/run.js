@@ -11,6 +11,9 @@ import { signal, derived, effect, root, batch } from "../src/runtime/signals.js"
 import { registerApiTests } from "./api-routes.js";
 import { registerInferenceTests } from "./check-inference.js";
 import { registerFormTests } from "./form-actions.js";
+import { registerDiTests } from "./di.js";
+import { registerCliTests } from "./cli.js";
+import { registerDiCliTests } from "./di-cli.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -27,6 +30,9 @@ function test(name, fn) {
 registerApiTests(test);
 registerInferenceTests(test);
 registerFormTests(test);
+registerDiTests(test);
+registerCliTests(test);
+registerDiCliTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {
@@ -5157,6 +5163,63 @@ test("shield: probes ban after strikes, bans block, audit chain is tamper-eviden
   lines[0] = JSON.stringify(first);
   writeFileSync(file, lines.join("\n") + "\n");
   ok(!verifyAuditChain(dir).ok, "tampering with the audit log breaks the hash chain");
+});
+
+test("shield: trusted loopback isolates attackers and allows crawlers without trusting bot names", async () => {
+  const { createShield } = await import("../src/server/shield.js");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "niral-shield-proxy-"));
+  const shield = createShield({ dataDir: dir, trustProxy: "loopback", lockdownBans: 100 });
+  const request = (peer, forwarded, url = "/docs", agent = "Googlebot") => ({
+    url, method: "GET", socket: { remoteAddress: peer },
+    headers: { "x-forwarded-for": forwarded, "user-agent": agent },
+  });
+  try {
+    const proxy = "::ffff:127.0.0.1";
+    shield.inspect(request(proxy, "192.0.2.10", "/.env"));
+    shield.inspect(request(proxy, "192.0.2.10", "/wp-login.php"));
+    eq(shield.inspect(request(proxy, "192.0.2.10")).status, 403, "attacker banned despite crawler user-agent");
+    for (const agent of ["Googlebot", "bingbot", "GPTBot", "ClaudeBot", "Mozilla/5.0"]) {
+      eq(shield.inspect(request(proxy, "192.0.2.11", "/docs", agent)), null, "clean visitor allowed: " + agent);
+    }
+    eq(shield.inspect(request(proxy, undefined, "/@niral/health")), null, "watchdog remains unbanned");
+    shield.inspect(request("192.0.2.20", "192.0.2.11", "/.env"));
+    shield.inspect(request("192.0.2.20", "192.0.2.12", "/wp-login.php"));
+    eq(shield.inspect(request("192.0.2.20", "192.0.2.13")).status, 403, "direct peer cannot evade ban with forged header");
+    eq(shield.inspect(request(proxy, "192.0.2.11")), null, "forged victim address remains unbanned");
+    for (const peer of ["127.0.0.1", "::1"]) {
+      eq(shield.inspect(request(peer, "192.0.2.10")).status, 403, "loopback forms resolve same banned visitor");
+    }
+    shield.inspect(request(proxy, "2001:db8::10", "/.env"));
+    shield.inspect(request(proxy, "2001:db8::10", "/wp-login.php"));
+    eq(shield.inspect(request(proxy, "2001:db8::10")).status, 403, "IPv6 visitor banned");
+    eq(shield.inspect(request(proxy, "2001:db8::11")), null, "other IPv6 visitor allowed");
+    eq(shield.inspect(request(proxy, "192.0.2.10, 192.0.2.11")), null, "header lists are not trusted as a verified single IP");
+    eq(shield.inspect(request(proxy, "not-an-ip")), null, "invalid header falls back to peer");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("doctor: recognizes loopback trust and warns about missing or unrestricted proxy trust", async () => {
+  const { runDoctor } = await import("../src/doctor.js");
+  const { mkdtempSync, mkdirSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "niral-doctor-proxy-"));
+  const previous = process.env.NIRAL_TRUST_PROXY;
+  try {
+    mkdirSync(join(dir, "routes"));
+    for (const [mode, level] of [["loopback", "ok"], ["1", "warn"], ["0", "warn"]]) {
+      process.env.NIRAL_TRUST_PROXY = mode;
+      const result = await runDoctor({ root: dir, security: true });
+      eq(result.checks.find(check => check.name.startsWith("NIRAL_TRUST_PROXY")).level, level, "proxy mode " + mode);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.NIRAL_TRUST_PROXY;
+    else process.env.NIRAL_TRUST_PROXY = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("shield: lockdown freezes writes but keeps reads after sustained attack", async () => {

@@ -1,5 +1,132 @@
 # Niral Progress
 
+## 2026-10-18: DI Commands (Local, Release In Progress)
+
+- Added `niral di setup`, `status`, `ask`, `chat` and `new` through the existing
+  framework dispatcher and both npm launchers. No separate package or cloud service.
+- Setup saves exact provider/model/auth settings and only the credential variable
+  name in private `NIRAL_HOME/di.json`; no automatic .env loading or secret storage.
+- Workspace listing/reading/writing requires interactive per-call approval. Reads
+  are bounded, conventional private paths and symlinks are excluded, writes require
+  the current hash and save original content under `NIRAL_HOME/di-backups`.
+- Read-only and prompt-only modes, bounded in-memory chat, cancellation, terminal
+  control stripping and real template scaffolding are wired. No arbitrary shell,
+  automatic tests, streaming, automatic rollback or transcript persistence.
+- Six focused offline DI CLI groups pass, including both npm entrypoints,
+  approval denial, backup/conflict protection, path escapes and chat/scaffolding.
+  Fixed macOS canonical-path alias handling for a not-yet-created DI home.
+- CLI/site/package documentation now covers the commands and safety limits.
+  Full regression suite passed **240/0** with real TypeScript; final permission,
+  hash-type and cancellation guards pass the six focused DI CLI groups.
+  Fifteen launcher groups, documentation syntax and editor diagnostics pass.
+- Both npm manifests prepared as **0.1.3** after registry versions confirmed
+  0.1.0 through 0.1.2 only. Publication blocked on npm login (whoami returned 401);
+  no key/token was requested through chat and no package was published.
+- Actual 0.1.3 tarballs each contain exactly the five allowlisted files;
+  extracted entrypoints pass DI help and version checks. Local docs build passed
+  (release8ca5f61663cc). Whitespace check and fifteen launcher groups pass.
+- Authorized EC2 read-only preflight: Node22.23.3, nginx/app/watchdog active,
+  health200 on release cb55f099d593. Commit/push, checkpoint and deployment pending.
+  No live provider request or production change in this step.
+
+## 2026-10-18: Global CLI Update Preparation (Local)
+
+- Framework help and version commands now exit successfully without executing
+  project commands; unknown commands fail clearly. Help includes the API recipe.
+- Both npm launchers expose `update` before forwarding to an older cached CLI;
+  installed framework CLI restricts updates to the managed `NIRAL_HOME/framework`.
+- Git installs require a clean official-origin main checkout and fast-forward
+  updates; Git failures never fall back to destructive archive replacement.
+  New downloads are staged and CLI syntax-checked, archive replacements retain
+  the full previous directory, and symlink/concurrent installations are refused.
+- Scaffolder validates arguments/templates before downloads, forwards failures,
+  and preserves custom install paths in generated launchers. Both package copies
+  are kept identical; no automatic network refresh on ordinary cached commands.
+- Fifteen focused offline CLI groups pass, including real creation of all three
+  templates through both packages, existing-project preservation, and coverage of
+  every dispatcher command/recipe in the CLI documentation.
+- Added npm package READMEs, explicit package file allowlists, local release
+  checklist and expanded getting-started/CLI docs. Update commands are marked
+  as source previews until publication. Windows runtime behavior is not verified.
+- Final full suite with the existing TypeScript cache: **234 passed, 0 failed**.
+  Documentation syntax and editor diagnostics pass. Optional image-transcoding
+  and live-Postgres checks remain environment-gated.
+- Actual local npm tarballs verified for both unchanged 0.1.2 packages: exactly
+  five allowlisted files each, zero dependencies, extracted help/version commands
+  succeed without framework installation. Temporary artifacts were removed.
+- No npm publication, version bump, Git commit/push or production deployment.
+  DI commands and workspace tools remain a separate unfinished milestone.
+
+## 2026-10-18: Niral DI Foundation (Local)
+
+- Added independent, zero-dependency DI adapters for Chat Completions, Responses
+  and Anthropic Messages. Explicit endpoint/model/auth configuration supports
+  compatible services, Azure API keys and host-supplied renewable bearer tokens.
+- Shared loop requires explicit host validators and default-deny authorization;
+  preflights whole batches and enforces turn/call/result limits and a total
+  deadline. Sequential tools receive cancellation signals; no automatic retries,
+  unrestricted shell, filesystem tools or automatic transcript persistence.
+- Sixteen deterministic DI tests pass (`node tests/di.js`), now registered in
+  the main harness: three-protocol round trips, native state/usage, multiple
+  calls, refusals, unsafe/incomplete output rejection, validation/approval,
+  limits, cancellation/timeouts and credential-safe transport/tool errors.
+- Internal API and limitations documented in `src/di/README.md`. Host validators
+  enforce arguments; JSON Schema is only the provider-facing description.
+  Cancellation cannot roll back or forcibly stop arbitrary host tool code.
+- Full framework regression suite with cached TypeScript: **219 passed, 0 failed**
+  (`NIRAL_TSC="$PWD/.niral/lib/typescript/typescript.js" npm test`). Editor
+  diagnostics clean for DI modules and test files. Optional cwebp/live-Postgres
+  checks remain environment-gated; provider tests use mocks, not live services.
+- Live Azure Responses smoke test passed with user-selected deployment
+  `gpt-6.1-sol` and API version `2025-04-01-preview`: two model turns, one
+  validated/authorized synthetic tool execution, final answer verified against
+  its random return value. Usage: 245 input tokens, 51 output tokens. Used the
+  existing adapters/loop without code changes; no repository content sent.
+- API key entered through a hidden terminal prompt, never written to disk or
+  printed, and removed from the temporary shell variable after the test.
+  Application-side `ai` and its environment variables are unchanged. No
+  production changes, commits or pushes. Other provider live tests remain pending.
+- CLI setup/chat/new-project commands, workspace tools and streaming are not
+  implemented yet. DI is a framework feature;
+  Cloud is an optional future add-on, not a prerequisite or the current focus.
+
+## 2026-10-18: Shield Visitor Isolation
+
+- Diagnosed a 15-minute scanner-triggered ban of nginx's loopback address;
+  all visitors and watchdog probes shared that identity. Ban expired naturally.
+- Added `NIRAL_TRUST_PROXY=loopback`: only loopback peers may supply a single
+  valid visitor IP. Direct-peer spoofed headers and malformed lists are ignored.
+- EC2 nginx trusts `CF-Connecting-IP` only from Cloudflare's official IPv4/IPv6
+  networks (retrieved from its published endpoints), and overwrites forwarding
+  headers with the resolved address. Service enables loopback-only trust.
+- Public robots rules remain allow-all with a sitemap. Shield uses request
+  behavior, not user-agent names; claiming to be a crawler never bypasses bans.
+- Final local suite: **203 passed, 0 failed**, including attacker/visitor/watchdog
+  isolation, direct-header spoofing, IPv6, crawler behavior and proxy diagnostics.
+  `niral doctor --security` recognizes loopback-only trust and warns about legacy
+  unrestricted trust. Editor, documentation syntax and whitespace checks clean.
+- Deployed with user approval; checkpoint:
+  `/root/niral-upgrade-checkpoints/20261018-shield-visitor-ip` preserves nginx,
+  systemd unit, Shield source, environment and previous release pointer.
+  nginx syntax, systemd validation and remote Node22 isolation checks passed.
+  All services active; running process confirms loopback-only trust. Environment
+  is byte-identical and release206194d9f600 remains active; data preserved.
+- Live reserved attacker IP192.0.2.241 banned; other visitor and watchdog200.
+  nginx ignores spoofed XFF/CF headers from untrusted peers. The first nginx
+  test used fetch with a Host override and hit the default server404; explicit
+  node:http Host routing passed. Synthetic ban audit records are preserved;
+  the later documentation restart cleared in-memory bans as designed.
+  A normal public request logged the visitor's
+  address, not loopback. Forged Cloudflare-header request was rejected before origin.
+- Public homepage, health, robots and sitemap200. Routing guide200 with browser,
+  Googlebot, bingbot, GPTBot and ClaudeBot user agents (not proof of indexing).
+  Security guide and doctor module published after adding source backups to the
+  checkpoint. Docs release **cb55f099d593** built as app user; integrity50/50
+  passed before restart. All services active; origin/public health200, Shield
+  enabled with no lockdown or active bans at final verification. Environment
+  unchanged; prior release retained. Updated Security guide200 for all five
+  tested user agents. No Git commit/push or npm publication in this correction.
+
 ## 2026-10-17: State-Preserving Navigation (Verified Locally)
 
 - Navigation responses are version-guarded across fetch and module loading.
@@ -15,8 +142,17 @@
 - Final full regression recheck: **201 passed, 0 failed**, with real TypeScript.
   Documentation syntax, editor diagnostics and whitespace checks are clean.
   Optional external image-tool and live Postgres checks remain environment-gated.
-- User authorized commit, push and deployment to the existing EC2 site on
-  2026-10-17. Publication and checkpointed deployment are in progress.
+- User authorized commit, push and deployment on 2026-10-17. Feature committed
+  and pushed as `d8b4971`. EC2 preflight: Node22.23.3, all three services active,
+  health200 on release `76cdffd10467`. Private checkpoint saved at
+  `/root/niral-upgrade-checkpoints/20261017-d8b4971` (source, env, previous pointer).
+  Allowlisted transfer completed preserving ownership, env and data. All five
+  focused form/runtime groups and six real-TypeScript groups pass on EC2;
+  docs syntax and environment byte comparison pass. Built release `206194d9f600`
+  as the app user; integrity50/50 clean and environment unchanged. Activated;
+  nginx, app and watchdog active. Origin/public health, homepage and routing
+  documentation verified200. Live browser navigation smoke was inconclusive
+  because a sidebar link was outside the viewport; local Chromium coverage passed.
 
 ## 2026-10-17: Refresh Upgrade Published
 
