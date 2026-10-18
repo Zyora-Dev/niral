@@ -29,9 +29,16 @@ are historical unless explicitly marked as verified with a date.
   `--read-only` removes writes; `--no-tools` allows prompt-only automation.
   Six focused offline CLI groups and full suite240/0 pass; fifteen launcher groups,
   docs syntax and diagnostics pass. Command/safety docs cover site and npm packages.
-  No shell/test execution, streaming or transcript persistence. Both npm manifests
-  prepared as0.1.3; registry latest remains0.1.2. User restored npm authentication
-  (whoami zyoralabs), final package/docs checks pass, publication in progress.
+  No shell/test execution, streaming or transcript persistence. Both npm packages
+  published as0.1.3 after user restored authentication (whoami zyoralabs).
+  Both latest tags confirm0.1.3; exact registry records return200 with matching
+  inspected checksums. Final package/docs checks pass.
+  Fresh registry installs pass DI/help/version/config/cache, scaffolding/build/test
+  and Git updates. Published launcher upgrades pre-DI1d41d44 archive with backup.
+  Final docs releasebbc96b5529dd deployed after checkpoint20261018-npm013-cbf06d2,
+  integrity50/50 and unchanged env. All services active, NRestarts0, public
+  home/CLI/health200; browser confirms release wording and all DI commands.
+  Previous7bd11bf2707e retained. Npm publication and docs deployment complete.
   Actual packed entrypoint DI help/version checks pass for both five-file archives;
   local documentation build passed (8ca5f61663cc).
   Release source d2cf087 committed/pushed to main with matching remote revision.

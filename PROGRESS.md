@@ -1,6 +1,6 @@
 # Niral Progress
 
-## 2026-10-18: DI Commands (Local, Release In Progress)
+## 2026-10-18: DI Commands Published and Deployed
 
 - Added `niral di setup`, `status`, `ask`, `chat` and `new` through the existing
   framework dispatcher and both npm launchers. No separate package or cloud service.
@@ -20,8 +20,8 @@
   hash-type and cancellation guards pass the six focused DI CLI groups.
   Fifteen launcher groups, documentation syntax and editor diagnostics pass.
 - Both npm manifests prepared as **0.1.3** after registry versions confirmed
-  0.1.0 through 0.1.2 only. Publication blocked on npm login (whoami returned 401);
-  no key/token was requested through chat and no package was published.
+  0.1.0 through 0.1.2 only. Publication was initially blocked on npm login
+  (whoami returned 401); no key/token was requested through chat.
 - Actual 0.1.3 tarballs each contain exactly the five allowlisted files;
   extracted entrypoints pass DI help and version checks. Local docs build passed
   (release8ca5f61663cc). Whitespace check and fifteen launcher groups pass.
@@ -45,7 +45,24 @@
 - User completed npm login; whoami confirms zyoralabs, and 0.1.3 remains unused
   for both packages. Removed source-preview notices in release documentation;
   fifteen CLI groups, docs syntax/diagnostics and five-file package checks pass.
-  Publication is in progress; neither 0.1.3 package is published yet.
+  Release guidance pushed as cbf06d2. Npm accepted publication of niral@0.1.3
+  (five files, shasum6a4bbea6d2d0f8254684e608a6448b0addc12b04).
+  Npm also accepted create-niral@0.1.3
+  (five files, shasumf2219dec0451b8a3f25197d086918b5c1775b3f6).
+  Both exact registry versions return200 with matching checksums. Fresh registry
+  installs in disposable homes pass help/version, DI setup/status with private
+  config, cache reuse, real minimal scaffold/build/test (1/0 each), and explicit
+  Git update to cbf06d2. Published launcher upgrades a real pre-DI archive from
+  1d41d44 and preserves its backup. No provider calls or user-cache edits.
+- Both npm latest tags now resolve to **0.1.3**. Final documentation deployment
+  checkpoint: /root/niral-upgrade-checkpoints/20261018-npm013-cbf06d2 (content,
+  private env and previous pointer). Only docs content transferred; env unchanged.
+  Built as niral, integrity50/50 passed, release **bbc96b5529dd** activated.
+  nginx/app/watchdog active, NRestarts0, startup/request logs healthy; public
+  home, CLI guide and health return200 on the new release. Browser verifies
+  all five commands, launcher0.1.3 wording and removal of source-preview notice.
+  Previous7bd11bf2707e retained. Npm publication and documentation deployment
+  complete; Windows and additional live-provider compatibility remain untested.
 
 ## 2026-10-18: Global CLI Update Preparation (Local)
 

@@ -2,8 +2,12 @@
 
 The two npm packages are self-contained launchers, not the framework runtime.
 They download `Zyora-Dev/niral` from `main`; the website deployment is independent.
-Both package manifests are prepared as 0.1.3. Npm authentication was restored on
-2026-10-18 and the registry confirmed 0.1.3 is unused; publication is in progress.
+Both packages were published as 0.1.3 on 2026-10-18. Exact registry version records
+return 200 with checksums matching the inspected five-file packages.
+Both latest tags resolve to 0.1.3. Fresh isolated registry installs pass DI/help,
+configuration, scaffolding/build/test, cache reuse and explicit updates, including
+a pre-DI archive upgrade with backup preservation. Live docs release bbc96b5529dd
+passes integrity and public health checks. Windows remains unverified.
 Do not treat a local version bump or a website deployment as npm publication.
 
 ## Validate Locally
