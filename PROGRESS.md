@@ -25,9 +25,24 @@
 - Actual 0.1.3 tarballs each contain exactly the five allowlisted files;
   extracted entrypoints pass DI help and version checks. Local docs build passed
   (release8ca5f61663cc). Whitespace check and fifteen launcher groups pass.
+- Release source committed and pushed to main as **d2cf087**; remote revision
+  matches local HEAD. Unrelated AGENTS.md, CLAUDE.md and .kiro changes excluded.
 - Authorized EC2 read-only preflight: Node22.23.3, nginx/app/watchdog active,
-  health200 on release cb55f099d593. Commit/push, checkpoint and deployment pending.
-  No live provider request or production change in this step.
+  health200 on release cb55f099d593. Private checkpoint completed at
+  /root/niral-upgrade-checkpoints/20261018-di-d2cf087 (source, env, current pointer).
+- Committed source staged at /home/ubuntu/niral-di-release.v4YGWL: Node22 passes
+  16 provider/agent, six DI CLI and fifteen launcher groups. Allowlisted source,
+  installer packages and docs content copied without deletes or ownership changes;
+  installed syntax/DI help pass and app.env remains byte-identical to checkpoint.
+  No live provider request was made.
+- EC2 docs built as niral and activated as **7bd11bf2707e**, after integrity50/50
+  passed with no tampering and env byte comparison passed. App restarted and
+  watchdog restored; nginx/app/watchdog active, NRestarts0, request logs healthy.
+  Public home, /docs/cli and /@niral/health return200 with the new release;
+  browser rendered-text assertions confirm all five DI commands. Initial raw-HTML
+  command matching was unsuitable for highlighted code; rendered checks passed.
+  Previous release cb55f099d593 retained. Npm publication remains the only release
+  blocker: user must complete npm login; neither 0.1.3 package has been published.
 
 ## 2026-10-18: Global CLI Update Preparation (Local)
 
