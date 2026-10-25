@@ -36,7 +36,7 @@ import { createWorkerPool } from "../server/workers.js";
 import { createLimiter } from "../server/ratelimit.js";
 import { loadRecipe, spawnTailwindWatch } from "../add/tailwind.js";
 import { componentCss } from "../compiler/style.js";
-import { createDevtools, localDevtoolsRequest } from "./devtools.js";
+import { createDevtools, localDevtoolsRequest, clientSourceLocations } from "./devtools.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PATH = "/@niral/runtime/index.js";
@@ -68,14 +68,15 @@ export function errorPayload(e) {
 }
 
 /** Compile a .niral file for the dev server, wrapping the export for HMR. */
-export function compileForDev(source, urlPath) {
-  const { code } = compileClient(source, {
+export function compileForDev(source, urlPath, editor = null) {
+  const { code, ast } = compileClient(source, {
     filename: urlPath,
     runtime: RUNTIME_PATH,
   });
   // Wrap the default export so every live instance registers with the HMR client.
   const marker = "export default function Component(__target, __props = {}) {";
   if (!code.includes(marker)) return code; // future codegen shape — serve as-is
+  const locations = urlPath.endsWith(".niral") ? clientSourceLocations(source, ast, code) : {};
   return (
     code.replace(marker, "function Component(__target, __props = {}) {") +
     `
@@ -88,6 +89,7 @@ export default function __NiralHot(__target, __props = {}) {
 }
 __NiralHot.__build = Component.__build;
 __NiralHot.__ssr = Component.__ssr;
+if (typeof window !== "undefined") window.__NIRAL_HMR__?.errors?.register(${JSON.stringify(urlPath)}, ${JSON.stringify({ lines: locations, editor })});
 `
   );
 }
@@ -597,6 +599,9 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     if (urlPath === "/@niral/client.js") {
       return send(res, 200, "text/javascript; charset=utf-8", readFileSync(join(FRAMEWORK_DIR, "dev", "client.js")));
     }
+    if (urlPath === "/@niral/devtools-errors.js") {
+      return send(res, 200, MIME[".js"], readFileSync(join(FRAMEWORK_DIR, "dev", "devtools-errors.js")));
+    }
     if (urlPath.startsWith("/@niral/runtime/")) {
       const file = join(FRAMEWORK_DIR, "runtime", urlPath.slice("/@niral/runtime/".length));
       if (!inside(join(FRAMEWORK_DIR, "runtime"), file) || !existsSync(file)) return send(res, 404, "text/plain", "not found");
@@ -654,7 +659,8 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     if (ext === ".niral" || ext === ".jsx" || ext === ".tsx") {
       const source = readFileSync(file, "utf8");
       try {
-        return send(res, 200, "text/javascript; charset=utf-8", compileForDev(source, urlPath));
+        const editor = localDevtoolsRequest(req) ? `vscode://file${pathToFileURL(file).pathname}` : null;
+        return send(res, 200, "text/javascript; charset=utf-8", compileForDev(source, urlPath, editor));
       } catch (e) {
         if (e instanceof NiralError) return send(res, 200, "text/javascript; charset=utf-8", errorModule(errorPayload(e)));
         throw e;

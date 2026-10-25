@@ -35,9 +35,10 @@ childProcess.spawnSync = (command, args, options) => {
   if (scenario === "archive" || scenario === "network-failure" || scenario === "no-git") return { status: 1, stdout: "", stderr: "no git" };
   if (args[0] === "--version") return success("git fixture");
   if (args[0] === "status") return success(scenario === "dirty" ? " M edited.js" : "");
-  if (args[0] === "branch") return success(scenario === "branch" ? "custom" : "main");
+  if (args[0] === "branch") return success(scenario === "branch" ? "custom" : scenario === "pinned" ? "" : "main");
   if (args[0] === "remote") return success(scenario === "origin" ? "https://example.invalid/custom.git" : "https://github.com/Zyora-Dev/niral.git");
-  if (args[0] === "rev-parse") return success("fixture-revision");
+  if (args[0] === "rev-parse") return success(process.env.FIXTURE_REVISION || "fixture-revision");
+  if (args[0] === "checkout") return scenario === "checkout-failure" ? { status: 1, stderr: "invalid pin" } : success();
   if (args[0] === "pull") {
     if (scenario === "pull-failure") return { status: 1, stdout: "", stderr: "simulated failure" };
     writeFileSync(join(options.cwd, "updated"), "yes");
@@ -50,7 +51,7 @@ childProcess.spawnSync = (command, args, options) => {
   throw new Error("Unexpected Git operation");
 };
 https.get = (url, callback) => {
-  appendFileSync(process.env.FIXTURE_CALLS, "download\\n");
+  appendFileSync(process.env.FIXTURE_CALLS, "download " + url + "\\n");
   const request = new EventEmitter();
   request.destroy = (error) => { request.emit("error", error); request.emit("close"); };
   process.nextTick(() => {
@@ -246,6 +247,78 @@ export function registerCliTests(test) {
       assert.deepEqual(manifest.files, ["bin/", "index.js", "README.md"]);
       assert.ok(readFileSync(installer(name, "README.md"), "utf8").includes("npx niral@latest update"));
     }
+  });
+
+  test("framework pins persist, reject implicit switches and preserve failed updates", () => {
+    const ref = "a".repeat(40);
+    for (const name of packages) withInstallation(({ framework, home, env, execute }) => {
+      writeFramework(env.FIXTURE_DOWNLOAD);
+      const entry = installer(name, "bin/niral.js");
+      const installed = execute(entry, ["update"], { NIRAL_REF: ref, FIXTURE_REVISION: ref });
+      assert.equal(installed.status, 0, installed.stderr);
+      assert.equal(readFileSync(join(home, ".framework-ref"), "utf8").trim(), ref);
+      mkdirSync(join(framework, ".git"));
+      assert.equal(execute(entry, ["check"], { NIRAL_REF: "main" }).status, 1);
+      const updated = execute(entry, ["update"], { FIXTURE_SCENARIO: "pinned", FIXTURE_REVISION: ref });
+      assert.equal(updated.status, 0, updated.stderr);
+      const failed = execute(entry, ["update"], { NIRAL_REF: "v9.9.9", FIXTURE_SCENARIO: "checkout-failure" });
+      assert.equal(failed.status, 1);
+      assert.equal(readFileSync(join(home, ".framework-ref"), "utf8").trim(), ref);
+      assert.equal(readFileSync(join(framework, "bin", "niral.js"), "utf8"), fixtureCli);
+      assert.equal(execute(entry, ["update"], { NIRAL_REF: "../../invalid" }).status, 1);
+      const unpinned = execute(entry, ["update"], { NIRAL_REF: "main" });
+      assert.equal(unpinned.status, 0, unpinned.stderr);
+      assert.equal(existsSync(join(home, ".framework-ref")), false);
+    });
+  });
+
+  test("archive framework pins use the requested commit URL", () => {
+    const ref = "b".repeat(40);
+    for (const name of packages) withInstallation(({ home, root, env, execute }) => {
+      writeFramework(env.FIXTURE_DOWNLOAD);
+      const archive = join(root, "fixture.tgz");
+      assert.equal(spawnSync("tar", ["-czf", archive, "-C", root, "download"]).status, 0);
+      const result = execute(installer(name, "bin/niral.js"), ["update"], { NIRAL_REF: ref, FIXTURE_SCENARIO: "archive", FIXTURE_ARCHIVE: archive });
+      assert.equal(result.status, 0, result.stderr);
+      assert.ok(readFileSync(join(root, "calls"), "utf8").includes(`/tar.gz/${ref}`));
+      assert.equal(readFileSync(join(home, ".framework-ref"), "utf8").trim(), ref);
+    });
+  });
+
+  test("shell installer shares safe updates, quoting and backup preservation", () => {
+    const shell = fileURLToPath(new URL("../install.sh", import.meta.url));
+    assert.equal(readFileSync(shell, "utf8"), readFileSync(new URL("../apps/docs/install.sh", import.meta.url), "utf8"));
+    if (process.platform === "win32") return;
+    for (const scenario of ["archive", "network-failure", "dirty"]) withInstallation(({ root, home, framework, env }) => {
+      writeFramework(framework);
+      writeFileSync(join(framework, "private-data"), "preserve");
+      if (scenario === "dirty") mkdirSync(join(framework, ".git"));
+      writeFramework(env.FIXTURE_DOWNLOAD);
+      const archive = join(root, "fixture.tgz");
+      assert.equal(spawnSync("tar", ["-czf", archive, "-C", root, "download"]).status, 0);
+      const bin = join(root, "fake-bin");
+      mkdirSync(bin);
+      writeFileSync(join(bin, "curl"), `#!${process.execPath}\nconst fs = require("node:fs"); const args = process.argv.slice(2); fs.copyFileSync(process.env.FIXTURE_BOOTSTRAP, args[args.indexOf("-o") + 1]);\n`, { mode: 0o755 });
+      const shellEnv = {
+        ...env, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: `--import=data:text/javascript,${encodeURIComponent(offlineLoader)}`,
+        FIXTURE_BOOTSTRAP: installer("niral", "index.js"), FIXTURE_SCENARIO: scenario, FIXTURE_ARCHIVE: archive,
+      };
+      const result = spawnSync("bash", [shell], { cwd: root, encoding: "utf8", timeout: 15000, env: { ...shellEnv, NIRAL_REF: scenario === "archive" ? "c".repeat(40) : "main" } });
+      assert.equal(result.status, scenario === "archive" ? 0 : 1, result.stderr);
+      if (scenario === "archive") {
+        const backup = readdirSync(home).find(entry => entry.startsWith("framework-backup-"));
+        assert.equal(readFileSync(join(home, backup, "framework", "private-data"), "utf8"), "preserve");
+        assert.ok(readFileSync(join(root, ".zshrc"), "utf8").includes("custom"));
+        writeFileSync(join(framework, "bin", "niral.js"), "throw new Error('old CLI must not handle update');");
+        const updated = spawnSync("sh", [join(home, "bin", "niral"), "update"], { encoding: "utf8", timeout: 15000, env: shellEnv });
+        assert.equal(updated.status, 0, updated.stderr);
+        assert.equal(readFileSync(join(home, ".framework-ref"), "utf8").trim(), "c".repeat(40));
+        assert.equal(readFileSync(join(framework, "bin", "niral.js"), "utf8"), fixtureCli);
+      } else {
+        assert.equal(readFileSync(join(framework, "private-data"), "utf8"), "preserve");
+        assert.equal(existsSync(join(root, ".zshrc")), false);
+      }
+    });
   });
 
   test("CLI documentation covers every dispatcher command and add recipe", () => {

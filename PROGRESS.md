@@ -1,5 +1,58 @@
 # Niral Progress
 
+## 2026-10-25: Release Reliability And Launcher Update (In Progress)
+
+- User authorized the three release-reliability fixes, npm publication, and a
+  source commit/push including pending Devtools tracing. No website deployment.
+- Build now writes into disposable staging, includes framework and generated
+  output in release identity, verifies existing releases instead of replacing
+  them, and cleans failed staging. Four focused tests pass: identical rebuild,
+  injected copy failure, changed framework input and tampered-release refusal.
+- Both shell installers now use the npm updater's locking, validation, backups
+  and custom-home launcher handling. `NIRAL_REF` supports persisted full commit
+  SHAs or version tags, with explicit `main` to unpin. Eighteen offline launcher
+  checks pass, including real shell entry-point success/failure preservation.
+- Added `npm run test:release`, immutable-build regressions in the main harness,
+  Node 22/24 CI with Postgres/image gates, and corrected the Node engine to >=22.
+  Combined release validation passes, including docs browsers, Devtools, main
+  Chromium and all four dev/prod form/navigation combinations. Local Postgres/image
+  gates were unconfigured; CI execution is not yet verified. Package allowlists
+  passed. A follow-up shell regression confirms updates bypass older pinned CLIs.
+- Registry discovery found both packages at 0.1.3; manifests now prepare 0.1.4.
+  Documentation records pins, defaults, backups and the release gate. Publication
+  and source push remain pending; no production changes.
+- Final 0.1.4 release gate passes: 252 main checks, 15 focused Node tests, 10
+  Chromium scenarios, and all four form/navigation combinations. Actual five-file
+  tarballs install offline into disposable homes and scaffold/build/test against
+  the current source. SHA1: niral `68beefcd85c902a7429c341f2f2c0c75ec8bdb20`;
+  create-niral `965bda2d83ca7e336c37d3e50db5af3aff982c0a`.
+- User completed terminal login; `npm whoami` now verifies `zyoralabs`.
+  Source commit/push and both npm publications are pending. No production deployment.
+
+## 2026-10-25: Full-Stack Error Tracing (Verified, Local Only)
+
+- Added local-only opaque response IDs, per-call RPC correlation and browser
+  error/rejection/runtime capture. Caught, concurrent and streamed failures retain
+  exact server links; network failures remain unlinked. Synchronous event-handler
+  attribution stores only type/sequence, never values, targets or keys.
+- Added an Errors tab with grouped counts, latest 20 occurrences per group,
+  request navigation, source links, search, clear and keyboard-accessible tabs.
+  Browser history is bounded to 100 groups and remains in its originating tab.
+  Messages, stacks, arguments, responses and queries are not retained.
+- Source links are deliberately partial: unique unchanged `.niral` script lines
+  map exactly; transformed/duplicate lines, templates, JSX/TSX and unknown frames
+  remain unresolved. No server source or full server exception stacks are shipped.
+  Async-boundary actions are unattributed, never guessed from timing.
+- Verification: 7 focused Node tests, 245 framework checks and 10 Chromium
+  scenarios passed. Existing optional environment gates remain. Browser tests
+  cover production exclusion, actual action/request correlation, repeated errors,
+  stream/network failures, source links, privacy, clear/focus and 320/390/768/1440px
+  layouts. Desktop/mobile screenshots reviewed; editor diagnostics clean.
+- Disposable preview restarted at http://localhost:51644 with current code;
+  page, protected inspector, tracker module and matching response ID verified.
+- No runtime dependencies added. This change is uncommitted, unpushed and not
+  deployed; previous publication/deployment records below are historical.
+
 ## 2026-10-25: Devtools (Verified, Not Deployed)
 
 - Added request-scoped route/layout/loader and RPC metadata tracing, capped at

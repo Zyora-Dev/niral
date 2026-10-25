@@ -13,12 +13,24 @@
 
 export function rpc(moduleId, fn, args) {
   if (typeof window === "undefined") return new Promise(() => {});
-  return fetch("/@niral/rpc", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-niral-rpc": "1" },
-    body: JSON.stringify({ module: moduleId, fn, args }),
-  }).then(async (res) => {
-    if (res.headers.get("x-niral-stream") === "1") return ndjsonStream(res, fn);
+  const trace = window.__NIRAL_HMR__?.errors?.rpc();
+  let request;
+  try {
+    request = fetch("/@niral/rpc", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-niral-rpc": "1" },
+      body: JSON.stringify({ module: moduleId, fn, args }),
+    });
+  } catch (error) {
+    trace?.fail(error);
+    throw error;
+  }
+  return request.then(async (res) => {
+    trace?.response(res);
+    if (res.headers.get("x-niral-stream") === "1") {
+      const stream = ndjsonStream(res, fn);
+      return trace ? trace.stream(stream) : stream;
+    }
     let data;
     try {
       data = await res.json();
@@ -33,7 +45,7 @@ export function rpc(moduleId, fn, args) {
       throw err;
     }
     return data.result;
-  });
+  }).catch(error => { trace?.fail(error); throw error; });
 }
 
 /** NDJSON lines → async iterable of chunk values. */

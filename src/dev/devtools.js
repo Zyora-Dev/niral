@@ -1,6 +1,23 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { relative, sep } from "node:path";
 import { AuthRequiredError } from "../server/rpc.js";
+
+export function clientSourceLocations(source, ast, code) {
+  if (!ast.script) return {};
+  const originals = new Map();
+  const first = source.slice(0, ast.script.start).split("\n").length;
+  source.slice(ast.script.start, ast.script.end).split("\n").forEach((line, index) => {
+    const text = line.trim();
+    if (text.length > 2) originals.set(text, originals.has(text) ? null : first + index);
+  });
+  const lines = {};
+  code.split("\n").forEach((line, index) => {
+    const original = originals.get(line.trim());
+    if (original) lines[index + 1] = original;
+  });
+  return lines;
+}
 
 export function localDevtoolsRequest(req) {
   if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) return false;
@@ -25,7 +42,8 @@ export function createDevtools(root) {
 
   function run(req, res, task) {
     if (!localDevtoolsRequest(req) || (req.url.startsWith("/@niral/") && req.url.split("?")[0] !== "/@niral/rpc")) return task();
-    const record = { id: ++sequence, time: new Date().toISOString(), kind: "request", method: req.method, route: "(unmatched)", layouts: [], loads: [], failure: null };
+    const record = { id: ++sequence, requestId: randomUUID(), time: new Date().toISOString(), kind: "request", method: req.method, route: "(unmatched)", layouts: [], loads: [], failure: null };
+    res.setHeader("x-niral-trace", record.requestId);
     const start = performance.now();
     let finished = false;
     const finish = aborted => {

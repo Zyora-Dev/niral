@@ -14,6 +14,10 @@ asserting the things only a real browser can prove:
 - **client-side navigation** works
 - local Devtools filters, loader/RPC details, pause/clear/refresh, keyboard focus,
   mobile bounds and icon loading work; the inspector is absent from production
+- the Errors tab captures browser errors, rejections and contained runtime errors;
+    caught/concurrent/streamed RPCs join exact server traces, network failures stay
+    unlinked, click attribution and verified source links work, repeated errors
+    group, sensitive values stay absent, and error history can be cleared
 
 ## Run
 
@@ -24,13 +28,16 @@ npm test
 npm run test:forms
 ```
 
-To run only the inspector scenario from this folder:
+To run only the inspector scenarios from this folder:
 
 ```sh
 NIRAL_BROWSER_FILTER=Devtools npm test
 ```
 
-The scenario builds a disposable fixture, not the documentation website.
+These scenarios build disposable fixtures, not the documentation website. The
+error scenario deliberately throws test errors; unexpected page errors still fail
+the test. It checks 320/390/768/1440px layouts and saves desktop/mobile screenshots
+in the system temporary directory.
 
 The framework itself never depends on Playwright — this folder has its own
 `package.json`, exactly like `bench/`. Keeps the zero-dependency promise intact.

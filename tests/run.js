@@ -14,6 +14,7 @@ import { registerFormTests } from "./form-actions.js";
 import { registerDiTests } from "./di.js";
 import { registerCliTests } from "./cli.js";
 import { registerDiCliTests } from "./di-cli.js";
+import { registerBuildReleaseTests } from "./build-releases.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -33,6 +34,7 @@ registerFormTests(test);
 registerDiTests(test);
 registerCliTests(test);
 registerDiCliTests(test);
+registerBuildReleaseTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {

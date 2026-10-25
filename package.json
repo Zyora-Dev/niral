@@ -5,9 +5,10 @@
   "type": "module",
   "bin": { "niral": "./bin/niral.js" },
   "license": "UNLICENSED",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "test:release": "node tests/release.js"
   },
   "dependencies": {}
 }

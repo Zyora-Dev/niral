@@ -14,7 +14,6 @@ import { get } from "node:https";
 
 export const NIRAL_HOME = resolve(process.env.NIRAL_HOME || join(homedir(), ".niral"));
 const FRAMEWORK = join(NIRAL_HOME, "framework");
-const TARBALL = "https://codeload.github.com/Zyora-Dev/niral/tar.gz/refs/heads/main";
 const REPO = "https://github.com/Zyora-Dev/niral.git";
 
 function download(url, dest) {
@@ -59,9 +58,9 @@ function commandError(label, result) {
   return new Error(`${label} failed: ${detail}`);
 }
 
-async function installFromTarball(stage) {
+async function installFromTarball(stage, ref) {
   const tgz = join(stage, "niral.tgz");
-  await download(TARBALL, tgz);
+  await download(`https://codeload.github.com/Zyora-Dev/niral/tar.gz/${ref === "main" ? "refs/heads/main" : encodeURIComponent(ref)}`, tgz);
   const target = join(stage, "framework");
   mkdirSync(target);
   const extracted = spawnSync("tar", ["-xzf", tgz, "-C", target, "--strip-components=1"], { encoding: "utf8", timeout: 120000 });
@@ -72,7 +71,14 @@ async function installFromTarball(stage) {
 /** Download the framework to ~/.niral/framework (git if available, tarball otherwise). */
 export async function ensureFramework({ update = false } = {}) {
   if (Number(process.versions.node.split(".")[0]) < 22) throw new Error("Niral requires Node.js 22 or newer");
-  if (existsSync(join(FRAMEWORK, "bin", "niral.js")) && !update) return FRAMEWORK;
+  const pinFile = join(NIRAL_HOME, ".framework-ref");
+  const previousRef = existsSync(pinFile) ? readFileSync(pinFile, "utf8").trim() : "main";
+  const ref = process.env.NIRAL_REF ?? previousRef;
+  if (!/^(?:main|[a-f0-9]{40}|v\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?)$/.test(ref)) throw new Error("NIRAL_REF must be main, a full lowercase commit SHA, or a v-prefixed version tag");
+  if (existsSync(join(FRAMEWORK, "bin", "niral.js")) && !update) {
+    if (ref !== previousRef) throw new Error("framework pin differs from the installed version; run niral update with NIRAL_REF set");
+    return FRAMEWORK;
+  }
   mkdirSync(NIRAL_HOME, { recursive: true });
   const lock = join(NIRAL_HOME, ".framework-install-lock");
   try {
@@ -95,31 +101,45 @@ export async function ensureFramework({ update = false } = {}) {
         return result.stdout.trim();
       };
       if (git(["status", "--porcelain", "--untracked-files=all"])) throw new Error("framework checkout has local changes; preserve them before updating");
-      if (git(["branch", "--show-current"]) !== "main") throw new Error("framework checkout is not on main; update it manually with Git");
+      const branch = git(["branch", "--show-current"]);
+      if (branch !== "main" && !(previousRef !== "main" && branch === "")) throw new Error("framework checkout is not on main or a managed pin; update it manually with Git");
       if (![REPO, REPO.replace(/\.git$/, "")].includes(git(["remote", "get-url", "origin"]))) throw new Error("framework origin differs from the official repository; update it manually with Git");
-      const previous = git(["rev-parse", "HEAD"]);
-      git(["pull", "--ff-only", "origin", "main"]);
-      console.log(`niral: framework ${git(["rev-parse", "--short", "HEAD"])} (previous ${previous})`);
-      return FRAMEWORK;
+      if (ref === "main" && previousRef === "main") {
+        const previous = git(["rev-parse", "HEAD"]);
+        git(["pull", "--ff-only", "origin", "main"]);
+        console.log(`niral: framework ${git(["rev-parse", "--short", "HEAD"])} (previous ${previous})`);
+        return FRAMEWORK;
+      }
     }
     stage = mkdtempSync(join(NIRAL_HOME, ".framework-stage-"));
     const target = join(stage, "framework");
     let installed = false;
     if (hasGit()) {
-      const cloned = spawnSync("git", ["clone", "-q", "--depth", "1", "--branch", "main", REPO, target], {
+      const args = ref === "main" ? ["clone", "-q", "--depth", "1", "--branch", "main", REPO, target] : ["clone", "-q", "--no-checkout", REPO, target];
+      const cloned = spawnSync("git", args, {
         encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       });
       installed = !cloned.error && cloned.status === 0;
+      if (installed && ref !== "main") {
+        const checkedOut = spawnSync("git", ["checkout", "--detach", ref], { cwd: target, encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+        if (checkedOut.error || checkedOut.status !== 0) throw commandError("pinned framework checkout", checkedOut);
+        if (/^[a-f0-9]{40}$/.test(ref)) {
+          const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: target, encoding: "utf8", timeout: 10000 });
+          if (revision.status !== 0 || revision.stdout.trim() !== ref) throw new Error("pinned framework revision did not match the requested commit");
+        }
+      }
       if (!installed) {
         rmSync(target, { recursive: true, force: true });
         console.warn("niral: Git download unavailable; trying the framework archive...");
       }
     }
-    if (!installed) await installFromTarball(stage);
+    if (!installed) await installFromTarball(stage, ref);
     const manifest = JSON.parse(readFileSync(join(target, "package.json"), "utf8"));
     if (manifest.name !== "niral" || !existsSync(join(target, "src", "index.js"))) throw new Error("download is not a Niral framework");
     const checked = spawnSync(process.execPath, ["--check", join(target, "bin", "niral.js")], { encoding: "utf8", timeout: 10000 });
     if (checked.error || checked.status !== 0) throw commandError("downloaded CLI validation", checked);
+    const stagedPin = join(stage, "ref");
+    if (ref !== "main") writeFileSync(stagedPin, ref + "\n");
     let backup;
     if (entry) {
       backup = join(mkdtempSync(join(NIRAL_HOME, "framework-backup-")), "framework");
@@ -127,12 +147,15 @@ export async function ensureFramework({ update = false } = {}) {
     }
     try {
       renameSync(target, FRAMEWORK);
+      if (ref === "main") rmSync(pinFile, { force: true });
+      else renameSync(stagedPin, pinFile);
     } catch (error) {
+      if (existsSync(FRAMEWORK)) renameSync(FRAMEWORK, target);
       if (backup) renameSync(backup, FRAMEWORK);
       throw error;
     }
     if (backup) console.log(`niral: previous framework preserved at ${backup}`);
-    console.log(`niral: framework ${manifest.version} ready`);
+    console.log(`niral: framework ${manifest.version} ready (${ref})`);
     return FRAMEWORK;
   } finally {
     if (stage) rmSync(stage, { recursive: true, force: true });
@@ -150,11 +173,12 @@ export async function updateFramework({ sourceRoot } = {}) {
 export async function runLauncher(args) {
   if (args[0] === "update") {
     if (args.length === 2 && ["--help", "-h"].includes(args[1])) {
-      console.log("usage: niral update\nUpdates NIRAL_HOME/framework from main; does not update npm packages or deploy apps.");
+      console.log("usage: niral update\nUpdates NIRAL_HOME/framework using its saved NIRAL_REF (default main); does not update npm packages or deploy apps.");
       return 0;
     }
     if (args.length !== 1) throw new Error("usage: niral update");
     await updateFramework();
+    if (existsSync(join(NIRAL_HOME, "bin", process.platform === "win32" ? "niral.cmd" : "niral"))) installLauncher();
     return 0;
   }
   if (!args.length || ["help", "--help", "-h"].includes(args[0])) {
@@ -179,7 +203,23 @@ export async function runLauncher(args) {
 export function installLauncher() {
   const binDir = join(NIRAL_HOME, "bin");
   mkdirSync(binDir, { recursive: true });
-  const frameworkCli = join(FRAMEWORK, "bin", "niral.js");
+  const launcherDir = join(NIRAL_HOME, "launcher");
+  mkdirSync(launcherDir, { recursive: true });
+  writeFileSync(join(launcherDir, "index.mjs"), readFileSync(new URL(import.meta.url)));
+  const frameworkCli = join(launcherDir, "run.mjs");
+  writeFileSync(frameworkCli, `import { ensureFramework, runLauncher, runNiral } from "./index.mjs";
+try {
+  const args = process.argv.slice(2);
+  if (args[0] === "update") process.exitCode = await runLauncher(args);
+  else {
+    await ensureFramework();
+    process.exitCode = runNiral(args);
+  }
+} catch (error) {
+  console.error(error.message);
+  process.exitCode = 1;
+}
+`);
   const shim = join(binDir, process.platform === "win32" ? "niral.cmd" : "niral");
   if (process.platform === "win32") {
     writeFileSync(shim, `@echo off\r\nset "NIRAL_HOME=${NIRAL_HOME.replaceAll("%", "%%")}"\r\n"${process.execPath.replaceAll("%", "%%")}" "${frameworkCli.replaceAll("%", "%%")}" %*\r\n`);

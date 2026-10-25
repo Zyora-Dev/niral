@@ -22,6 +22,32 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Release reliability work approved 2026-10-25: user explicitly authorized npm
+  publication plus source commit/push including Devtools tracing, not a website
+  deployment. Immutable staged builds and framework/output-aware hashes pass four
+  focused checks. Shell/npm safety parity and persisted `NIRAL_REF` pins pass 18
+  offline launcher checks, including direct updates of older pinned CLIs. Combined
+  release gate passes locally; Node 22/24 CI added but not yet run. Postgres/image
+  gates were unconfigured locally. Root Node requirement is now >=22. Registry
+  discovery found both launchers at 0.1.3; local 0.1.4 manifests/publication pending.
+- Final 0.1.4 gate passes: 252 main checks, 15 focused Node tests, 10 Chromium
+  scenarios, four form/navigation combinations, actual five-file package installs
+  and isolated scaffold/build/test against current source. User completed npm
+  login; `npm whoami` verifies `zyoralabs`. No source commit/push or package
+  publication yet; no production deployment.
+
+- Full-stack error tracing verified locally (2026-10-25), not committed or
+  deployed: Errors tab records redacted browser/rejection/runtime/RPC failures,
+  grouped into 100 bounded groups with 20 recent occurrences each. Opaque local
+  response IDs join exact server traces across concurrent and streamed calls.
+  Event attribution covers synchronous handlers only. VS Code links cover unique
+  unchanged `.niral` script lines; transformed/duplicate lines and templates are
+  unresolved, not guessed. No server source, messages, stacks or payloads are
+  retained in browser error history. Seven focused Node tests, framework245 and
+  browser10 pass; responsive screenshots reviewed and production exclusion tested.
+  Disposable preview refreshed at http://localhost:51644; page/API/tracker and
+  response-to-trace correlation verified against the running process.
+
 - Devtools verified locally (2026-10-25): request-scoped, 100-record metadata
   buffer with loopback/Host/origin/forwarded-header restrictions; no payloads,
   raw URLs, dynamic values, headers or error content. Shadow-DOM panel provides
@@ -29,8 +55,9 @@ are historical unless explicitly marked as verified with a date.
   Four collector/HTTP tests pass, including auth redirects and loader/stream
   failures; framework245/browser9 pass with existing environment gates. Desktop
   and mobile captures reviewed; production launcher/endpoints absent. Preview:
-  http://localhost:51644. No dedicated form-action spans or browser-error causal
-  tracing yet. Source committed as `f89e484`; user authorized GitHub publication
+  http://localhost:51644. That initial checkpoint excluded browser-error tracing;
+  dedicated form-action spans remain outside this inspector. Source committed as
+  `f89e484`; user authorized GitHub publication
   to `Zyora-Dev/niral` on `main`. Local agent/editor settings excluded. README
   updated; no production deployment or npm publication for Devtools.
 

@@ -35,18 +35,25 @@ The launcher downloads the framework from the official
 Subsequent commands reuse that framework; `npx create-niral@latest` selects the
 latest npm launcher but does not refresh a cached framework.
 
-Use launcher 0.1.3 or newer for an explicit framework update:
+Use launcher 0.1.4 for explicit framework updates and persisted revision pins:
 
 ```sh
 npx niral@latest update
 ```
 
 After the framework update, `niral update` works through the direct launcher too.
-Updates follow the framework repository's `main` branch, independently of npm
-package versions. They do not update app source, npm packages or running servers.
+Updates follow `main` by default, independently of npm package versions.
+Set `NIRAL_REF` to a reviewed full lowercase 40-character commit SHA or existing
+`v`-prefixed version tag for an explicit install/update. The selection persists in
+`NIRAL_HOME/.framework-ref`; plain updates retain it. Full SHAs are reproducible;
+tags can move. Use `NIRAL_REF=main npx niral@latest update` to remove the pin.
+Switching an existing cache requires an explicit update. Generated shell launchers
+keep their updater outside the framework, including when pinning older revisions.
+Updates do not change app source, npm packages or running servers.
 
-Git updates require a clean official-origin `main` checkout and fast-forward only.
-Git failures stop without archive replacement. Archive-based installs are replaced
+Git updates require a clean official-origin `main` checkout or managed detached
+pin. `main` updates are fast-forward only. Git failures stop without archive
+replacement. Pin changes and archive-based installs are replaced
 only after staging and CLI validation; the old directory is retained at the printed
 backup path. Local additions remain in that backup, not merged into the new copy.
 Stop active Niral development/build commands before updating. Backups are not

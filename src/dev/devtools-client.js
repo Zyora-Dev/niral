@@ -12,6 +12,8 @@ export async function mountDevtools() {
   if (document.getElementById("niral-devtools")) return;
   let traces;
   try { traces = await snapshot(); } catch { return; }
+  const tracker = window.__NIRAL_HMR__?.errors;
+  let errors = tracker?.snapshot() ?? [];
   const host = document.createElement("div");
   host.id = "niral-devtools";
   const root = host.attachShadow({ mode: "open" });
@@ -29,6 +31,12 @@ export async function mountDevtools() {
       h2 { font-size: 14px; font-weight: 500; margin: 0; } .connection { margin-left: auto; color: #f2b544; font-size: 12px; }
       .tool { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #656569; border-radius: 4px; padding: 0; flex-shrink: 0; }
       .tool:hover, .launcher:hover { border-color: #f2b544; } .tool:disabled { cursor: default; opacity: .55; }
+      .tabs { display: flex; gap: 20px; padding: 0 16px; border-bottom: 1px solid #48484c; flex-shrink: 0; }
+      .tabs button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 10px 0; }
+      .tabs [aria-selected="true"] { border-color: #f2b544; color: #f2b544; }
+      a, .trace-link { color: #f2b544; overflow-wrap: anywhere; }
+      .trace-link { background: none; border: 0; padding: 0; text-decoration: underline; text-align: left; }
+      a:focus-visible, .tabs button:focus-visible { outline: 2px solid #f2b544; outline-offset: 2px; }
       .toolbar { display: flex; gap: 8px; padding: 12px 16px; background: #242427; border-bottom: 1px solid #48484c; flex-shrink: 0; }
       input, select { min-width: 0; height: 36px; padding: 0 10px; background: #101012; border: 1px solid #656569; border-radius: 4px; } input { flex: 1; width: 100%; } input::placeholder { color: #c4c4c7; }
       select { width: 110px; } .body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
@@ -42,13 +50,14 @@ export async function mountDevtools() {
       dt { color: #e1e1e3; } dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; } .mono { font: 12px/1.6 "SFMono-Regular", Consolas, monospace; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid #38383c; overflow-wrap: anywhere; font-weight: 400; } th { color: #f2b544; } th:last-child, td:last-child { width: 88px; text-align: right; }
       .empty { padding: 24px 16px; color: #e1e1e3; margin: 0; } footer { padding: 8px 16px; border-top: 1px solid #48484c; font-size: 12px; background: #242427; }
-      @media(max-width:650px) { .panel { right: 8px; width: calc(100vw - 16px); } header { gap: 10px; padding: 10px 12px; } header .brand { display: none; } .toolbar { padding: 10px; flex-wrap: wrap; } input { flex-basis: calc(100% - 122px); } .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(100px, 1fr) minmax(100px, 1fr); } .requests { border-right: 0; border-bottom: 1px solid #48484c; } .row { padding: 10px 12px; } .detail { padding: 14px 12px; } }
+      @media(max-width:650px) { .panel { right: 8px; width: calc(100vw - 16px); } header { gap: 10px; padding: 10px 12px; } header .brand { display: none; } .toolbar { padding: 10px; flex-wrap: wrap; } input { flex-basis: calc(100% - 122px); } .toolbar.errors input { flex-basis: 0; } .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } .requests { border-right: 0; border-bottom: 1px solid #48484c; } .row { padding: 10px 12px; } .detail { padding: 14px 12px; } }
     </style>
     <button class="launcher" type="button" aria-label="Open Niral Devtools" title="Open Niral Devtools" aria-expanded="false" aria-controls="panel">${icon("activity")}<span class="brand">niral<span>.</span></span></button>
     <section class="panel" id="panel" role="region" aria-label="Niral Devtools" hidden>
       <header><span class="brand">niral<span>.</span></span><h2>Devtools</h2><span class="connection" role="status">Connected</span><button type="button" class="tool close" aria-label="Close Devtools" title="Close Devtools">${icon("x")}</button></header>
+      <div class="tabs" role="tablist" aria-label="Inspector views"><button type="button" role="tab" id="requests-tab" aria-controls="inspector-view" aria-selected="true" data-view="requests">Requests</button><button type="button" role="tab" id="errors-tab" aria-controls="inspector-view" aria-selected="false" tabindex="-1" data-view="errors">Errors</button></div>
       <div class="toolbar"><input type="search" aria-label="Filter traces" placeholder="Filter traces"><select aria-label="Trace type"><option value="all">All requests</option><option value="route">Routes</option><option value="rpc">RPC</option><option value="failed">Failures</option></select><button type="button" class="tool pause" aria-label="Pause updates" title="Pause updates" aria-pressed="false">${icon("pause")}</button><button type="button" class="tool refresh" aria-label="Refresh traces" title="Refresh traces">${icon("rotate-cw")}</button><button type="button" class="tool clear" aria-label="Clear visible traces" title="Clear visible traces">${icon("trash-2")}</button></div>
-      <div class="body"><div class="requests" aria-label="Requests"></div><section class="detail" aria-label="Request details"></section></div>
+      <div class="body" id="inspector-view" role="tabpanel" aria-labelledby="requests-tab"><div class="requests" aria-label="Requests"></div><section class="detail" aria-label="Request details"></section></div>
       <footer class="count">0 requests</footer>
     </section>`;
   document.body.appendChild(host);
@@ -65,6 +74,8 @@ export async function mountDevtools() {
   let pending = false;
   let timer;
   let selected = null;
+  let selectedError = null;
+  let view = "requests";
   let clearedThrough = 0;
   let signature = "";
   const failed = trace => trace.failure || trace.status >= 400;
@@ -76,6 +87,7 @@ export async function mountDevtools() {
   };
 
   function render() {
+    if (view === "errors") { renderErrors(); return; }
     const query = search.value.toLowerCase();
     const visible = traces.filter(trace => trace.id > clearedThrough && (type.value === "all" || (type.value === "failed" ? failed(trace) : trace.kind === type.value)) && `${trace.route} ${trace.module || ""} ${trace.fn || ""}`.toLowerCase().includes(query)).slice().reverse();
     if (!visible.some(trace => trace.id === selected)) selected = visible[0]?.id ?? null;
@@ -131,10 +143,117 @@ export async function mountDevtools() {
     if (focused) requests.querySelector(`[data-trace="${focused}"]`)?.focus({ preventScroll: true });
   }
 
+  function renderErrors() {
+    const query = search.value.toLowerCase();
+    const visible = errors.filter(error => `${error.name} ${error.kind} ${error.source?.module ?? ""}`.toLowerCase().includes(query));
+    if (!visible.some(error => error.id === selectedError)) selectedError = visible[0]?.id ?? null;
+    const nextSignature = JSON.stringify(["errors", visible, selectedError, traces]);
+    if (signature === nextSignature) return;
+    signature = nextSignature;
+    const focused = root.activeElement?.dataset?.error;
+    requests.replaceChildren();
+    for (const error of visible) {
+      const row = text("button", "", "row failed");
+      row.type = "button";
+      row.dataset.error = error.id;
+      row.setAttribute("aria-pressed", String(error.id === selectedError));
+      const name = text("span", "", "name");
+      name.append(text("strong", error.name), text("small", error.kind.toUpperCase()));
+      row.append(name, text("span", "ERR", "status"), text("span", `${error.count}x`, "duration"));
+      row.title = error.source?.module ?? error.kind;
+      row.addEventListener("click", () => { selectedError = error.id; render(); });
+      requests.append(row);
+    }
+    if (!visible.length) requests.append(text("p", errors.length ? "No matching errors." : "No errors yet.", "empty"));
+    root.querySelector(".count").textContent = `${visible.length} group${visible.length === 1 ? "" : "s"} / ${visible.reduce((total, error) => total + error.count, 0)} occurrences`;
+    root.querySelector(".clear").disabled = !errors.length;
+    detail.replaceChildren();
+    const error = visible.find(entry => entry.id === selectedError);
+    if (error) {
+      detail.append(text("h3", `${error.name} / ${error.kind}`));
+      const fields = document.createElement("dl");
+      for (const [label, value] of [["Count", error.count]]) {
+        fields.append(text("dt", label), text("dd", value, "mono"));
+      }
+      fields.append(text("dt", "Source"));
+      const source = text("dd", "Unresolved", "mono");
+      if (error.source) {
+        source.textContent = `${error.source.module}${error.source.line ? `:${error.source.line}` : " (line unresolved)"}`;
+        if (error.source.editor?.startsWith("vscode://file/")) {
+          const link = text("a", source.textContent);
+          link.href = error.source.editor;
+          link.title = "Open source in VS Code";
+          source.replaceChildren(link);
+        }
+      }
+      fields.append(source);
+      for (const [label, value] of [["First", new Date(error.first).toLocaleTimeString()], ["Latest", new Date(error.last).toLocaleTimeString()]]) {
+        fields.append(text("dt", label), text("dd", value, "mono"));
+      }
+      detail.append(fields);
+      const table = document.createElement("table");
+      table.setAttribute("aria-label", "Error occurrences");
+      const heading = document.createElement("tr");
+      heading.append(text("th", "Action / Time"), text("th", "Request"));
+      const head = document.createElement("thead");
+      head.append(heading);
+      const body = document.createElement("tbody");
+      for (const occurrence of error.occurrences.slice().reverse()) {
+        const row = document.createElement("tr");
+        const action = occurrence.action ? `${occurrence.action.type} #${occurrence.action.id}` : "Unattributed";
+        row.append(text("td", `${action} / ${new Date(occurrence.time).toLocaleTimeString()}`, "mono"));
+        const cell = text("td", occurrence.requestId ? "Unavailable" : "None", "mono");
+        const trace = traces.find(entry => entry.requestId === occurrence.requestId);
+        if (trace) {
+          const link = text("button", `#${trace.id}`, "trace-link");
+          link.type = "button";
+          link.setAttribute("aria-label", `Inspect request ${trace.id}`);
+          link.addEventListener("click", () => { selected = trace.id; clearedThrough = Math.min(clearedThrough, trace.id - 1); type.value = "all"; setView("requests"); root.querySelector('[data-view="requests"]').focus(); });
+          cell.replaceChildren(link);
+        }
+        row.append(cell);
+        body.append(row);
+      }
+      table.append(head, body);
+      detail.append(table);
+    } else detail.append(text("p", "No error selected.", "empty"));
+    if (focused) requests.querySelector(`[data-error="${focused}"]`)?.focus({ preventScroll: true });
+  }
+
+  function setView(next) {
+    view = next;
+    search.value = "";
+    search.placeholder = next === "errors" ? "Filter errors" : "Filter traces";
+    search.setAttribute("aria-label", search.placeholder);
+    type.hidden = next === "errors";
+    root.querySelector(".toolbar").classList.toggle("errors", next === "errors");
+    signature = "";
+    for (const tab of root.querySelectorAll('[role="tab"]')) {
+      const active = tab.dataset.view === next;
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+    }
+    root.querySelector('[role="tabpanel"]').setAttribute("aria-labelledby", `${next}-tab`);
+    requests.setAttribute("aria-label", next === "errors" ? "Errors" : "Requests");
+    detail.setAttribute("aria-label", next === "errors" ? "Error details" : "Request details");
+    render();
+  }
+
+  for (const tab of root.querySelectorAll('[role="tab"]')) {
+    tab.addEventListener("click", () => setView(tab.dataset.view));
+    tab.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      setView(event.key === "Home" ? "requests" : event.key === "End" ? "errors" : view === "errors" ? "requests" : "errors");
+      root.querySelector(`[data-view="${view}"]`).focus();
+    });
+  }
+
   async function refresh() {
     clearTimeout(timer);
     if (pending || !opened || document.hidden) return;
     pending = true;
+    errors = tracker?.snapshot() ?? [];
     try {
       traces = await snapshot();
       if (traces.length && Math.max(...traces.map(trace => trace.id)) < clearedThrough) clearedThrough = 0;
@@ -143,6 +262,7 @@ export async function mountDevtools() {
     } catch { connection.textContent = "Disconnected"; }
     finally {
       pending = false;
+      render();
       if (opened && !paused && !document.hidden) timer = setTimeout(refresh, 1500);
     }
   }
@@ -158,7 +278,11 @@ export async function mountDevtools() {
   launcher.addEventListener("click", () => toggle(!opened));
   root.querySelector(".close").addEventListener("click", () => toggle(false));
   root.querySelector(".refresh").addEventListener("click", refresh);
-  root.querySelector(".clear").addEventListener("click", () => { clearedThrough = Math.max(clearedThrough, ...traces.map(trace => trace.id)); render(); search.focus(); });
+  root.querySelector(".clear").addEventListener("click", () => {
+    if (view === "errors") { tracker?.clear(); errors = []; }
+    else clearedThrough = Math.max(clearedThrough, ...traces.map(trace => trace.id));
+    render(); search.focus();
+  });
   pause.addEventListener("click", () => {
     paused = !paused;
     pause.setAttribute("aria-pressed", String(paused));

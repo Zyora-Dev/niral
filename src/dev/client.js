@@ -9,6 +9,8 @@
  *   clear   → hide the overlay.
  */
 
+import { createErrorTracker } from "/@niral/devtools-errors.js";
+
 const RUNTIME = "/@niral/runtime/index.js";
 
 const hmr = {
@@ -60,6 +62,15 @@ const hmr = {
 window.__NIRAL_HMR__ = hmr;
 
 if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+  hmr.errors = createErrorTracker();
+  addEventListener("error", event => hmr.errors.capture(event.error, { kind: "error" }));
+  addEventListener("unhandledrejection", event => hmr.errors.capture(event.reason, { kind: "rejection" }));
+  for (const type of ["click", "submit", "change", "keydown"]) {
+    addEventListener(type, event => {
+      if (event.composedPath().some(element => element.id === "niral-devtools" || element.id === "niral-error-overlay")) return;
+      hmr.errors.action(type, event);
+    }, true);
+  }
   import("/@niral/devtools.js").then(module => module.mountDevtools()).catch(() => {});
 }
 

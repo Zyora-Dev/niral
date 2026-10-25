@@ -1,33 +1,49 @@
 # Launcher Release Checklist
 
 The two npm packages are self-contained launchers, not the framework runtime.
-They download `Zyora-Dev/niral` from `main`; the website deployment is independent.
-Both packages were published as 0.1.3 on 2026-10-18. Exact registry version records
-return 200 with checksums matching the inspected five-file packages.
-Both latest tags resolve to 0.1.3. Fresh isolated registry installs pass DI/help,
-configuration, scaffolding/build/test, cache reuse and explicit updates, including
-a pre-DI archive upgrade with backup preservation. Live docs release bbc96b5529dd
-passes integrity and public health checks. Windows remains unverified.
+They download `Zyora-Dev/niral` from `main` by default; `NIRAL_REF` selects a
+persisted full commit SHA or existing version tag. The website is independent.
+Version 0.1.4 is prepared locally, not yet published. Registry discovery on
+2026-10-25 found versions 0.1.0 through 0.1.3 for both packages. The previous
+0.1.3 publication and deployment records are historical. Windows remains unverified.
 Do not treat a local version bump or a website deployment as npm publication.
+
+Local 0.1.4 validation passed, including actual tarball installs and isolated
+scaffold/build/test against current source. User completed terminal login on
+2026-10-25; npm authentication verifies `zyoralabs`. Source commit/push remains pending.
 
 ## Validate Locally
 
 From the repository root:
 
 ```sh
-node tests/cli.js
-node tests/di.js
-node tests/di-cli.js
-NIRAL_TSC="$PWD/.niral/lib/typescript/typescript.js" npm test
-npm pack ./installer/niral --dry-run --ignore-scripts --json
-npm pack ./installer/create-niral --dry-run --ignore-scripts --json
+npm run test:release
 ```
 
-The full-suite command uses this workspace's existing TypeScript cache; configure
-`NIRAL_TSC` appropriately in another checkout. The CLI suite uses isolated homes
+The gate requires Node 22+, TypeScript (`NIRAL_TSC`, defaulting to this workspace's
+`.niral/lib/typescript/typescript.js`) and Playwright/Chromium installed under
+`tests/browser`. Missing prerequisites fail, not silently skip. In a fresh checkout:
+
+```sh
+npm install --prefix tests/browser --no-package-lock --ignore-scripts
+npm exec --prefix tests/browser -- playwright install chromium
+npm install --prefix tests/browser --no-save --no-package-lock --ignore-scripts typescript@5.7.3
+NIRAL_TSC="$PWD/tests/browser/node_modules/typescript/lib/typescript.js" npm run test:release
+```
+
+The gate runs the framework/CLI/DI suite, immutable build regressions, Devtools,
+docs contact/SEO with browsers enabled, Chromium smoke and form/navigation suites,
+then package allowlist checks. `NIRAL_BROWSER_FILTER` is cleared for release runs.
+Postgres/image gates are reported as unconfigured locally unless
+`NIRAL_TEST_PG_URL` and `NIRAL_CWEBP` are provided. Only use a disposable test
+database. `NIRAL_RELEASE_EXTENDED=1` requires both; checked-in Node 22/24 Linux CI
+provides them along with isolated tooling. CI never publishes or deploys.
+
+The CLI suite uses isolated homes
 and mocked Git/HTTPS responses, plus real archive extraction and template creation.
 It checks argument forwarding, exit codes, source-checkout protection, failed
-updates, backup retention and byte-identical shared launcher files. It also checks
+updates, pin persistence/unpinning, shell entry-point recovery, backup retention
+and byte-identical shared launcher files and shell installer mirrors. It also checks
 that every dispatcher command and recipe appears in the CLI documentation.
 
 Each package must contain only `package.json`, `README.md`, `index.js` and the two

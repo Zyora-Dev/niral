@@ -46,22 +46,37 @@ The generated direct `niral` shim reports the framework version only.
 
 ## Update
 
-Launcher 0.1.3 supports explicit framework updates:
+Launcher 0.1.4 supports explicit framework updates and persisted revision pins:
 
 ```sh
 npx niral@latest update
 ```
 
-This explicitly updates `NIRAL_HOME/framework` from the repository's `main`
-branch, even when the cached framework has no `update` command. After updating,
-the direct `niral update` command is available too. Updates follow `main`, not
-a version-pinned release. Updating the npm launcher alone does not refresh the
-framework; update a globally installed launcher separately with
+This explicitly updates `NIRAL_HOME/framework`, even when the cached framework
+has no `update` command. The default is the repository's `main` branch. Updating
+also refreshes an existing generated shell shim so its updater remains independent
+of older pinned framework code. Updating the npm launcher alone does not refresh
+the framework; update a globally installed launcher separately with
 `npm install -g niral@latest`.
 
-Git installs must be clean, on `main`, and use the official HTTPS origin. Updates
+Set `APPROVED_FRAMEWORK_SHA` to a reviewed full 40-character lowercase commit SHA:
+
+```sh
+NIRAL_REF="$APPROVED_FRAMEWORK_SHA" npx niral@latest update
+niral update
+NIRAL_REF=main npx niral@latest update
+```
+
+The selection is saved in `NIRAL_HOME/.framework-ref`; plain updates retain it.
+Existing `v`-prefixed version tags are also accepted, but tags can move: use a
+full commit SHA for reproducibility. `NIRAL_REF=main` explicitly removes the pin.
+Fresh installations accept the same variable; switching a cached install requires
+an explicit update. npm versions and framework revisions are independent.
+
+Git installs must be clean, on `main` or a managed detached pin, and use the
+official HTTPS origin. `main` updates
 are fast-forward only; a Git failure never replaces the checkout with an archive.
-Non-Git replacements are staged and syntax-checked first; the complete previous
+Pin changes and non-Git replacements are staged and syntax-checked first; the complete previous
 directory is retained at the printed `framework-backup-*/framework` path. Local
 files in that backup are not merged into the new framework. No backups are pruned.
 

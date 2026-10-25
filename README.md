@@ -47,7 +47,7 @@ npx niral --help
 npx niral --version
 ```
 
-Launcher 0.1.3 adds **explicit framework updates**:
+Launcher 0.1.4 provides **explicit framework updates and revision pins**:
 
 ```sh
 npx niral@latest update
@@ -56,17 +56,34 @@ niral update
 
 The first form can upgrade an older cached framework without an update command.
 Normal commands reuse the cache; fetching the latest npm launcher alone does not refresh it.
-Updates follow the official repository's `main` branch, not a pinned npm version.
+Updates follow the official repository's `main` branch by default. Set `NIRAL_REF`
+to a reviewed full lowercase 40-character commit SHA or existing `v`-prefixed tag
+for an explicit installation/update. The selection persists across plain updates;
+use `NIRAL_REF=main npx niral@latest update` to remove it. Tags can move, so use
+full SHAs for reproducibility. Framework pins are independent of npm versions.
 They do not modify app projects, deploy servers or update global npm packages.
 
-Stop development/build commands before updating. Dirty/non-main/custom-origin Git
+Stop development/build commands before updating. Dirty/unmanaged-branch/custom-origin Git
 checkouts are refused; failed Git updates never trigger destructive replacement.
-Archive replacements are staged and the previous framework is retained as a backup,
+Pin changes and archive replacements are staged, and the previous framework is retained as a backup,
 including any local additions (not merged into the new copy). Source checkouts
 outside the managed installation should be updated with Git.
 
 See the [launcher release checklist](installer/README.md) and
 [package usage](installer/niral/README.md).
+
+## Release Validation
+
+`npm run test:release` runs the framework/compiler, installer recovery, immutable
+build, Devtools, docs, Chromium hydration and form/navigation suites, then verifies
+both npm packages contain exactly their five allowed files. It requires isolated
+TypeScript and Playwright/Chromium tooling; setup is in the
+[release checklist](installer/README.md). CI runs Node 22 and 24 with disposable
+Postgres and image-transcoding gates. The command never publishes or deploys.
+
+Builds finish in staging before activation. Release identity includes framework
+source and generated output; identical releases are verified and reused without
+rewriting published files. Failed staging leaves the active release untouched.
 
 ## Local Devtools
 
@@ -76,12 +93,36 @@ patterns, layout/module paths, loader timings, RPC dispatch/total durations, HTT
 statuses and failure categories. Filter requests, select details, pause updates,
 refresh manually or clear the visible list. Escape closes the focused panel.
 
-The server keeps the latest 100 completed traces in memory (up to 32 loader spans
-per trace), shared across local tabs. Clear only hides history in the current
-panel; pause stops polling, not collection. Automatic polling runs only while the
-panel is open, visible and unpaused. Request IDs are local to this server process.
+The **Errors** tab captures browser errors, unhandled promise rejections,
+contained Niral runtime failures and failed RPCs (including caught calls,
+network failures and streamed errors). Groups show a safe error class, source,
+count and timestamps. Each tab retains up to 100 groups with the latest 20
+occurrences per group; grouping uses category, class, source and action type,
+not message text. Browser error history is never uploaded to the server.
 
-Only metadata is recorded: no raw URLs, dynamic parameter values, queries,
+RPC failures link to their exact server trace using an opaque response ID,
+including overlapping requests. Calls started during a click, submit, change
+or keydown handler retain that event's type and local sequence number, never
+its target, text, key or input values. Calls after an async boundary are marked
+unattributed rather than assigned to the most recent interaction. Transport
+failures without a response have no server link; expired traces are unavailable.
+
+Verified `.niral` client script lines link to VS Code. Mapping is conservative:
+only unique, unchanged script lines are mapped; transformed or duplicate lines,
+templates, JSX/TSX and unknown frames may show an unresolved line or source.
+This is not a complete source map or a server exception stack. At most 512
+loaded component maps are retained. Editor links include the local project file
+path; server block source is never sent to the browser.
+
+The server keeps the latest 100 completed traces in memory (up to 32 loader spans
+per trace), shared across local tabs. Clear hides request history in the current
+panel or empties that tab's browser error buffer, depending on the selected view.
+An explicit error-to-request link can reveal a previously cleared request.
+Pause stops display updates, not collection. Automatic polling runs only while
+the panel is open, visible and unpaused. Numeric request IDs are local to the
+server process; opaque correlation IDs also distinguish server restarts.
+
+Only metadata is recorded: no raw request URLs, dynamic parameter values, queries,
 headers, cookies, arguments, results, error messages or stacks. The read-only
 endpoint requires a loopback connection, matching local Host/port, same-origin
 request metadata and an inspector header; forwarded requests are rejected.
@@ -89,9 +130,8 @@ Access through LAN addresses or reverse proxies is unsupported. Do not expose a
 development server publicly. Production builds do not load the inspector or
 provide its endpoints. Icons use the same pinned Lucide CDN as the dev overlays.
 
-This first version covers page/navigation loaders and RPCs, not browser-error
-causal tracing, reactive-state inspection or dedicated form-action spans.
-Run `node --test tests/devtools.js` for the collector and HTTP security tests;
+Reactive-state inspection and dedicated form-action spans are not included.
+Run `node --test tests/devtools.js` for collector, mapping and HTTP security tests;
 see [browser tests](tests/browser/README.md) for UI coverage.
 
 ## Developer Intelligence

@@ -18,7 +18,7 @@
 
 import { chromium } from "playwright";
 import { spawnSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -166,7 +166,8 @@ try {
     try {
       await page.goto(base + "/", { waitUntil: "networkidle" });
       eq(await page.locator("#niral-devtools").count(), 0, "no inspector in production");
-      for (const path of ["/@niral/devtools", "/@niral/devtools.js"]) {
+      eq((await page.request.get(base + "/")).headers()["x-niral-trace"], undefined, "no production trace IDs");
+      for (const path of ["/@niral/devtools", "/@niral/devtools.js", "/@niral/devtools-errors.js"]) {
         eq((await page.request.get(base + path, { headers: { "x-niral-devtools": "1" } })).status(), 404, "production endpoint absent");
       }
       const port = await new Promise(ready => dev.listen(ready));
@@ -224,6 +225,126 @@ try {
     } finally {
       await page.close();
       dev.close();
+    }
+  });
+  await test("Devtools: browser errors, action correlation, source links and redaction", async () => {
+    const source = `<server>
+export async function fail(delay) { await new Promise(resolve => setTimeout(resolve, delay)); throw new Error("private-server-secret"); }
+export async function* stream() { yield "private-chunk"; throw new Error("private-stream-secret"); }
+</server>
+<script>
+function caught() {
+  void fail(0).catch(() => {});
+}
+function concurrent() {
+  void fail(40).catch(() => {});
+  void fail(5).catch(() => {});
+}
+async function streamed() {
+  try { for await (const chunk of await stream()) {} } catch {}
+}
+function browserFailure() {
+  queueMicrotask(() => { throw new TypeError("private-browser-secret"); });
+}
+function rejected() {
+  Promise.reject(new RangeError("private-rejection-secret"));
+}
+function runtimeFailure() {
+  throw new Error("private-runtime-secret");
+}
+</script>
+<h1>Error tracing</h1>
+<button on:click={caught}>Caught RPC</button>
+<button on:click={concurrent}>Concurrent RPCs</button>
+<button on:click={streamed}>Stream RPC</button>
+<button on:click={browserFailure}>Browser error</button>
+<button on:click={rejected}>Rejected promise</button>
+<button on:click={runtimeFailure}>Runtime error</button>`;
+    writeFileSync(join(app, "routes", "trace-errors.niral"), source);
+    const dev = createDevServer({ root: app, port: 0, watch: false });
+    const page = await browser.newPage();
+    const unexpected = [];
+    page.on("pageerror", error => { if (!/^private-(browser|rejection)-secret$/.test(error.message)) unexpected.push(error.message); });
+    try {
+      const port = await new Promise(ready => dev.listen(ready));
+      await page.goto(`http://localhost:${port}/trace-errors?password=private-query`, { waitUntil: "networkidle" });
+      for (let index = 0; index < 2; index++) {
+        await page.getByRole("button", { name: "Caught RPC", exact: true }).click();
+        await page.waitForFunction(count => window.__NIRAL_HMR__.errors.snapshot().some(error => error.kind === "rpc" && error.count === count), index + 1);
+      }
+      const captured = await page.evaluate(() => window.__NIRAL_HMR__.errors.snapshot());
+      eq(captured.length, 1, "repeated caught RPCs grouped");
+      eq(captured[0].source.line, source.split("\n").findIndex(line => line.includes("void fail(0)")) + 1, "original client callsite line");
+      ok(captured[0].occurrences.every(entry => entry.action?.type === "click" && entry.requestId), "click actions and server IDs captured");
+      ok(captured[0].occurrences[0].action.id !== captured[0].occurrences[1].action.id, "actions distinguished");
+      await page.getByRole("button", { name: "Open Niral Devtools" }).click();
+      const panel = page.getByRole("region", { name: "Niral Devtools" });
+      await panel.getByRole("tab", { name: "Errors", exact: true }).click();
+      await panel.getByRole("button", { name: "Pause updates" }).click();
+      await page.waitForFunction(() => document.querySelector("#niral-devtools").shadowRoot.querySelector(".detail a"));
+      const link = panel.getByRole("link");
+      ok((await link.getAttribute("href")).endsWith(`/routes/trace-errors.niral:${captured[0].source.line}`), "source link opens exact original line");
+      const requestLink = panel.getByRole("button", { name: /Inspect request/ }).first();
+      const linkedRequest = await requestLink.textContent();
+      await panel.getByRole("tab", { name: "Requests", exact: true }).click();
+      await panel.getByRole("button", { name: "Clear visible traces" }).click();
+      await panel.getByRole("tab", { name: "Errors", exact: true }).click();
+      await requestLink.click();
+      eq(await panel.getByRole("tab", { name: "Requests", exact: true }).getAttribute("aria-selected"), "true", "request link selects Requests view");
+      ok((await panel.getByLabel("Request details").textContent()).includes("fail"), "linked server failure details");
+      ok((await panel.getByLabel("Request details").textContent()).includes(linkedRequest), "explicit error link restores the exact cleared request");
+      await panel.getByRole("button", { name: "Close Devtools" }).click();
+      await page.getByRole("button", { name: "Concurrent RPCs" }).click();
+      await page.waitForFunction(() => window.__NIRAL_HMR__.errors.snapshot().filter(error => error.kind === "rpc").reduce((count, error) => count + error.count, 0) === 4);
+      await page.getByRole("button", { name: "Stream RPC" }).click();
+      await page.waitForFunction(() => window.__NIRAL_HMR__.errors.snapshot().some(error => error.kind === "rpc-stream"));
+      await page.getByRole("button", { name: "Browser error", exact: true }).click();
+      await page.getByRole("button", { name: "Browser error", exact: true }).click();
+      await page.getByRole("button", { name: "Rejected promise" }).click();
+      await page.getByRole("button", { name: "Runtime error", exact: true }).click();
+      await page.getByRole("alertdialog").waitFor();
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(() => window.__NIRAL_HMR__.errors.snapshot().some(error => error.kind === "rejection"));
+      await page.route("**/@niral/rpc", route => route.abort("failed"));
+      await page.getByRole("button", { name: "Caught RPC", exact: true }).click();
+      await page.waitForFunction(() => window.__NIRAL_HMR__.errors.snapshot().some(error => error.kind === "rpc" && error.occurrences.some(entry => !entry.requestId)));
+      await page.unroute("**/@niral/rpc");
+      const groups = await page.evaluate(() => window.__NIRAL_HMR__.errors.snapshot());
+      ok(groups.some(error => error.kind === "error" && error.count === 2), "global browser errors grouped");
+      ok(groups.some(error => error.kind === "runtime"), "contained runtime error captured");
+      ok(!/private|secret|password/.test(JSON.stringify(groups)), "no error messages, payloads or queries retained");
+      const traces = await (await page.request.get(`http://localhost:${port}/@niral/devtools`, { headers: { "x-niral-devtools": "1" } })).json();
+      const occurrences = groups.flatMap(error => error.occurrences).filter(entry => entry.requestId);
+      eq(occurrences.length, 5, "all HTTP RPC failures retained once");
+      eq(new Set(occurrences.map(entry => entry.requestId)).size, 5, "per-call request identity");
+      ok(occurrences.every(entry => traces.traces.some(trace => trace.requestId === entry.requestId && trace.failure)), "every RPC joins the actual failed server trace");
+      await page.getByRole("button", { name: "Open Niral Devtools" }).click();
+      await panel.getByRole("button", { name: "Refresh traces" }).click();
+      await panel.getByRole("tab", { name: "Errors", exact: true }).click();
+      await panel.getByLabel("Filter errors").fill("TypeError");
+      await panel.locator(".row").filter({ hasText: "2x" }).click();
+      for (const width of [320, 390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        ok(await panel.evaluate(element => element.scrollWidth <= element.clientWidth), `error view fits ${width}`);
+        ok(await panel.locator(".toolbar").evaluate(element => element.querySelector("input").getBoundingClientRect().top === element.querySelector(".clear").getBoundingClientRect().top), `error toolbar stays on one row at ${width}`);
+        if (width === 390 || width === 1440) await page.screenshot({ path: join(tmpdir(), `niral-devtools-errors-${width}.png`) });
+      }
+      ok(!/private|secret|password/.test(await panel.textContent()), "rendered inspector is redacted");
+      await panel.getByRole("tab", { name: "Errors", exact: true }).focus();
+      await page.keyboard.press("ArrowLeft");
+      eq(await panel.getByRole("tab", { name: "Requests", exact: true }).getAttribute("aria-selected"), "true", "keyboard tabs");
+      await page.keyboard.press("ArrowRight");
+      await panel.getByRole("button", { name: "Clear visible traces" }).click();
+      eq(await panel.locator(".row").count(), 0, "error clear");
+      eq(await page.evaluate(() => window.__NIRAL_HMR__.errors.snapshot().length), 0, "error buffer cleared");
+      await page.keyboard.press("Escape");
+      ok(await panel.isHidden(), "Escape closes cleared error panel");
+      eq(unexpected.length, 0, unexpected.join(" | "));
+    } finally {
+      await page.close();
+      dev.close();
+      dev.server.closeAllConnections();
+      rmSync(join(app, "routes", "trace-errors.niral"));
     }
   });
   await test("dev diagnostics: escaped text, clipboard, focus, dismissal and responsive layout", async () => {

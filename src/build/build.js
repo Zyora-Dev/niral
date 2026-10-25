@@ -17,7 +17,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync,
-  cpSync, symlinkSync, renameSync, rmSync,
+  cpSync, symlinkSync, renameSync, rmSync, mkdtempSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve, dirname, relative, sep } from "node:path";
@@ -33,7 +33,7 @@ import { LANG_EXT } from "../server/polyglot.js";
 import { loadRecipe, runTailwindOnce } from "../add/tailwind.js";
 import { transcodeStatic } from "../add/imagetools.js";
 import { componentCss } from "../compiler/style.js";
-import { writeIntegrity } from "../server/integrity.js";
+import { writeIntegrity, hashRelease, checkIntegrity } from "../server/integrity.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
@@ -129,11 +129,15 @@ export function build({ root = ".", out } = {}) {
   for (const rel of [...modules.keys()].sort()) hasher.update(rel).update("\0").update(modules.get(rel).source);
   for (const f of publicFiles) hasher.update(f).update("\0").update(readFileSync(join(dir, f)));
   for (const [rel, source] of [...endpointFiles].sort(([left], [right]) => left.localeCompare(right))) hasher.update(rel).update("\0").update(source);
+  for (const file of staticFiles(FRAMEWORK_DIR)) hasher.update(`framework/${file}`).update("\0").update(readFileSync(join(FRAMEWORK_DIR, file)));
   hasher.update(shell);
-  const hash = hasher.digest("hex").slice(0, 12);
+  let hash = hasher.digest("hex").slice(0, 12);
 
-  const release = join(distDir, "releases", hash);
-  if (existsSync(release)) rmSync(release, { recursive: true }); // rebuild same content = same result
+  mkdirSync(distDir, { recursive: true });
+  const stage = mkdtempSync(join(distDir, ".stage-"));
+  let release = stage;
+  let tmpLink;
+  try {
 
   /* ── write compiled modules + server blocks ── */
   const manifestRoutes = [];
@@ -238,6 +242,15 @@ export function build({ root = ".", out } = {}) {
   // images → responsive .webp variants (no-op without `niral add image --transcode`)
   transcodeStatic(dir, join(release, "static"), staticList);
 
+  const artifacts = hashRelease(stage, { skip: [] }).files;
+  const outputHash = createHash("sha256").update(hash);
+  for (const file of Object.keys(artifacts).sort()) outputHash.update(file).update("\0").update(artifacts[file]);
+  const previousPrefix = `/assets/${hash}/`;
+  hash = outputHash.digest("hex").slice(0, 12);
+  for (const entry of [...manifestRoutes, ...Object.values(manifestLayouts), ...Object.values(manifestSpecial)]) {
+    entry.client = `/assets/${hash}/` + entry.client.slice(previousPrefix.length);
+  }
+
   writeFileSync(
     join(release, "manifest.json"),
     JSON.stringify(
@@ -250,8 +263,18 @@ export function build({ root = ".", out } = {}) {
   /* ── tamper-detection manifest: sha256 of every file in the release ── */
   writeIntegrity(release);
 
+  const destination = join(distDir, "releases", hash);
+  mkdirSync(dirname(destination), { recursive: true });
+  if (existsSync(destination)) {
+    const integrity = checkIntegrity(destination);
+    if (integrity.unavailable || !integrity.ok) throw new Error(`existing release ${hash} failed integrity validation; left unchanged`);
+  } else {
+    renameSync(stage, destination);
+  }
+  release = destination;
+
   /* ── atomic flip: dist/current → releases/<hash> ── */
-  const tmpLink = join(distDir, `.current.${process.pid}.${Date.now()}`);
+  tmpLink = join(distDir, `.current.${process.pid}.${Date.now()}`);
   symlinkSync(join("releases", hash), tmpLink);
   renameSync(tmpLink, join(distDir, "current"));
 
@@ -265,6 +288,10 @@ export function build({ root = ".", out } = {}) {
   }
 
   return { hash, release, routes: manifestRoutes.length + endpoints.length };
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+    if (tmpLink) rmSync(tmpLink, { force: true });
+  }
 }
 
 /** Project files copied verbatim (everything except routes/dist/node_modules/hidden). */

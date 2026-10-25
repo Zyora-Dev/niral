@@ -1907,7 +1907,7 @@ change state; inspect the [security guide](/docs/security) before using them.
 
 ## Framework and launcher updates
 
-Launcher 0.1.3 supports explicit framework updates:
+Launcher 0.1.4 supports explicit framework updates and revision pins:
 
 \`\`\`sh
 npx niral@latest update
@@ -1918,8 +1918,15 @@ The npm form handles updates before calling the cached CLI, so it can upgrade an
 older framework without an update command. The direct form works after that
 framework update. Both update only \`NIRAL_HOME/framework\` (default:
 \`~/.niral/framework\`) from the official repository's \`main\` branch.
-There is no automatic background update or per-command network refresh, and no
-version pinning to the npm launcher version. Git updates print the revision.
+There is no automatic background update or per-command network refresh.
+Set \`NIRAL_REF\` to a reviewed full lowercase 40-character commit SHA or existing
+\`v\`-prefixed version tag on an explicit install/update. The selection persists
+in \`NIRAL_HOME/.framework-ref\`; plain updates retain it. Tags can move, so use
+full commit SHAs for reproducibility. Use
+\`NIRAL_REF=main npx niral@latest update\` to remove the pin. Changing a cached
+installation requires an explicit update. Framework pins are independent of npm
+versions. Generated shell launchers retain their updater outside the framework,
+so older pinned revisions do not need their own update command.
 
 \`npx create-niral@latest\` selects the npm launcher; it does not update an
 already cached framework. Update a globally installed npm launcher separately
@@ -1927,8 +1934,9 @@ with \`npm install -g niral@latest\` or \`npm install -g create-niral@latest\`,
 whichever you installed. Installing both globally can cause executable conflicts.
 
 Stop active Niral development/build commands before updating. Git installs must
-be clean, on \`main\`, and use the official HTTPS origin; fast-forward failures
-stop without an archive fallback. Archive replacements are staged and the old
+be clean, on \`main\` or a managed detached pin, and use the official HTTPS origin;
+fast-forward failures stop without an archive fallback. Pin changes and archive
+replacements are staged and the old
 directory is kept at the printed \`framework-backup-*/framework\` path. Local
 additions remain there, not merged into the new framework. Backups are not pruned.
 Concurrent installers and symlinked framework paths are refused. After an

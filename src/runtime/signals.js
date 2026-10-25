@@ -21,6 +21,7 @@ let signalSink = null; // HMR: collects user signals created during a mount
  */
 export function _reportError(err, where) {
   if (typeof window === "undefined") throw err;
+  window.__NIRAL_HMR__?.errors?.capture(err, { kind: "runtime" });
   console.error(`[niral] error in ${where}:`, err);
   try {
     window.dispatchEvent(
