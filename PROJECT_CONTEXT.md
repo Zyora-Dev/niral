@@ -22,6 +22,208 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Error screens matched to the starter theme (2026-10-25): shared default 404/500
+  pages and compile/runtime overlays now use charcoal/white/saffron gold and pinned
+  Lucide CDN icons. Text labels, diagnostic escaping/redaction, production privacy,
+  custom-page precedence and copy/dismiss/focus behavior retained. Browser suite
+  8 passed with responsive/icon/privacy checks and captures reviewed; focused
+  renderer security/syntax checks and editor diagnostics pass. Disposable preview
+  restarted at http://localhost:49867 (`/missing` for 404). Only the disposable
+  browser-test fixture was built; no website build, deployment or publication.
+
+- Starter palette updated at user request (2026-10-25): charcoal/white/saffron gold
+  with gold original logo mark and Lucide line icons. Supersedes the light/green
+  palette below while retaining its layout. Uses the same pinned Lucide CDN assets
+  as docs, so icons require network access; no npm dependency. Generated compile,
+  four-width browser/image checks and starter interactions pass; captures reviewed.
+  Local preview remains http://localhost:49867; no production build/deployment.
+
+- Starter layout revised locally (2026-10-25) in `src/create.js`: dark project
+  sidebar, light workspace, vertically arranged demos and compact mobile header.
+  Existing interactions and logo retained; static/error pages unchanged. Generated
+  compilation and six-width Chromium layout/interaction checks pass. Current preview
+  http://localhost:49867, `/tmp/niral-preview-cWHKlj/app`. Visual approval pending;
+  no production build or deployment. Supersedes the home layout and preview below.
+
+- Starter and diagnostic redesign completed locally (2026-10-18). `src/create.js`
+  generates the refined home/static pages and copies the original logo. Dev overlays
+  have separate compile/runtime labels, isolated CSS, copy/dismiss controls and
+  keyboard focus management. `src/server/page.js` supplies default 404/500 HTML;
+  custom app error pages still win, production diagnostics stay private, and dev
+  stacks remove encoded generated-server source. Framework245/browser7 passed;
+  final stack redaction separately verified and browser-confirmed. Preview:
+  http://localhost:56885 (`/compile-error`, `/server-error`, `/missing`), disposable
+  files `/tmp/niral-preview-HrU4vg/app`. Newly generated apps only; not distributed
+  or deployed. Existing docs preview 5199 and production were not changed.
+
+- About Us page added locally (2026-10-18), http://localhost:5199/about. Positions
+  Niral JS as ZyoraLabs' flagship framework and explains the compiler/full stack,
+  zHost deployment cloud, self-hosting choice and India origin. Shared navigation
+  and footer link it; AboutPage JSON-LD and full metadata included. Sitemap now has
+  27 pages. SEO tests pass (3); Chromium verifies five widths, images, mobile menu,
+  footer navigation and metadata; desktop/mobile captures reviewed. No deployment.
+
+- Website SEO completed locally (2026-10-18) across 26 pages: 22 guides plus
+  home/DI/contact/changelog. Authored titles/descriptions, visible guide summaries,
+  canonical/social tags, linked breadcrumbs and shared JSON-LD. Initial HTML has
+  full metadata; Seo component synchronizes it after client navigation. Docs hooks
+  provide canonical redirects and 404/noindex for invalid guide slugs. SEO crawl
+  and Chromium navigation checks pass (3 tests); contact tests 4 passed/1 optional
+  browser test skipped. Screenshots reviewed at 390/1440px. Preview refreshed on
+  port 5199; no production build/deployment or private configuration changes.
+- Native head constraint: child component heads are not included in initial SSR;
+  root static page heads use literal values, dynamic guide heads use loader props.
+  Do not replace static head values with client-script constants. Imported content
+  helpers can remain cached in dev; restart the preview after editing them.
+
+- New local `/di` page (2026-10-18) explains Developer Intelligence with approval,
+  provider-data-boundary and write-lifecycle infographics, provider selector,
+  copyable commands and detailed safety/API FAQs. Shared desktop/mobile header
+  highlights DI; footer and sitemap link it. Current DI README is content authority.
+  Chromium verifies selected-provider styling, seven exact command copies and
+  denied feedback, seven FAQs, mobile menu, assets/fonts, hydration, text/page
+  bounds at six widths (320-1920px), home/contact client navigation and sitemap.
+  Desktop/mobile captures reviewed; user approval and production build pending.
+  No dependencies, live provider calls or deployment. Preview: http://localhost:5199/di.
+
+- Contact email sender display name is `Niral.js` (REST `from: { address, name }`).
+  Address still comes from CLOUDFLARE_EMAIL_FROM; focused mocked provider test
+  passes. No live email sent specifically for the display-name change.
+- Cloudflare contact notifications added locally on 2026-10-18. Server-only
+  `sendContact` saves the existing private copy then calls the Email Sending REST
+  API with native fetch, a ten-second timeout and visitor `reply_to`. Recipient:
+  developer@niral.site. Delivered/queued responses succeed; other outcomes report
+  saved-but-not-notified without leaking upstream errors. Private ignored
+  `apps/docs/.env`: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_EMAIL_API_TOKEN (Email Sending:
+  Edit), optional CLOUDFLARE_EMAIL_FROM (default developer@niral.site). Preview task
+  loads that file at startup; restart after credentials change. User populated
+  credentials; initial test failed with HTTP 404 / Cloudflare error 7003. After
+  user correction, one requested retest to info@zyoralabs.com returned HTTP 200
+  and `queued`: live API acceptance verified, final inbox delivery unconfirmed.
+  Preview not restarted for the standalone test; default contact recipient
+  unchanged. Five contact tests pass with mocked Cloudflare
+  and actual JS/no-JS browser submissions. Shared SiteHeader/SiteFooter used by
+  homepage/contact; route markup equality verified. Local only, not deployed.
+
+- Contact Us page added locally on 2026-10-18 at `/contact`, linked in homepage
+  footer and sitemap. Native form actions persist to private `apps/docs/data/contact.db`
+  using `lib/contact.js`; originally storage-only (email integration above). Includes validation,
+  honeypot and one/minute, five/day per-email limits. Matching graphite/white/gold
+  design and original logo; direct email/WhatsApp preserved. Empty textarea text
+  corrected in both SSR renderers and client hydration. Four contact test groups
+  pass, including real Chromium submissions with/without JavaScript and temporary
+  inboxes: `NIRAL_CONTACT_BROWSER=1 node --test tests/docs-contact.js` (browser tooling
+  lives in tests/browser). Without the flag, three Node groups run and browser is
+  skipped. Framework suite: 244 passed. Desktop/mobile screenshots, navigation,
+  assets, hydration and no-overflow checks at 320-1440px pass. Preview:
+  http://localhost:5199/contact. Visual approval pending; not deployed.
+
+- Current homepage footer (2026-10-18) follows the user's supplied Dribbble
+  reference: https://dribbble.com/shots/27425078-Modern-Website-Footer-UI-Design.
+  Rejected ruled-row/contact-panel version is superseded. Black background,
+  four compact navigation columns, divider and centered copyright. Latest request
+  removes the large bottom logo entirely. Only the small `/niral-logo.svg` remains,
+  with its original icon shape in saffron gold (#f2b544) and lettering white via
+  scoped CSS/masking; the shared asset is unchanged. Do not restore the large
+  logo, standalone `n.png` mark or typed NIRAL lettering.
+  Email `developer@niral.site` and WhatsApp `https://wa.me/918940189694` occupy
+  the reference's right-hand area; all 12 navigation destinations preserved.
+  Chromium checks at nine widths from 320-1920px, desktop/mobile screenshots
+  and editor diagnostics pass. Logo correction additionally verified at
+  320/390/768/1440px with desktop/mobile captures. Local visual approval pending at
+  http://localhost:5199/#footer; no full build or deployment.
+
+- Current homepage (2026-10-18) is a complete replacement; both previous layout
+  iterations were rejected and are superseded. Svelte/Next.js references informed
+  a left-aligned brand opening, development strip, working counter/todo code and
+  preview, asymmetric feature grid, consolidated benchmarks/deployment, resources
+  and new footer. Native interactive Niral replaces the static homepage; Geist,
+  graphite, white and saffron gold retained, no runtime dependencies added.
+  Local Chromium passes counter/derived/reset, todo actions, hosting switches,
+  mobile navigation, all 13 linked guides, icons/fonts, and no page/heading/card
+  overflow at 320-1920px. All three copy actions verified with exact clipboard
+  readback plus denied-copy feedback. Desktop/mobile screenshots inspected;
+  editor diagnostics clean. Historical benchmark figures remain qualified, not
+  rerun. Preview http://localhost:5199/; user visual approval and production build
+  pending. No deployment/release; docs/changelog and unrelated work preserved.
+
+- Earlier homepage (now superseded) and changelog refined locally on 2026-10-18 to match the chosen docs
+  theme: self-hosted Geist Sans/Mono, black/graphite, white and saffron #f2b544.
+  VoltJS reference informed the dark surfaces, gold emphasis and code treatment.
+  Prominent Niral hero, clearer full-width sections, restrained feature cards,
+  unframed metrics/scaling and month-based commit timeline. Native details mobile
+  menus; homepage remains static, changelog loader/cache/fallback preserved.
+  Browser screenshots/assets/fonts/navigation, homepage widths320-1920 and
+  changelog390 checked; 56 loaded entries preserved. Diagnostics/whitespace pass.
+  Fixed a literal entity in scaling copy, with browser text verification.
+  Preview http://localhost:5199/. No full build/deployment; visual review pending.
+
+- Current local docs theme (2026-10-18) supersedes the earlier emerald styling:
+  user chose black/graphite gradients, white text and saffron gold (#f2b544).
+  Shared layout tokens cover navigation/search and article UI, including starter
+  kit, code panels, tables and pager. Group titles are white with dividers; accents
+  are restrained. Geist, content and spacing retained. Docs logo uses a scoped
+  monochrome filter; shared asset unchanged. Browser theme-color updated.
+  Desktop/mobile screenshots, 320/390/1440px overflow, search/navigation/drawer and
+  diagnostics verified. No full build/deployment; visual review remains local.
+
+- Documentation uses self-hosted Geist Sans (CSS family "Geist"). On 2026-10-18,
+  extended it to all documentation buttons, inputs and selects; browser checks
+  confirm loaded Geist, with Geist Mono retained for code/prompt preview. Local
+  screenshot and diagnostics verified; no dependencies added or deployment.
+
+- Sidebar hierarchy refined locally on 2026-10-18: section headings are now bold
+  uppercase emerald with fine dividers; link styles and spacing are unchanged.
+  Browser styles/screenshot and file diagnostics verified. Not deployed.
+
+- Local Getting Started agent kit added2026-10-18: compact card with VS Code,
+  JetBrains, Claude Code and Codex logo images; copyable2,755-character Niral prompt
+  and collapsed read-only preview. Content/nav preserved. Copy success and denied
+  clipboard fallback verified with browser stubs; desktop/mobile320-1440 layouts,
+  icon decode and navigation checks pass. Images use version-pinned public CDNs;
+  no packages added. Native inline SVG in page components was observed to become
+  HTML namespace after client navigation; the new copy control uses an SVG image
+  instead. Compiler's client env guard also matches instructional strings, so the
+  prompt says "environment variables". Local only; no deployment or agent execution.
+
+- Follow-up visual feedback rejected the first docs presentation. Latest local
+  correction is sidebar-only: no bullets, consistent36px rows/2px gaps/20px group
+  spacing, active-page indicator, Lucide book-open SVG replacing the CSS placeholder.
+  Native Niral menu, not installed React/shadcn components. All22 links and article
+  content preserved; desktop screenshot and mobile320/390 navigation checks pass,
+  including SVG rendering, active route and drawer close. Styles/fonts/logo load.
+  Editor diagnostics clean. Still awaiting visual acceptance; no deployment/build.
+
+- Docs presentation refined locally on 2026-10-18 in the shared docs layout,
+  slug renderer and Markdown table wrapper. Wider three-column desktop layout,
+  sticky top search, responsive navigation/page outline, clearer typography and
+  section spacing, code headers/copy icons, scrollable tables and page-link cards.
+  Existing content, dark Niral identity, local fonts and zero dependencies retained.
+  Components compile; 22 guides render and 22 preview routes return200; diagnostics
+  and whitespace checks pass. Browser verifies desktop/mobile layouts at320-1920px,
+  navigation, anchors, search/reset, table width and copy feedback. Clipboard
+  readback unverified because the browser permission API is unavailable.
+  Local preview task runs at http://localhost:5199/docs/getting-started. Restart
+  preview after changing project-imported helpers such as lib/md.js to clear cache.
+  Visual review pending; no production build/full-suite rerun, deployment or release.
+
+- Provider-first follow-up on 2026-10-18: setup now offers OpenAI (Responses/bearer),
+  Claude (Messages/x-api-key/version 2023-06-01), Azure OpenAI (v1 Responses/api-key)
+  and Custom (manual settings). Azure accepts resource or /openai/v1 URLs. Exact
+  model/deployment and credential variable stay explicit; no probing or Bedrock
+  adapter. DI10 passes with mocked wire requests and cancellation tests; full
+  suite244/0, docs syntax and whitespace checks pass. No live provider calls.
+  This work and the interactive fix below were subsequently deployed to EC2 as
+  release35d6f8e95a5a; still uncommitted/unpushed and not distributed through npm.
+
+- Local follow-up on 2026-10-18: bare DI setup prompts for exact settings (not
+  secrets), with cancellation and explicit-flag automation preserved. Root bin
+  mapping fixes npx selecting the local framework manifest without an executable.
+  Offline npm exec help, DI8/CLI15 checks and full suite242/0 pass, including
+  readline input/Ctrl-C/EOF. Docs syntax and editor diagnostics are clean.
+  Docs updated; subsequently deployed to EC2 as release35d6f8e95a5a. Still not
+  committed/pushed/published or in the installed user cache.
+
 - DI commands implemented locally on 2026-10-18: `di setup/status/ask/chat/new`.
   Existing npm launchers forward these; config references an environment variable
   rather than storing credentials. Per-call approval gates bounded source-file
@@ -118,6 +320,33 @@ are historical unless explicitly marked as verified with a date.
   not changed as part of relocation.
 
 ## Production Reference
+
+- Website deployment authorized 2026-10-18: updated design, contact, DI, About and
+  SEO, plus canonical `https://niral.site/install.sh` command. Shell/JS and public
+  URL checks pass. Healthy EC2 preflight served `35d6f8e95a5a`. User approved
+  securely adding only three missing Cloudflare email settings after backup;
+  never replace the whole production environment. Settings now added with all
+  prior values verified unchanged. Checkpoint `20261018-website-canonical` saves
+  source/env/old release. Local framework 244/0; local and staged site tests 7 pass,
+  one optional browser skip. Staged production build `b6feb5b537db`, integrity
+  61/61 and all 27 page/installer checks pass. Production activated the same release,
+  integrity 61/61; nginx/app/watchdog active, automatic restart counts zero, startup
+  logs clean. Origin/public health report the new release, public installer hash
+  matches local bytes, and new pages return 200. Live About content browser-verified;
+  full public crawl/navigation interrupted by client TLS/network timeouts, not a
+  completed all-page public check. Running service loaded all three email settings;
+  no live message sent. Existing data/settings and rollback checkpoint preserved.
+  No Git/npm/extension publication. Supersedes local-only website status above.
+
+- Provider presets deployment authorized 2026-10-18: healthy EC2 preflight on
+  releasebbc96b5529dd; private checkpoint20261018T033336Z-di-presets under
+  /root/niral-upgrade-checkpoints preserves affected source, app.env and pointer.
+  Isolated Node22 stage passes16 DI +10 DI CLI +15 launcher groups and docs
+  syntax. Allowlisted source deployed and docs built as niral into35d6f8e95a5a,
+  integrity50/50; old bbc96b5529dd retained, env byte-identical, data untouched.
+  nginx/app/watchdog active with NRestarts0 and clean logs. Origin/public health
+  report new release; home/CLI HTTP200, browser confirms preset guide. Complete;
+  no Git/npm release or installed user-cache update.
 
 - New EC2 deployment authorized 2026-10-17: `ubuntu@13.126.45.97`, local key
   `aws-key/dream.pem` (ignored, mode 600). Node 22.23.3/nginx/UFW provisioned;

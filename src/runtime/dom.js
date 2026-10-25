@@ -73,6 +73,11 @@ function claimEl(tag) {
 }
 
 function claimText(s) {
+  if (s === "" && hTop().parent.localName === "textarea" && hNext() === null) {
+    const node = document.createTextNode("");
+    hTop().parent.appendChild(node);
+    return node;
+  }
   hSettle();
   const f = hTop();
   const c = f.next === f.stop ? null : f.next;

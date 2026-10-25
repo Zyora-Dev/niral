@@ -18,7 +18,7 @@ import { renderComponent, composeComponent } from "./render.js";
 import { callServerFn, pooledCall, authFailure, streamRpc } from "./rpc.js";
 import { satisfiesAuth } from "./auth.js";
 import { newSecret, readSession, sessionCookie } from "./session.js";
-import { assemblePage, assemblePageParts, hydrationScript, renderHead, preloadLinks } from "./page.js";
+import { assemblePage, assemblePageParts, hydrationScript, renderHead, preloadLinks, errorPage } from "./page.js";
 import { streamBody } from "./stream.js";
 import { createWorkerPool } from "./workers.js";
 import { createLimiter } from "./ratelimit.js";
@@ -460,13 +460,13 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
         console.error(e);
         const errPage = await specialPage("error", { path: urlPath, message: String(e?.message ?? e) });
         if (errPage) return send(res, 500, MIME[".html"], errPage);
-        return send(res, 500, "text/plain", "internal error");
+        return send(res, 500, MIME[".html"], errorPage());
       }
     }
 
     const nf = await specialPage("notFound", { path: urlPath });
     if (nf) return send(res, 404, MIME[".html"], nf);
-    return send(res, 404, "text/plain", "not found");
+    return send(res, 404, MIME[".html"], errorPage({ status: 404, path: urlPath }));
   }
 
   async function renderRoute(req, res, route, params, urlPath, opts = {}) {

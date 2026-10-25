@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { PassThrough } from "node:stream";
 import { runDi } from "../src/di/cli.js";
 import { createWorkspaceTools } from "../src/di/workspace.js";
 
@@ -18,6 +19,115 @@ async function fixture(run) {
 }
 
 export function registerDiCliTests(test) {
+  test("DI setup readline handles terminal answers, Ctrl-C and EOF", async () => {
+    for (const mode of ["answers", "interrupt", "eof"]) await fixture(async ({ env, output }) => {
+      const input = new PassThrough();
+      const error = new PassThrough();
+      input.isTTY = true;
+      error.isTTY = true;
+      const replies = new Map([
+        ["Provider (", "4"],
+        ["Protocol (", "2"], ["API base URL (", "https://provider.example/v1"],
+        ["Exact model", "chosen"], ["Authentication (", "4"], ["API version (", ""],
+      ]);
+      error.on("data", (chunk) => {
+        for (const [prompt, value] of replies) if (chunk.toString().includes(prompt)) {
+          replies.delete(prompt);
+          queueMicrotask(() => {
+            if (mode === "interrupt") input.write("\u0003");
+            else if (mode === "eof") input.end();
+            else input.write(value + "\n");
+          });
+        }
+      });
+      try {
+        const code = await runDi(["setup"], { env, output, input, error });
+        assert.equal(code, mode === "answers" ? 0 : 1);
+        assert.equal(existsSync(join(env.NIRAL_HOME, "di.json")), mode === "answers");
+      } finally { input.destroy(); error.destroy(); }
+    });
+  });
+
+  test("DI bare setup prompts for exact settings and preserves config on cancellation", async () => {
+    await fixture(async ({ env, output, text }) => {
+      const file = join(env.NIRAL_HOME, "di.json");
+      await assert.rejects(runDi(["setup"], { env, output, input: {}, error: {} }), /terminal for prompts/);
+      assert.equal(existsSync(file), false);
+      const answers = ["", "unknown", "4", "2", "https://provider.example/v1", "exact-deployment", "2", "DI_TEST_KEY", "chosen-version"];
+      assert.equal(await runDi(["setup"], { env, output, question: async () => answers.shift() }), 0);
+      const stored = readFileSync(file, "utf8");
+      assert.deepEqual(JSON.parse(stored), { protocol: "responses", baseURL: "https://provider.example/v1", model: "exact-deployment", auth: "api-key", keyEnv: "DI_TEST_KEY", apiVersion: "chosen-version" });
+      assert.equal(statSync(file).mode & 0o777, 0o600);
+      assert.ok(!stored.includes(env.DI_TEST_KEY));
+      await assert.rejects(runDi(["setup"], { env, output, question: async () => assert.fail("must not prompt") }), /already configured/);
+      assert.equal(await runDi(["setup", "--replace"], { env, output, question: async () => { process.emit("SIGINT"); return "responses"; } }), 1);
+      assert.equal(readFileSync(file, "utf8"), stored);
+      assert.match(text(), /cancelled/);
+      const invalid = ["custom", "responses", "https://provider.example/v1", "exact", "bearer", "not a variable", ""];
+      await assert.rejects(runDi(["setup", "--replace"], { env, output, question: async () => invalid.shift() }), /credential environment variable/);
+      assert.equal(readFileSync(file, "utf8"), stored);
+      const noAuth = ["custom", "1", "http://localhost:9999/v1", "chosen", "4", ""];
+      assert.equal(await runDi(["setup", "--replace"], { env, output, question: async () => noAuth.shift() }), 0);
+      assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { protocol: "chat-completions", baseURL: "http://localhost:9999/v1", model: "chosen", auth: "none" });
+    });
+  });
+
+  test("DI provider presets skip protocol/auth prompts and produce exact requests", async () => {
+    const presets = [
+      { choices: ["1", "openai"], config: { protocol: "responses", auth: "bearer", baseURL: "https://api.openai.com/v1" } },
+      { choices: ["2", "claude"], config: { protocol: "anthropic", auth: "x-api-key", baseURL: "https://api.anthropic.com/v1", apiVersion: "2023-06-01" } },
+      { choices: ["3", "azure"], config: { protocol: "responses", auth: "api-key", baseURL: "https://resource.openai.azure.com/openai/v1" } },
+    ];
+    for (const preset of presets) for (const choice of preset.choices) await fixture(async ({ env, output, text }) => {
+      const prompts = [];
+      const answers = [choice];
+      if (preset.config.auth === "api-key") answers.push(choice === "3" ? "https://resource.openai.azure.com/" : preset.config.baseURL + "/");
+      answers.push("", "exact-model", "DI_TEST_KEY");
+      const expected = { ...preset.config, model: "exact-model", keyEnv: "DI_TEST_KEY" };
+      assert.equal(await runDi(["setup"], { env, output,
+        question: async (prompt) => { prompts.push(prompt); assert.ok(answers.length, prompt); return answers.shift(); },
+        fetchImpl: async () => assert.fail("setup must stay offline"),
+      }), 0);
+      assert.equal(answers.length, 0);
+      assert.ok(!prompts.some((prompt) => /^(Protocol|Authentication|API version|API base URL)/.test(prompt)));
+      assert.match(text(), /A value is required/);
+      const file = join(env.NIRAL_HOME, "di.json");
+      assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), expected);
+      assert.equal(statSync(file).mode & 0o777, 0o600);
+      assert.ok(!readFileSync(file, "utf8").includes(env.DI_TEST_KEY));
+      let requests = 0;
+      assert.equal(await runDi(["ask", "hello", "--no-tools"], { env, output,
+        fetchImpl: async (url, options) => {
+          requests++;
+          const anthropic = expected.protocol === "anthropic";
+          assert.equal(String(url), expected.baseURL + (anthropic ? "/messages" : "/responses"));
+          const headers = new Headers(options.headers);
+          assert.equal(headers.get(expected.auth === "bearer" ? "authorization" : expected.auth), expected.auth === "bearer" ? `Bearer ${env.DI_TEST_KEY}` : env.DI_TEST_KEY);
+          assert.equal(headers.get("anthropic-version"), expected.apiVersion ?? null);
+          const body = JSON.parse(options.body);
+          assert.equal(body.model, "exact-model");
+          if (anthropic) return Response.json({ role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text: "ok" }] });
+          assert.equal(body.store, false);
+          return Response.json({ status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }] });
+        },
+      }), 0);
+      assert.equal(requests, 1);
+    });
+  });
+
+  test("DI Azure preset rejects incompatible endpoints without replacing configuration", async () => {
+    await fixture(async ({ env, output, setup }) => {
+      await runDi(setup, { env, output });
+      const file = join(env.NIRAL_HOME, "di.json");
+      const stored = readFileSync(file, "utf8");
+      for (const endpoint of ["not a URL", "http://resource.example", "https://user:secret@resource.example", "https://resource.example/openai/responses", "https://resource.example/openai/v1/responses", "https://resource.example/?api-version=preview", "https://resource.example/#fragment"]) {
+        const answers = ["azure", endpoint];
+        await assert.rejects(runDi(["setup", "--replace"], { env, output, question: async () => answers.shift() }), /Azure/);
+        assert.equal(readFileSync(file, "utf8"), stored);
+      }
+    });
+  });
+
   test("DI workspace tools reject private paths, escapes, symlinks and stale edits", async () => {
     await fixture(async ({ root, env }) => {
       const tools = createWorkspaceTools({ root, home: env.NIRAL_HOME });

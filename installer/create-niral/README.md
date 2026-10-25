@@ -64,13 +64,18 @@ both export the same executable names. Update a global `create-niral` launcher w
 This package also installs the `niral` executable, including `niral di`:
 
 ```sh
-niral di setup --help
+niral di setup
 niral di status
 niral di ask "Explain this project" --read-only
 niral di chat
 niral di new myblog "Customize the home page" --template blog
 ```
 
+`niral di setup` offers OpenAI, Claude (Anthropic), Azure OpenAI or Custom.
+Named providers set protocol/auth automatically; Custom keeps manual choices.
+Enter your exact model/deployment and credential variable name, not the key.
+Azure also asks for its resource URL or `/openai/v1` base. Bedrock is not yet
+supported. Explicit flags remain available with `niral di setup --help`.
 DI uses your explicit provider/model and an environment-variable credential.
 Workspace tools require per-call approval; writes keep external backups and
 check current hashes. No shell execution, automatic tests or cloud requirement.

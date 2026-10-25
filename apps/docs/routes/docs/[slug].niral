@@ -2,23 +2,66 @@
 export async function load({ params }) {
   const { PAGES, GROUPS } = await projectImport("lib/content.js")
   const { md } = await projectImport("lib/md.js")
-  const page = PAGES[params.slug]
-  if (!page) return { title: "Not found", description: "Page not found — pick a topic from the sidebar.", slug: params.slug, html: "<p>No such page — pick a topic from the sidebar.</p>", prev: null, next: null, toc: [] }
+  const page = Object.hasOwn(PAGES, params.slug) ? PAGES[params.slug] : null
+  if (!page) return { title: "Not found", seoTitle: "Page Not Found | Niral Docs", description: "Page not found — pick a topic from the sidebar.", noindex: true, robots: "noindex, follow", slug: params.slug, html: "<p>No such page — pick a topic from the sidebar.</p>", prev: null, next: null, toc: [] }
   const html = md(page.body)
-  // plain-text summary for meta description (strip code fences, links, md syntax)
-  const plain = page.body.replace(/\x60\x60\x60[\s\S]*?\x60\x60\x60/g, " ").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[#>*_|]/g, " ").replace(/\s+/g, " ").trim()
-  const description = plain ? (plain.slice(0, 155).trim() + (plain.length > 155 ? "…" : "")) : (page.title + " — Niral, the zero-dependency full-stack framework by ZyoraLabs.")
+  const { description, seoTitle } = page
   // "On this page" — the h2s the renderer just emitted (they carry ids)
   const toc = [...html.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/g)].map((m) => ({ id: m[1], text: m[2].replace(/<[^>]+>/g, "") }))
   const order = GROUPS.flatMap((g) => g.slugs)
   const i = order.indexOf(params.slug)
   const ref = (s) => (s ? { slug: s, title: PAGES[s].title } : null)
-  return { title: page.title, description, slug: params.slug, html, prev: ref(order[i - 1]), next: ref(order[i + 1]), toc }
+  const section = GROUPS.find((group) => group.slugs.includes(params.slug))?.name ?? "Documentation"
+  return { title: page.title, seoTitle, description, robots: "index, follow, max-image-preview:large", section, slug: params.slug, html, prev: ref(order[i - 1]), next: ref(order[i + 1]), toc }
 }
 </server>
 
 <script>
-  let { title, description, slug, html, prev, next, toc } = $props
+  import Seo from "../../components/Seo.niral"
+  let { title, seoTitle, description, robots, section, slug, html, prev, next, toc, noindex = false } = $props
+  const breadcrumbs = slug === "getting-started" ? [{ name: "Niral", path: "/" }, { name: "Documentation", path: "/docs/getting-started" }] : [{ name: "Niral", path: "/" }, { name: "Documentation", path: "/docs/getting-started" }, { name: title, path: "/docs/" + slug }]
+  let promptStatus = $state("")
+  let promptOpen = $state(false)
+  const starterPrompt = `Help me develop an application with Niral, the zero-dependency, compiler-first full-stack web framework. Use my accompanying request as the task. If I have not described the application or change, ask what I want to build before editing files.
+
+FIRST
+- Inspect the workspace and read its AGENTS.md, README and other project instructions. Preserve existing work. If a Niral app already exists, extend it; do not scaffold over it.
+- Read the official documentation at https://niral.site/docs/getting-started and https://niral.site/docs/components, plus the relevant topic pages. If you cannot access them, say so and use local documentation; do not invent APIs.
+- Node.js 22 or newer is required. For a new app only, confirm the app name and target folder, then run npx create-niral <app-name>. Work inside that folder. Use the installed niral CLI, or npx niral when it is not on PATH.
+
+NIRAL CONVENTIONS
+- Niral is not Svelte or React. Use native .niral components and Node built-ins. Do not add React, Next.js, Vite, Svelte or runtime packages by default.
+- A .niral component combines <server>, <script>, markup, <head> and scoped <style> blocks. Server blocks never ship to the browser.
+- Export async function load({ params, locals }) from the server block for SSR data. Other exported server functions become RPCs callable by name from client code. Authenticate, authorize and validate every server operation.
+- Client runes: let { title } = $props; let count = $state(0); let doubled = $derived(count * 2). Use on:click={handler}, bind:value={draft}, {#if condition}...{:else}...{/if}, and {#for item of items key item.id}...{/for}.
+- Routes are file-based: routes/index.niral is /; routes/about.niral is /about; routes/post/[slug].niral reads params.slug. A routes/_layout.niral wraps child pages with <slot />.
+- Keep credentials, environment variables, database access and business logic server-side. Never expose or serve data/; preserve databases and existing environment files. Use parameterized SQL and check record ownership.
+- Follow the existing project's styles and architecture. Make responsive, accessible interfaces with labeled controls, visible focus, loading, empty and error states. Keep changes scoped to the task.
+
+VERIFY AND HAND OFF
+- Run niral check, niral build and relevant tests (niral test when the project has tests). Fix errors caused by your changes. Report checks you could not run, rather than claiming they passed.
+- Start niral dev for local preview when needed and share the actual URL from its output. Avoid conflicting with an existing server.
+- Summarize changed files and verified behavior. Do not commit, push, deploy, delete data or change production without explicit approval.`
+
+  async function copyStarterPrompt() {
+    promptStatus = ""
+    try {
+      await navigator.clipboard.writeText(starterPrompt)
+      promptStatus = "Prompt copied"
+    } catch {
+      const field = document.querySelector("#agent-starter-prompt")
+      const panel = document.querySelector("#agent-starter-preview")
+      panel.open = true
+      promptOpen = true
+      field.focus()
+      field.select()
+      try {
+        promptStatus = document.execCommand("copy") ? "Prompt copied" : "Copy the selected prompt below."
+      } catch {
+        promptStatus = "Copy the selected prompt below."
+      }
+    }
+  }
 
   // copy buttons on code blocks — injected AFTER mount (never during hydration)
   if (typeof window !== "undefined") {
@@ -28,6 +71,8 @@ export async function load({ params }) {
         const btn = document.createElement("button")
         btn.className = "copy"
         btn.textContent = "copy"
+        btn.setAttribute("aria-label", "Copy code")
+        btn.title = "Copy code"
         btn.addEventListener("click", async () => {
           const text = pre.querySelector("code").textContent
           try {
@@ -42,7 +87,10 @@ export async function load({ params }) {
             ta.remove()
           }
           btn.textContent = "copied ✓"
-          setTimeout(() => (btn.textContent = "copy"), 1200)
+          btn.setAttribute("aria-label", "Code copied")
+          btn.title = "Code copied"
+          btn.dataset.copied = "true"
+          setTimeout(() => { btn.textContent = "copy"; btn.title = "Copy code"; btn.setAttribute("aria-label", "Copy code"); delete btn.dataset.copied }, 1200)
         })
         pre.appendChild(btn)
       }
@@ -51,92 +99,166 @@ export async function load({ params }) {
 </script>
 
 <head>
-  <title>{title} · Niral docs</title>
+  <title>{seoTitle}</title>
   <meta name="description" content="{description}" />
+  <meta name="robots" content="{robots}" />
+  <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/docs/{slug}" />
-  <meta name="robots" content="index, follow" />
-  <meta name="theme-color" content="#0b0d10" />
-  <link rel="icon" type="image/png" href="/n.png" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/n.png" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Niral" />
-  <meta property="og:title" content="{title} · Niral docs" />
+  <meta property="og:title" content="{seoTitle}" />
   <meta property="og:description" content="{description}" />
   <meta property="og:url" content="https://niral.site/docs/{slug}" />
   <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="{title} · Niral docs" />
+  <meta name="twitter:title" content="{seoTitle}" />
   <meta name="twitter:description" content="{description}" />
   <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
 </head>
+<Seo title={seoTitle} description={description} path={"/docs/" + slug} article={true} breadcrumbs={breadcrumbs} noindex={noindex} />
 
 <div class="page">
   <article>
-    <h1>{title}</h1>
-    {@html html}
-    <nav class="pager">
-      {#if prev}<a class="prev" href={"/docs/" + prev.slug}>← {prev.title}</a>{:else}<span></span>{/if}
-      {#if next}<a class="next" href={"/docs/" + next.slug}>{next.title} →</a>{/if}
+    <header class="doc-header" id="page-top">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        {#for crumb of breadcrumbs key crumb.path}
+          {#if crumb.path !== "/"}<span aria-hidden="true">/</span>{/if}
+          {#if crumb.path === "/docs/" + slug}<span aria-current="page">{crumb.name}</span>{:else}<a href={crumb.path}>{crumb.name}</a>{/if}
+        {/for}
+      </nav>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </header>
+    {#if slug === "getting-started"}
+      <section class="agent-kit" aria-label="Niral agent starter kit">
+        <div class="agent-kit-top">
+          <div class="agent-kit-title">
+            <span class="agent-kit-mark" aria-hidden="true">{">_"}</span>
+            <h2>Agent starter kit</h2>
+          </div>
+          <button class="copy-prompt" on:click={copyStarterPrompt} title="Copy Niral development prompt">
+            <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/copy.svg" alt="" width="16" height="16" />
+            Copy prompt
+          </button>
+        </div>
+        <div class="agent-tools" aria-label="Editors and agents">
+          <span class="agent-tool" title="Visual Studio Code"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/vscode/vscode-original.svg" alt="" width="18" height="18" />VS Code</span>
+          <span class="agent-tool" title="JetBrains"><img class="mono-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@14.0.0/icons/jetbrains.svg" alt="" width="18" height="18" />JetBrains</span>
+          <span class="agent-tool" title="Claude Code"><img class="mono-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@14.0.0/icons/claude.svg" alt="" width="18" height="18" />Claude Code</span>
+          <span class="agent-tool" title="OpenAI Codex"><img class="mono-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@14.0.0/icons/openai.svg" alt="" width="18" height="18" />Codex</span>
+        </div>
+        <details class="agent-preview" id="agent-starter-preview" open={promptOpen}>
+          <summary>View prompt</summary>
+          <textarea id="agent-starter-prompt" aria-label="Niral development starter prompt" readonly spellcheck="false">{starterPrompt}</textarea>
+        </details>
+        <p class="prompt-status" role="status" aria-live="polite">{promptStatus}</p>
+      </section>
+    {/if}
+    {#if toc.length > 1}
+      <details class="mobile-toc">
+        <summary>On this page <span>{toc.length} sections</span></summary>
+        <nav aria-label="Page sections">{#for heading of toc key heading.id}<a href={"#" + heading.id}>{heading.text}</a>{/for}</nav>
+      </details>
+    {/if}
+    <div class="prose">{@html html}</div>
+    <nav class="pager" aria-label="Previous and next pages">
+      {#if prev}<a class="prev" href={"/docs/" + prev.slug}><span class="direction">← Previous</span><b>{prev.title}</b></a>{:else}<span></span>{/if}
+      {#if next}<a class="next" href={"/docs/" + next.slug}><span class="direction">Next →</span><b>{next.title}</b></a>{/if}
     </nav>
   </article>
 
   {#if toc.length > 1}
-    <aside class="toc">
-      <p>On this page</p>
+    <aside class="toc" aria-label="On this page">
+      <p>On this page <span>{toc.length}</span></p>
       {#for h of toc key h.id}
         <a href={"#" + h.id}>{h.text}</a>
       {/for}
+      <a class="back-top" href="#page-top">↑ Back to top</a>
     </aside>
   {/if}
 </div>
 
 <style>
-  .page { display: grid; grid-template-columns: minmax(0, 720px) 1fr; gap: 2.5rem; }
-  .toc { position: sticky; top: 2.4rem; align-self: start; font-size: .82rem; min-width: 150px; }
-  .toc p { color: #5b6672; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; margin: 0 0 .5rem; }
-  .toc a { display: block; color: #79838e; text-decoration: none; padding: .18rem 0 .18rem .7rem; border-left: 2px solid #191e24; transition: color .12s, border-color .12s; }
-  .toc a:hover { color: #6ee7b7; border-color: #34d399; }
-  @media (max-width: 1000px) { .toc { display: none; } .page { grid-template-columns: minmax(0, 1fr); } }
-
-  article { max-width: 720px; min-width: 0; line-height: 1.7; font-size: .96rem; }
-  article :global(h1) { font-size: 2rem; letter-spacing: -.025em; margin-top: 0; font-weight: 700; }
-  article :global(h2) { margin-top: 2.2rem; font-size: 1.35rem; border-bottom: 1px solid #1d2229; padding-bottom: .35rem; }
-  article :global(h3) { margin-top: 1.6rem; font-size: 1.08rem; }
-  article :global(p) { color: #c3cad2; margin: .9rem 0; }
-  article :global(a) { color: #34d399; }
-  article :global(a:hover) { text-decoration: underline; }
-  article :global(strong), article :global(b) { color: #e8eaed; font-weight: 600; }
-  article :global(ul), article :global(ol) { padding-left: 1.35rem; margin: .85rem 0; }
-  article :global(li) { color: #c3cad2; margin: .35rem 0; padding-left: .15rem; }
-  article :global(li::marker) { color: #4b5560; }
-  article :global(blockquote) { margin: 1.2rem 0; padding: .15rem 1.1rem; border-left: 3px solid #34d39966; background: #10b98108; border-radius: 0 10px 10px 0; }
-  article :global(blockquote p) { color: #b9c1c9; }
-  article :global(hr) { border: 0; border-top: 1px solid #1d2229; margin: 2.2rem 0; }
-  article :global(code) { background: #14181d; border: 1px solid #232930; border-radius: 6px; padding: .1rem .35rem; font-size: .82em; color: #7ee2b8; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
-  article :global(pre) { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; }
-  article :global(pre code) { background: none; border: 0; padding: 0; color: #d7dde3; font-size: .84rem; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
-  article :global(.copy) { position: absolute; top: .55rem; right: .6rem; background: #1a2027; border: 1px solid #2a313a; color: #79838e; font-size: .7rem; padding: .22rem .55rem; border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity .15s; font-family: inherit; }
-  article :global(pre:hover .copy) { opacity: 1; }
-  article :global(.copy:hover) { color: #6ee7b7; border-color: #34d39955; }
-  article :global(.tok-c) { color: #566270; font-style: italic; }
-  article :global(.tok-s) { color: #98d3b2; }
-  article :global(.tok-k) { color: #82aaff; }
-  article :global(.tok-n) { color: #eabc7a; }
-  article :global(.tok-t) { color: #f28fad; }
-  article :global(.tok-r) { color: #34d399; font-weight: 500; }
-  article :global(table) { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
-  article :global(th) { text-align: left; color: #9aa3ad; font-weight: 600; border-bottom: 1px solid #2a313a; padding: .45rem .6rem; }
-  article :global(td) { border-bottom: 1px solid #1d2229; padding: .45rem .6rem; color: #c3cad2; }
-  article :global(b) { color: #e8eaed; }
-  .pager { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #1d2229; }
-  .pager a { color: #34d399; text-decoration: none; }
-
-  @media (max-width: 860px) {
-    article { font-size: .94rem; }
-    article :global(h1) { font-size: 1.7rem; }
-    article :global(h2) { font-size: 1.2rem; margin-top: 1.9rem; }
-    article :global(table) { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    article :global(pre) { padding: .85rem .95rem; border-radius: 10px; }
-    .pager { gap: 1rem; font-size: .9rem; }
-  }
+  .page { display: grid; grid-template-columns: minmax(0, 800px) 184px; gap: 48px; align-items: start; }
+  .doc-header { margin-bottom: 28px; scroll-margin-top: 112px; }
+  .breadcrumb { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--text); font-size: 12px; line-height: 1.5; margin-bottom: 20px; }
+  .breadcrumb a { color: var(--text); text-decoration: none; }
+  .breadcrumb a:hover { color: #f2b544; text-decoration: underline; }
+  .breadcrumb span:last-child { color: var(--text); }
+  h1 { font-size: 36px; line-height: 1.2; letter-spacing: 0; margin: 0; font-weight: 650; color: #fff; overflow-wrap: anywhere; }
+  article { min-width: 0; line-height: 1.8; font-size: 15px; }
+  .agent-kit { margin: 0 0 32px; padding: 20px; border: 1px solid var(--line-strong); border-radius: 8px; background: linear-gradient(125deg, var(--surface-raised), var(--surface)); }
+  .agent-kit-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+  .agent-kit-title { display: flex; gap: 10px; align-items: center; }
+  .agent-kit-title h2 { margin: 0; color: #fff; font-size: 15px; font-weight: 600; line-height: 24px; }
+  .agent-kit-mark { color: var(--accent); font: 16px/24px "Geist Mono", monospace; }
+  .copy-prompt { display: inline-flex; gap: 8px; align-items: center; justify-content: center; height: 36px; padding: 0 12px; background: var(--accent); color: #080809; border: 1px solid var(--accent); border-radius: 6px; font: 550 12px "Geist", sans-serif; cursor: pointer; }
+  .copy-prompt:hover { background: var(--accent-hover); }
+  .copy-prompt img { display: block; width: 16px; height: 16px; flex: none; }
+  .agent-tools { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-top: 18px; }
+  .agent-tool { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-size: 12px; line-height: 22px; white-space: nowrap; }
+  .agent-tool img { display: block; width: 18px; height: 18px; flex: none; }
+  .mono-logo { filter: invert(1); }
+  .agent-preview { margin-top: 16px; }
+  .agent-preview summary { width: fit-content; color: var(--text); cursor: pointer; font-size: 12px; line-height: 20px; }
+  .agent-preview textarea { display: block; box-sizing: border-box; width: 100%; height: 260px; min-height: 160px; resize: vertical; margin-top: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: #0b0b0d; color: var(--text); font: 12px/1.8 "Geist Mono", monospace; }
+  .prompt-status { margin: 10px 0 0; color: var(--text); font-size: 12px; line-height: 20px; }
+  .prompt-status:empty { display: none; }
+  @media (max-width: 480px) { .agent-kit { padding: 16px; } .agent-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
+  .prose { overflow-wrap: anywhere; }
+  .prose :global(> p:first-child) { font-size: 17px; color: var(--text); line-height: 1.8; margin: 0 0 32px; }
+  .prose :global(h2) { scroll-margin-top: 112px; margin: 52px 0 20px; font-size: 24px; line-height: 1.4; font-weight: 600; border-top: 1px solid var(--line); padding-top: 32px; color: #fff; }
+  .prose :global(h3) { scroll-margin-top: 112px; margin: 32px 0 14px; font-size: 18px; line-height: 1.5; font-weight: 600; color: #fff; }
+  .prose :global(p) { color: var(--text); margin: 18px 0; }
+  .prose :global(a) { color: var(--accent); text-decoration-color: #f2b54480; text-underline-offset: 4px; }
+  .prose :global(a:hover) { color: var(--accent-hover); text-decoration-color: currentColor; }
+  .prose :global(strong), .prose :global(b) { color: #fff; font-weight: 600; }
+  .prose :global(ul), .prose :global(ol) { padding-left: 24px; margin: 22px 0; }
+  .prose :global(li) { color: var(--text); margin: 10px 0; padding-left: 6px; }
+  .prose :global(li::marker) { color: var(--text); }
+  .prose :global(blockquote) { margin: 28px 0; padding: 4px 24px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; }
+  .prose :global(hr) { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+  .prose :global(code) { background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 5px; font-size: .85em; color: var(--text); font-family: "Geist Mono", monospace; box-decoration-break: clone; }
+  .prose :global(pre) { position: relative; background: #101012; border: 1px solid var(--line-strong); border-radius: 8px; padding: 66px 24px 24px; overflow-x: auto; line-height: 1.8; margin: 24px 0; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .prose :global(pre::before) { content: attr(data-lang); box-sizing: border-box; position: absolute; left: 0; top: 0; width: 100%; height: 46px; border-bottom: 1px solid var(--line); padding: 12px 24px; background: var(--surface-raised); font: 12px/22px "Geist Mono", monospace; color: var(--text); }
+  .prose :global(pre code) { display: block; width: max-content; min-width: 100%; background: none; border: 0; padding: 0; color: var(--text); font-size: 13px; font-family: "Geist Mono", monospace; }
+  .prose :global(.copy) { position: absolute; top: 7px; right: 12px; width: 32px; height: 32px; padding: 0; border-radius: 5px; background: var(--surface-raised); border: 1px solid var(--line-strong); cursor: pointer; font-size: 0; color: var(--text); }
+  .prose :global(.copy::before), .prose :global(.copy::after) { content: ""; position: absolute; width: 10px; height: 12px; border: 1px solid currentColor; border-radius: 2px; }
+  .prose :global(.copy::before) { top: 7px; left: 8px; }
+  .prose :global(.copy::after) { top: 10px; left: 11px; background: var(--surface-raised); }
+  .prose :global(.copy:hover) { border-color: var(--accent); color: var(--accent); }
+  .prose :global(.copy[data-copied]::before) { content: "\2713"; border: 0; font: 18px/18px "Geist", sans-serif; left: 7px; top: 6px; }
+  .prose :global(.copy[data-copied]::after) { display: none; }
+  .prose :global(.tok-c) { color: #e6e6e9; font-style: italic; }
+  .prose :global(.tok-s) { color: #f5d99c; }
+  .prose :global(.tok-k) { color: #dbc4ff; }
+  .prose :global(.tok-n) { color: #f1cf9b; }
+  .prose :global(.tok-t) { color: #f8bbce; }
+  .prose :global(.tok-r) { color: var(--accent); font-weight: 500; }
+  .prose :global(.table-scroll) { overflow-x: auto; margin: 28px 0; border: 1px solid var(--line-strong); border-radius: 8px; scrollbar-width: thin; }
+  .prose :global(table) { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0; font-size: 14px; }
+  .prose :global(th) { text-align: left; color: var(--text); font-weight: 600; background: var(--surface-raised); padding: 16px 20px; border-bottom: 1px solid var(--line-strong); }
+  .prose :global(td) { border-bottom: 1px solid var(--line); padding: 16px 20px; color: var(--text); vertical-align: top; min-width: 140px; }
+  .prose :global(tr:last-child td) { border-bottom: 0; }
+  .prose :global(tbody tr:nth-child(even)) { background: #ffffff03; }
+  .toc { position: sticky; top: 120px; max-height: calc(100dvh - 160px); overflow-y: auto; align-self: start; scrollbar-width: thin; font-size: 12px; padding-top: 4px; }
+  .toc p { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--text); font-size: 12px; font-weight: 600; margin: 0 0 20px; }
+  .toc p span { color: var(--text); font-family: "Geist Mono", monospace; font-size: 11px; }
+  .toc a { display: block; color: var(--text); line-height: 1.6; text-decoration: none; padding: 9px 0 9px 16px; border-left: 1px solid var(--line-strong); overflow-wrap: anywhere; }
+  .toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .toc .back-top { margin-top: 24px; padding-top: 20px; padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+  .mobile-toc { display: none; }
+  .pager { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--line); }
+  .pager a { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; min-height: 116px; padding: 20px 24px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text); text-decoration: none; background: linear-gradient(135deg, var(--surface-raised), var(--surface)); transition: border-color .15s, background .15s; overflow-wrap: anywhere; }
+  .pager a:hover { border-color: var(--accent); background: var(--surface-raised); }
+  .pager .direction { font-size: 12px; font-weight: 450; color: var(--text); }
+  .pager b { font-size: 15px; font-weight: 550; }
+  .next { text-align: right; }
+  @media (max-width: 1200px) { .toc { display: none; } .page { grid-template-columns: minmax(0, 800px); justify-content: center; } .mobile-toc { display: block; margin-bottom: 28px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); } .mobile-toc summary { cursor: pointer; font-size: 13px; padding: 16px 0; color: var(--text); } .mobile-toc summary span { float: right; color: var(--text); font-size: 12px; } .mobile-toc nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; padding: 0 0 20px; } .mobile-toc a { color: var(--text); text-decoration: none; font-size: 13px; line-height: 1.6; padding: 6px 0; } }
+  @media (max-width: 860px) { h1 { font-size: 30px; } .doc-header { margin-bottom: 24px; scroll-margin-top: 156px; } .prose :global(h2) { scroll-margin-top: 156px; font-size: 22px; margin-top: 40px; padding-top: 28px; } .prose :global(h3) { scroll-margin-top: 156px; } .prose :global(> p:first-child) { font-size: 16px; } .prose :global(pre) { padding: 62px 18px 20px; } .prose :global(pre::before) { padding-left: 18px; } .prose :global(th), .prose :global(td) { padding: 14px 16px; } .pager { gap: 12px; margin-top: 40px; } .pager a { padding: 18px 16px; } }
+  @media (max-width: 480px) { .mobile-toc nav { grid-template-columns: 1fr; } .pager { grid-template-columns: 1fr; } .pager > span { display: none; } }
 </style>

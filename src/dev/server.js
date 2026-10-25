@@ -20,7 +20,7 @@ import { scanRoutes, scanEndpoints, matchRoute, layoutChain } from "../server/ro
 import { handleEndpoint } from "../server/endpoints.js";
 import { collectEndpointModules, loadDevEndpoint } from "../server/endpoint-modules.js";
 import { renderPage, renderFile, loadComponent, collectCss, preparePage, renderComponent } from "../server/render.js";
-import { hydrationScript, assemblePageParts, renderHead, preloadLinks } from "../server/page.js";
+import { hydrationScript, assemblePageParts, renderHead, preloadLinks, errorPage } from "../server/page.js";
 import { streamBody } from "../server/stream.js";
 import { parseFormBody, actionName, actionRedirect, sendFormResult, allowFormOrigin } from "../server/forms.js";
 import { multipartBoundary, parseMultipart, encodeFilesForWorker, DEFAULT_MAX_UPLOAD } from "../server/uploads.js";
@@ -302,11 +302,11 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
         console.error(e);
         const errPage = await specialPage("_error.niral", { path: pathname, message: String(e?.message ?? e) });
         if (errPage) return { page: errPage, setCookie: null, status: 500 };
-        throw e;
+        return { page: errorPage({ dev: true, path: pathname, error: e }).replace("</body>", HMR_TAG + "</body>"), setCookie: null, status: 500 };
       }
       // compile error — serve a page that boots the HMR client and shows the overlay
       return {
-        page: DEFAULT_SHELL.replace("<!--niral:head-->", "").replace(
+        page: DEFAULT_SHELL.replace("<!--niral:head-->", '<title>Compile error | Niral</title><meta name="robots" content="noindex">').replace(
           "<!--niral:outlet-->",
           `<script type="module">
 import "/@niral/client.js";
@@ -429,7 +429,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
       console.error(e);
-      if (!res.headersSent) send(res, 500, "text/plain", `dev server error: ${e.message}`);
+      if (!res.headersSent) send(res, 500, MIME[".html"], errorPage({ dev: true, error: e }).replace("</body>", HMR_TAG + "</body>"));
     });
   });
 
@@ -621,7 +621,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       // nothing matched — custom 404 page if the project has one
       const nf = await specialPage("_404.niral", { path: urlPath });
       if (nf) return send404Page(res, nf);
-      return send(res, 404, "text/plain", "not found");
+      return send(res, 404, MIME[".html"], errorPage({ status: 404, path: urlPath, dev: true }));
     }
 
     const ext = extname(file);

@@ -1,0 +1,151 @@
+<script>
+  import SiteHeader from "../components/SiteHeader.niral"
+  import SiteFooter from "../components/SiteFooter.niral"
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "About Niral JS | ZyoraLabs Framework and Cloud"
+  const description = "Meet Niral JS, the flagship web framework developed at ZyoraLabs. Explore its compiler-first approach, full-stack capabilities and cloud deployment with zHost."
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+</script>
+
+<head>
+  <title>About Niral JS | ZyoraLabs Framework and Cloud</title>
+  <meta name="description" content="Meet Niral JS, the flagship web framework developed at ZyoraLabs. Explore its compiler-first approach, full-stack capabilities and cloud deployment with zHost." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
+  <link rel="canonical" href="https://niral.site/about" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="About Niral JS | ZyoraLabs Framework and Cloud" />
+  <meta property="og:description" content="Meet Niral JS, the flagship web framework developed at ZyoraLabs. Explore its compiler-first approach, full-stack capabilities and cloud deployment with zHost." />
+  <meta property="og:url" content="https://niral.site/about" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="About Niral JS | ZyoraLabs Framework and Cloud" />
+  <meta name="twitter:description" content="Meet Niral JS, the flagship web framework developed at ZyoraLabs. Explore its compiler-first approach, full-stack capabilities and cloud deployment with zHost." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
+</head>
+<Seo title={seoTitle} description={description} path="/about" pageType="AboutPage" />
+
+<div class="about-page">
+  <a class="skip-link" href="#about-main">Skip to content</a>
+  <SiteHeader current="about" />
+  <main id="about-main" class="frame">
+    <header class="introduction">
+      <p class="eyebrow">ABOUT US / ZYORALABS</p>
+      <h1>About Niral JS<span>.</span></h1>
+      <p class="lead">The flagship web framework developed at <a href="https://zyoralabs.com">ZyoraLabs</a>.</p>
+      <p class="opening">Niral brings the browser, server and deployment workflow together in one compiler-first framework. Built in India and made for developers everywhere, it puts the focus on building your application, with zero runtime dependencies.</p>
+      <dl class="identity">
+        <div><dt>Developed by</dt><dd>ZyoraLabs</dd></div>
+        <div><dt>Foundation</dt><dd>JavaScript + Node.js</dd></div>
+        <div><dt>Deployment</dt><dd>Your server or zHost</dd></div>
+      </dl>
+    </header>
+
+    <section class="editorial" aria-labelledby="framework-title">
+      <p class="section-label"><span>01</span> THE FRAMEWORK</p>
+      <div class="section-content">
+        <h2 id="framework-title">One framework.<br />The full stack in view.</h2>
+        <p>Niral JS is a full-stack web framework with its own compiler and fine-grained reactive runtime. Components bring templates, styles, browser behavior and server functions into a single <code>.niral</code> file. The compiler keeps server code on the server and turns reactive updates into targeted DOM changes, without a virtual DOM.</p>
+        <p>Server-side rendering, file-based routing and typed server calls connect the interface to the application behind it. Authentication, database access, realtime channels and background jobs are part of the framework, so the essentials can work together without assembling a separate runtime dependency stack.</p>
+        <div class="capabilities">
+          <div><img src={icons + "braces.svg"} alt="" width="22" height="22" /><h3>Compile first</h3><p>A native compiler, scoped styles and fine-grained reactivity, with static and streaming rendering options.</p></div>
+          <div><img src={icons + "server.svg"} alt="" width="22" height="22" /><h3>Build end to end</h3><p>Server functions, form actions, sessions and data access alongside the components that use them.</p></div>
+          <div><img src={icons + "radio.svg"} alt="" width="22" height="22" /><h3>Grow when needed</h3><p>Start with SQLite on one server. Add PostgreSQL and multi-server coordination as your application grows.</p></div>
+        </div>
+        <a class="text-link" href="/docs/getting-started">Explore Niral JS<img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a>
+      </div>
+    </section>
+
+    <section class="editorial" aria-labelledby="cloud-title">
+      <p class="section-label"><span>02</span> THE CLOUD</p>
+      <div class="section-content">
+        <h2 id="cloud-title">From your application<br />to a live URL.</h2>
+        <p><strong>zHost is ZyoraLabs' deployment cloud.</strong> Niral JS is the framework you build with; zHost is the cloud platform you can use to publish it. The platform detects Niral projects, builds the application and handles routing and HTTPS for the project's hosted URL.</p>
+        <ol class="cloud-flow" aria-label="zHost deployment workflow">
+          <li><span>01 / CONNECT</span><h3>Your project</h3><p>Create a project in the ZyoraLabs console and link it from your terminal.</p></li>
+          <li><span>02 / BUILD</span><h3>Your application</h3><p>Deploy your source. zHost detects Niral and runs the production build.</p></li>
+          <li><span>03 / PUBLISH</span><h3>Your live URL</h3><p>Reach your application through its hosted HTTPS address. Deploy again to publish changes.</p></li>
+        </ol>
+        <p>Cloud hosting is a choice, not a requirement. Niral also supports self-hosting on your own Linux server, with a generated deployment kit for nginx, systemd and atomic releases. Static sites can be exported separately. Choose the setup that fits your application and your infrastructure.</p>
+        <div class="links"><a class="text-link" href="/docs/zhost">Discover zHost<img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a><a class="text-link" href="/docs/deployment">Self-hosting guide<img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a></div>
+      </div>
+    </section>
+
+    <section class="editorial closing" aria-labelledby="company-title">
+      <p class="section-label"><span>03</span> ZYORALABS</p>
+      <div class="section-content">
+        <h2 id="company-title">Built in India.<br />Made for everyone.</h2>
+        <p>At ZyoraLabs, Niral is our flagship framework: a foundation for building web applications with an integrated toolchain and control over where they run. Niral JS and zHost connect application development with cloud deployment, while keeping self-hosting open to every developer.</p>
+        <p>Explore the framework, read the source, or talk to us about technical questions, feedback and partnerships.</p>
+        <div class="links"><a class="contact-link" href="/contact">Get in touch<img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a><a class="text-link" href="https://github.com/Zyora-Dev/niral">Explore the source<img src={icons + "github.svg"} alt="" width="18" height="18" /></a></div>
+      </div>
+    </section>
+  </main>
+  <SiteFooter />
+</div>
+
+<style>
+  :global(body) { margin: 0; background: #090909; color: #fafafa; }
+  *, *::before, *::after { box-sizing: border-box; }
+  .about-page { --gold: #f2b544; font: 15px/1.8 "Geist", sans-serif; letter-spacing: 0; background: linear-gradient(120deg, #202023, #0d0d0f 65%, #090909); }
+  .frame { width: min(1160px, calc(100% - 80px)); margin-inline: auto; }
+  h1, h2, h3, p, dl { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--gold); }
+  a:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+  .skip-link { position: absolute; top: -60px; left: 16px; z-index: 50; background: var(--gold); color: #090909; padding: 10px 16px; }
+  .skip-link:focus { top: 12px; }
+  .introduction { padding-top: 64px; }
+  .eyebrow, .section-label, dt, .cloud-flow li > span { font: 12px/1.6 "Geist Mono", monospace; }
+  .eyebrow { color: var(--gold); margin-bottom: 24px; }
+  h1 { font-size: 60px; line-height: 1.1; font-weight: 550; margin-bottom: 24px; }
+  h1 span { color: var(--gold); }
+  .lead { font-size: 24px; line-height: 1.5; max-width: 780px; }
+  .lead a { text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 6px; }
+  .opening { max-width: 750px; margin-top: 20px; font-size: 16px; }
+  .identity { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; padding-block: 28px; border-top: 1px solid #414144; margin-top: 40px; }
+  dt { margin-bottom: 8px; }
+  dd { margin: 0; font-size: 18px; }
+  .editorial { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 60px; border-top: 1px solid #414144; padding-block: 64px; }
+  .section-label { display: flex; gap: 20px; padding-top: 8px; }
+  .section-label > span { color: var(--gold); }
+  .section-content { min-width: 0; }
+  h2 { font-size: 36px; line-height: 1.25; font-weight: 500; margin-bottom: 28px; }
+  .section-content > p + p { margin-top: 20px; }
+  code { font: 13px/1.8 "Geist Mono", monospace; color: var(--gold); }
+  .capabilities { margin-block: 36px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .capabilities > div { border-top: 1px solid #555558; padding-top: 22px; }
+  .capabilities img, .text-link img { filter: invert(1); }
+  h3 { font-size: 16px; font-weight: 550; margin-block: 12px; }
+  .capabilities p, .cloud-flow p { font-size: 14px; }
+  .text-link, .contact-link { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; }
+  .text-link img, .contact-link img { flex-shrink: 0; }
+  .cloud-flow { list-style: none; padding: 0; margin-block: 36px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .cloud-flow li { border-top: 2px solid var(--gold); padding-top: 20px; }
+  .cloud-flow li > span { color: var(--gold); }
+  .links { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 28px; }
+  .contact-link { background: var(--gold); color: #090909; padding: 10px 18px; border-radius: 5px; }
+  .contact-link:hover { background: #ffd17a; color: #090909; }
+  .closing { padding-bottom: 80px; }
+  @media (max-width: 1000px) { .editorial { grid-template-columns: 160px minmax(0, 1fr); gap: 32px; } .capabilities, .cloud-flow { gap: 20px; } }
+  @media (max-width: 760px) {
+    .frame { width: calc(100% - 40px); }
+    .introduction { padding-top: 40px; }
+    h1 { font-size: 40px; }
+    .lead { font-size: 20px; }
+    .opening { font-size: 15px; }
+    .identity { gap: 20px; margin-top: 32px; }
+    dd { font-size: 15px; }
+    .editorial { grid-template-columns: 1fr; gap: 24px; padding-block: 40px; }
+    .section-label { padding: 0; }
+    h2 { font-size: 30px; margin-bottom: 24px; }
+    .capabilities, .cloud-flow { grid-template-columns: 1fr; gap: 24px; }
+    .capabilities h3 { display: inline-block; margin: 0 0 12px 12px; vertical-align: top; }
+    .closing { padding-bottom: 56px; }
+  }
+  @media (max-width: 420px) { .identity { grid-template-columns: 1fr; gap: 20px; } dt { margin-bottom: 2px; } }
+</style>

@@ -8,7 +8,7 @@ Compiler-first components · fine-grained reactivity · SSR at Svelte speed —
 served 7.5× faster than Next.js. Auth, jobs, realtime, AI and deploys built in.
 `node_modules` not required.
 
-[Docs](https://niral.zyora.club) · [Benchmarks](https://niral.zyora.club/docs/benchmarks) · [CLI reference](https://niral.zyora.club/docs/cli) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode)
+[Docs](https://niral.site) · [Benchmarks](https://niral.site/docs/benchmarks) · [CLI reference](https://niral.site/docs/cli) · [VS Code extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode)
 
 </div>
 
@@ -22,7 +22,7 @@ cd my-app
 npx niral dev                         # → http://localhost:5199
 ```
 
-No npm? `curl -fsSL https://niral.zyora.club/install.sh | bash` — or go direct:
+No npm? `curl -fsSL https://niral.site/install.sh | bash` — or go direct:
 
 ```sh
 git clone https://github.com/Zyora-Dev/niral.git
@@ -73,13 +73,17 @@ See the [launcher release checklist](installer/README.md) and
 Niral DI runs through the existing CLI, with your exact provider and model:
 
 ```sh
-niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
+niral di setup
 niral di status
 niral di ask "Explain the routes" --read-only
 niral di chat
 niral di new myblog "Customize the home page" --template blog
 ```
 
+Setup offers OpenAI, Claude (Anthropic), Azure OpenAI or Custom. Named providers
+set protocol/auth automatically; Custom keeps manual choices. You supply the exact
+model and credential variable name, not the key. Bedrock is not yet supported.
+Explicit flags remain available through `niral di setup --help`.
 Set the named credential variable privately in your terminal. Setup stores no
 key; every workspace tool needs interactive approval. Writes check the current
 file hash and retain external backups. Use `--no-tools` with `ask` for prompt-only

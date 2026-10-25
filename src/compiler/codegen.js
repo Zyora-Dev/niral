@@ -540,7 +540,7 @@ function genNodesS(nodes, ctx) {
         const tpl = pieces
           .map((p) => (p.lit != null ? p.lit.replace(/[\\`$]/g, (m) => "\\" + m) : `\${(${p.dyn}) ?? ""}`))
           .join("");
-        ctx.lines.push(ctx.raw ? `__h += \`${tpl}\`;` : `__h += __s.sText(\`${tpl}\`);`);
+        ctx.lines.push(ctx.raw ? `__h += \`${tpl}\`;` : `__h += __s.sText(\`${tpl}\`${ctx.textarea ? ", false" : ""});`);
         i = j - 1;
         continue;
       }
@@ -562,7 +562,7 @@ function genNodeS(node, ctx) {
       ctx.lines.push(
         ctx.raw
           ? `__h += __s.sRawText((${expr(node.expr, ctx)}));`
-          : `__h += __s.sText((${expr(node.expr, ctx)}));`
+          : `__h += __s.sText((${expr(node.expr, ctx)})${ctx.textarea ? ", false" : ""});`
       );
       return;
     case "RawHtml":
@@ -636,9 +636,12 @@ function genElementS(node, ctx) {
     }
     if (node.children.length > 0 && !VOID_ELEMENTS.has(node.tag)) {
       const prevRaw = ctx.raw;
+      const prevTextarea = ctx.textarea;
       ctx.raw = node.tag === "script" || node.tag === "style";
+      ctx.textarea = node.tag === "textarea";
       genNodesS(node.children, ctx);
       ctx.raw = prevRaw;
+      ctx.textarea = prevTextarea;
     }
     if (!VOID_ELEMENTS.has(node.tag)) ctx.lines.push(`__h += "</${node.tag}>";`);
     return;
@@ -694,9 +697,12 @@ function genElementS(node, ctx) {
   ctx.lines.push(`__h += __s.sOpen(${v});`);
   if (node.children.length > 0 && !VOID_ELEMENTS.has(node.tag)) {
     const prevRaw = ctx.raw;
+    const prevTextarea = ctx.textarea;
     ctx.raw = node.tag === "script" || node.tag === "style";
+    ctx.textarea = node.tag === "textarea";
     genNodesS(node.children, ctx);
     ctx.raw = prevRaw;
+    ctx.textarea = prevTextarea;
   }
   ctx.lines.push(`__h += __s.sClose(${v});`);
 }

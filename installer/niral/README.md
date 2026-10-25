@@ -74,14 +74,18 @@ Git. An update does not migrate apps, publish packages or deploy/restart servers
 ## Developer Intelligence
 
 ```sh
-npx niral di setup --help
+npx niral di setup
 npx niral di status
 npx niral di ask "Explain this project" --root ./myapp --read-only
 npx niral di chat --root ./myapp
 npx niral di new myblog "Customize the home page" --template blog
 ```
 
-Configure your exact protocol, API base, model/deployment and auth with `di setup`.
+`npx niral di setup` offers OpenAI, Claude (Anthropic), Azure OpenAI or Custom.
+Named providers set protocol/auth automatically; Custom keeps manual choices.
+Enter your exact model/deployment and credential variable name. Azure also asks
+for its resource URL or `/openai/v1` base. Bedrock is not yet supported.
+Use `npx niral di setup --help` for noninteractive flags.
 Credentials stay in a named environment variable, not config or project files.
 File reads/edits require a terminal and per-tool approval; writes retain backups
 and reject stale hashes. `ask <prompt> --no-tools` permits prompt-only automation.

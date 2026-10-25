@@ -6,7 +6,7 @@
  * load() + an RPC function. No dependencies to install — `niral dev` runs it.
  */
 
-import { writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync } from "node:fs";
 import { join, resolve, basename, dirname } from "node:path";
 import { TEMPLATES, TEMPLATE_NAMES } from "./templates.js";
 
@@ -22,11 +22,13 @@ export async function hello(name) {
 </server>
 
 <script>
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
   let { started } = $props
   let count = $state(0)
   let items = $state([{ id: 1, text: "read the code in routes/index.niral" }, { id: 2, text: "edit me — HMR keeps state" }])
   let draft = $state("")
   let reply = $state("")
+  let pending = $state(false)
 
   function add() {
     if (!draft.trim()) return
@@ -34,123 +36,164 @@ export async function hello(name) {
     draft = ""
   }
   async function ping() {
-    reply = await hello("niral")   // compile-time RPC stub — a POST under the hood
+    pending = true
+    try {
+      reply = await hello("niral")
+    } catch (error) {
+      reply = error.message || "The request failed. Try again."
+    } finally {
+      pending = false
+    }
   }
 </script>
 
 <head>
-  <title>niral · new app</title>
+  <title>Your new app | Niral</title>
+  <meta name="description" content="Your new Niral application." />
 </head>
 
-<main>
-  <div class="glow"></div>
-
-  <header>
-    <span class="mark">n</span>
-    <span class="badge">SSR'd on the server, hydrated in your browser</span>
-  </header>
-
-  <h1>It works.</h1>
-  <p class="lead">Your niral app is running — zero dependencies, nothing installed.<br />
-  <span class="dim">server said hi at {started}</span></p>
-
-  <section class="demo">
-    <div class="panel">
-      <p class="panel-title">Fine-grained reactivity</p>
-      <button class="primary" on:click={() => count++}>count is {count}</button>
-      <p class="hint">only this text updates — no virtual DOM, no re-render</p>
-    </div>
-
-    <div class="panel">
-      <p class="panel-title">Talk to the server</p>
-      <button on:click={ping}>call hello()</button>
-      {#if reply}<p class="reply">{reply}</p>{/if}
-      <p class="hint">a typed RPC — the function body never ships to the browser</p>
-    </div>
-
-    <div class="panel wide">
-      <p class="panel-title">Keyed lists + two-way binding</p>
-      <form on:submit={(e) => { e.preventDefault(); add() }}>
-        <input bind:value={draft} placeholder="add an item…" />
-        <button>add</button>
-      </form>
-      <ul>
-        {#for it of items key it.id}
-          <li>{it.text}</li>
-        {/for}
-      </ul>
-    </div>
-  </section>
-
-  <nav class="links">
-    <a class="link" href="https://niral.zyora.club/docs/getting-started"><b>Docs →</b><span>components, server functions, auth, realtime, deploys</span></a>
-    <a class="link" href="https://github.com/Zyora-Dev/niral"><b>GitHub →</b><span>every line readable — the framework is the repo</span></a>
-    <a class="link" href="/about"><b>Zero-JS page →</b><span>/about ships pure HTML — nothing hydrates</span></a>
-  </nav>
-
-  <footer>
-    <span>niral · start in <code>routes/index.niral</code> · powered by <a href="https://zyoralabs.com">ZyoraLabs</a></span>
-  </footer>
-</main>
+<div class="shell">
+  <aside class="project">
+    <a class="brand" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="112" height="36" /></a>
+    <section class="welcome" aria-labelledby="welcome-title">
+      <p class="eyebrow"><span class="status-dot"></span> YOUR APP IS RUNNING</p>
+      <h1 id="welcome-title">It works.</h1>
+      <dl class="build-info">
+        <div><dt>ENTRY POINT</dt><dd><code>routes/index.niral</code></dd></div>
+        <div><dt>SERVER RENDERED AT</dt><dd>{started}</dd></div>
+        <div><dt>RUNTIME DEPENDENCIES</dt><dd>0</dd></div>
+      </dl>
+    </section>
+    <nav class="resources" aria-label="Resources">
+      <a href="https://niral.site/docs/getting-started"><img class="icon" src={icons + "book-open.svg"} alt="" width="18" height="18" /><span>Read the docs</span><img class="icon link-arrow" src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a>
+      <a href="/about"><img class="icon" src={icons + "file-code-2.svg"} alt="" width="18" height="18" /><span>The static page</span><img class="icon link-arrow" src={icons + "arrow-right.svg"} alt="" width="16" height="16" /></a>
+      <a href="https://github.com/Zyora-Dev/niral"><img class="icon" src={icons + "github.svg"} alt="" width="18" height="18" /><span>Explore the source</span><img class="icon link-arrow" src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a>
+    </nav>
+    <footer>Built at <a href="https://zyoralabs.com">ZyoraLabs <img class="icon" src={icons + "arrow-up-right.svg"} alt="" width="14" height="14" /></a></footer>
+  </aside>
+  <main>
+    <header class="topbar"><span>Niral / Starter</span><span class="environment"><span class="status-dot"></span> Local development</span></header>
+    <section class="playground" aria-labelledby="playground-title">
+      <div class="section-heading"><h2 id="playground-title">The playground</h2><span>READY</span></div>
+      <div class="demo">
+        <section class="experiment counter" aria-labelledby="counter-title">
+          <div class="experiment-heading"><p class="panel-index"><img class="icon" src={icons + "activity.svg"} alt="" width="18" height="18" />01 / STATE</p><h3 id="counter-title">Make it count.</h3></div>
+          <div class="counter-body">
+            <output class="count" aria-live="polite">{count}</output>
+          <div class="counter-controls">
+            <button class="icon-button" on:click={() => count--} aria-label="Decrease count" title="Decrease count"><img class="icon" src={icons + "minus.svg"} alt="" width="20" height="20" /></button>
+            <button class="icon-button reset" on:click={() => count = 0} aria-label="Reset" title="Reset count"><img class="icon" src={icons + "rotate-ccw.svg"} alt="" width="18" height="18" /></button>
+            <button class="icon-button primary" on:click={() => count++} aria-label="Increase count" title="Increase count"><img class="icon" src={icons + "plus.svg"} alt="" width="20" height="20" /></button>
+          </div>
+          </div>
+        </section>
+        <section class="experiment server" aria-labelledby="server-title">
+          <div class="experiment-heading"><p class="panel-index"><img class="icon" src={icons + "terminal.svg"} alt="" width="18" height="18" />02 / SERVER</p><h3 id="server-title">Say hello.</h3></div>
+          <div class="server-body">
+          <div class="terminal" role="status"><span class="prompt">$ hello("niral")</span><p>{reply || "Awaiting your first request."}</p></div>
+          <button class="server-button" on:click={ping} disabled={pending}>{pending ? "Calling…" : "Call server"}<img class="icon" src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></button>
+          </div>
+        </section>
+        <section class="experiment list" aria-labelledby="list-title">
+          <div class="experiment-heading"><p class="panel-index"><img class="icon" src={icons + "list-todo.svg"} alt="" width="18" height="18" />03 / COLLECTIONS</p><h3 id="list-title">What's next?</h3></div>
+          <div class="list-body">
+          <form on:submit={(event) => { event.preventDefault(); add() }}>
+            <label class="sr-only" for="new-item">New item</label>
+            <input id="new-item" bind:value={draft} placeholder="Add something to build…" />
+            <button class="icon-button primary" aria-label="Add item" title="Add item" disabled={!draft.trim()}><img class="icon" src={icons + "plus.svg"} alt="" width="20" height="20" /></button>
+          </form>
+          <ul>{#for item of items key item.id}<li><span class="item-dot"></span>{item.text}</li>{/for}</ul>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
 
 <style>
-  :global(body) { margin: 0; background: #0b0d10; color: #e8eaed; }
-  main { max-width: 720px; margin: 0 auto; padding: 4.5rem 1.4rem 3rem; font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.6; position: relative; }
-  .glow { position: absolute; inset: -6rem 0 auto; height: 20rem; background: radial-gradient(ellipse 65% 60% at 50% 15%, rgba(52, 211, 153, .12), transparent 70%); pointer-events: none; }
-  header { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.6rem; }
-  .mark { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 11px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; }
-  .badge { background: #11151a; border: 1px solid #232930; border-radius: 999px; padding: .28rem .9rem; font-size: .78rem; color: #9aa3ad; }
-  h1 { font-size: 2.6rem; margin: 0 0 .4rem; letter-spacing: -.02em; }
-  .lead { color: #cdd3da; margin: 0 0 2rem; }
-  .dim { color: #5f6b76; font-size: .88rem; }
-  .demo { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .panel { background: #11151a; border: 1px solid #232930; border-radius: 14px; padding: 1.15rem 1.2rem; }
-  .panel.wide { grid-column: 1 / -1; }
-  .panel-title { margin: 0 0 .7rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .07em; color: #5f6b76; }
-  .hint { color: #5f6b76; font-size: .8rem; margin: .7rem 0 0; }
-  .reply { color: #7ee2b8; font-size: .88rem; margin: .7rem 0 0; }
-  button { padding: .52rem 1.05rem; border: 1px solid #262c33; border-radius: 9px; background: #14181d; color: #e8eaed; cursor: pointer; font-size: .9rem; transition: border-color .15s; }
-  button:hover { border-color: #34d399; }
-  button.primary { background: #34d399; border-color: #34d399; color: #04120b; font-weight: 600; }
-  input { padding: .52rem .8rem; border: 1px solid #262c33; border-radius: 9px; background: #0e1115; color: #e8eaed; margin-right: .5rem; font-size: .9rem; }
-  input::placeholder { color: #5f6b76; }
-  input:focus { outline: none; border-color: #34d399; }
-  ul { margin: .8rem 0 0; padding-left: 1.2rem; }
-  li { margin: .25rem 0; color: #cdd3da; }
-  .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
-  .link { background: #11151a; border: 1px solid #232930; border-radius: 14px; padding: 1rem 1.15rem; text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; }
-  .link:hover { border-color: #34d399; transform: translateY(-2px); }
-  .link b { display: block; color: #7ee2b8; margin-bottom: .2rem; font-size: .95rem; }
-  .link span { color: #9aa3ad; font-size: .8rem; }
-  footer { margin-top: 2.4rem; text-align: center; color: #5f6b76; font-size: .82rem; }
-  footer code { color: #7ee2b8; background: #11151a; padding: .1rem .4rem; border-radius: 6px; }
-  footer a { color: #34d399; text-decoration: none; }
-  @media (max-width: 560px) { .demo { grid-template-columns: 1fr; } h1 { font-size: 2.1rem; } }
+  :global(body) { margin: 0; background: #171719; color: #fafaf8; }
+  .shell { --accent: #f2b544; --line: #48484c; display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100svh; font-family: "Avenir Next", "Trebuchet MS", sans-serif; line-height: 1.6; letter-spacing: 0; }
+  .shell * { box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--accent); }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+  .project { background: #101012; color: #fafaf8; border-right: 1px solid var(--line); padding: 36px 28px 24px; display: flex; flex-direction: column; }
+  .brand { position: relative; display: inline-flex; align-self: flex-start; } .brand img { object-fit: contain; filter: brightness(0) invert(1); }
+  .brand::after { content: ""; position: absolute; inset: 0; background: var(--accent); mask: url("/niral-logo.svg") center / contain no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
+  .icon { display: block; flex-shrink: 0; object-fit: contain; filter: invert(78%) sepia(80%) saturate(450%) hue-rotate(342deg); }
+  main { min-width: 0; padding: 0 48px 40px; background-image: radial-gradient(#39393c 0.6px, transparent 0.6px); background-size: 20px 20px; }
+  .topbar { min-height: 92px; display: flex; justify-content: space-between; align-items: center; gap: 20px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .environment, .eyebrow, .panel-index, dt, .section-heading > span { font: 12px/1.6 "SFMono-Regular", Consolas, monospace; }
+  .environment, .eyebrow { display: flex; align-items: center; gap: 8px; }
+  .welcome { padding: 52px 0 32px; }
+  .eyebrow { margin: 0 0 12px; font-size: 11px; }
+  .status-dot { width: 6px; height: 6px; flex-shrink: 0; background: var(--accent); border-radius: 50%; }
+  h1 { font-size: 40px; font-weight: 500; line-height: 1.15; margin: 0 0 36px; }
+  .build-info { margin: 0; }
+  .build-info > div + div { margin-top: 22px; } dt { margin-bottom: 4px; } dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+  code { font: 13px/1.6 "SFMono-Regular", Consolas, monospace; }
+  .playground { max-width: 960px; margin: 0 auto; }
+  .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 32px 0 24px; }
+  .section-heading > span { color: var(--accent); }
+  h2 { font-size: 26px; font-weight: 500; margin: 0; }
+  .demo { background: #171719; }
+  .experiment { display: grid; grid-template-columns: minmax(140px, .65fr) minmax(0, 1fr); gap: 28px; padding: 28px 0; min-width: 0; border-top: 1px solid var(--line); }
+  .experiment-heading { padding-top: 4px; }
+  .panel-index { display: flex; align-items: center; gap: 10px; color: var(--accent); margin: 0 0 12px; } h3 { margin: 0; font-size: 20px; font-weight: 500; }
+  .counter-body { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; min-height: 92px; }
+  .count { display: block; font: 48px/1.5 "SFMono-Regular", Consolas, monospace; width: 100px; height: 72px; overflow: auto; }
+  .counter-controls { display: flex; align-items: center; gap: 12px; }
+  button { border: 1px solid var(--line); background: #242427; color: #fafaf8; border-radius: 4px; cursor: pointer; font: inherit; min-height: 44px; padding: 8px 16px; }
+  button:hover:not(:disabled) { border-color: var(--accent); background: #313134; } button:disabled { cursor: not-allowed; background: #313134; border-color: #626267; }
+  .icon-button { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
+  .primary { background: var(--accent); border-color: var(--accent); color: #171719; } .primary:hover:not(:disabled) { background: #ffca65; }
+  .primary .icon { filter: none; } .primary:disabled .icon { filter: invert(1); }
+  .reset { background: transparent; }
+  .terminal { background: #101012; border: 1px solid var(--line); color: #fafaf8; border-radius: 4px; font: 13px/1.7 "SFMono-Regular", Consolas, monospace; min-height: 120px; padding: 20px; overflow-wrap: anywhere; }
+  .prompt { color: var(--accent); } .terminal p { margin: 12px 0 0; }
+  .server-button { display: flex; gap: 24px; justify-content: space-between; align-items: center; font-size: 14px; margin-top: 12px; }
+  form { display: flex; gap: 8px; margin: 0 0 14px; }
+  input { width: 100%; min-width: 0; border: 1px solid #626267; border-radius: 4px; background: #101012; color: #fafaf8; padding: 10px 12px; font: inherit; font-size: 13px; }
+  input::placeholder { color: #b5b5bc; }
+  ul { list-style: none; padding: 0; margin: 0; } li { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; font-size: 13px; overflow-wrap: anywhere; }
+  li + li { border-top: 1px solid var(--line); } .item-dot { width: 5px; height: 5px; background: var(--accent); flex-shrink: 0; border-radius: 50%; }
+  .resources { border-top: 1px solid var(--line); padding: 14px 0 32px; }
+  .resources a { display: flex; align-items: center; gap: 12px; font-size: 14px; padding: 10px 0; } .resources .link-arrow { margin-left: auto; }
+  footer { margin-top: auto; font-size: 12px; } footer a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (min-width: 1400px) { main { padding-left: 72px; padding-right: 72px; } }
+  @media (max-width: 1100px) { main { padding: 0 28px 32px; } .experiment { grid-template-columns: 1fr; gap: 20px; } .counter-body { justify-content: flex-start; gap: 32px; } }
+  @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .project { padding: 24px; } .brand img { width: 96px; height: 30px; } .welcome { padding: 24px 0 20px; } h1 { font-size: 32px; margin-bottom: 24px; } .build-info { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } .build-info > div + div { margin-top: 0; } .build-info > div:last-child { display: none; } .resources { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 12px 0 0; } .resources a { padding: 4px 0; gap: 8px; font-size: 13px; } footer { display: none; } main { padding: 0 24px 24px; } .topbar { min-height: 64px; font-size: 13px; } .environment { font-size: 11px; } .section-heading { padding: 24px 0 20px; } h2 { font-size: 24px; } .experiment { padding: 24px 0; } }
+  @media (prefers-reduced-motion: no-preference) { .playground { animation: arrive 300ms ease-out both; } @keyframes arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } }
 </style>
 `;
 
 const ABOUT = `<script mode="static"></script>
 
 <head>
-  <title>about · zero JavaScript</title>
+  <title>The static page | Niral</title>
 </head>
 
 <main>
-  <span class="mark">n</span>
-  <h1>Zero JavaScript</h1>
-  <p>This page has <code>mode="static"</code> — pure HTML, no hydration, nothing shipped.<br />
-  View source: there is no script tag. That's the whole trick.</p>
-  <p><a href="/">← home</a></p>
+  <a class="brand" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="112" height="36" /></a>
+  <p class="eyebrow">NIRAL / STATIC</p>
+  <h1>Just the essentials<span>.</span></h1>
+  <p class="lead">Zero JavaScript. Pure HTML.</p>
+  <dl><div><dt>Route</dt><dd>/about</dd></div><div><dt>Rendering</dt><dd>Static</dd></div><div><dt>Client JavaScript</dt><dd>0 bytes</dd></div></dl>
+  <a class="back" href="/">← Back to your app</a>
 </main>
 
 <style>
-  :global(body) { margin: 0; background: #0b0d10; color: #e8eaed; }
-  main { max-width: 560px; margin: 0 auto; padding: 5rem 1.4rem; font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.7; }
-  .mark { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 11px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; margin-bottom: 1rem; }
-  h1 { letter-spacing: -.02em; margin: 0 0 .6rem; }
-  p { color: #9aa3ad; }
-  code { color: #7ee2b8; background: #11151a; padding: .1rem .45rem; border-radius: 6px; }
-  a { color: #34d399; text-decoration: none; }
+  :global(body) { margin: 0; background: #171719; color: #fafaf8; }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 24px; font-family: "Avenir Next", "Trebuchet MS", sans-serif; line-height: 1.6; letter-spacing: 0; }
+  .brand { display: inline-flex; margin-bottom: 72px; } img { object-fit: contain; }
+  .eyebrow { font: 12px/1.6 "SFMono-Regular", Consolas, monospace; color: #f2b544; margin: 0 0 24px; }
+  h1 { font-size: 64px; line-height: 1.1; font-weight: 500; margin: 0 0 24px; } h1 span { color: #f2b544; }
+  .lead { font-size: 21px; margin: 0 0 40px; }
+  dl { margin: 0 0 40px; } dl > div { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #48484c; padding: 18px 0; } dd { margin: 0; }
+  a { color: #f2b544; text-decoration: none; } .back { display: inline-block; padding: 12px 0; border-bottom: 1px solid #f2b544; }
+  a:focus-visible { outline: 2px solid #f2b544; outline-offset: 5px; }
+  @media (max-width: 600px) { main { padding: 32px 20px; } .brand { margin-bottom: 48px; } h1 { font-size: 44px; } }
 </style>
 `;
 
@@ -167,7 +210,7 @@ app.env
 const README = (name) => `# ${name}
 
 Built with [niral](https://github.com/Zyora-Dev/niral) — zero dependencies.
-Docs: https://niral.zyora.club
+Docs: https://niral.site
 
 \`\`\`sh
 niral dev        # develop — HMR, error overlays, http://localhost:5199
@@ -205,7 +248,7 @@ const VSCODE_EXTENSIONS = `{
 // App-level guide so AI agents (Copilot, Claude, …) understand this is a Niral app.
 const APP_AGENTS = `# AGENTS.md — this is a Niral app
 
-Built with **Niral** (https://niral.zyora.club) — a zero-dependency, compiler-first
+Built with **Niral** (https://niral.site) — a zero-dependency, compiler-first
 full-stack framework (Node ≥ 22). Guidance for AI agents editing this project.
 
 ## Rules
@@ -260,6 +303,7 @@ export function createApp({ name, dir, template = "minimal" }) {
   if (template === "minimal") {
     mkdirSync(join(root, "routes"), { recursive: true });
     mkdirSync(join(root, "tests"), { recursive: true });
+    copyFileSync(new URL("../assets/niral-logo.svg", import.meta.url), join(root, "niral-logo.svg"));
     writeFileSync(join(root, "routes", "index.niral"), INDEX);
     writeFileSync(join(root, "routes", "about.niral"), ABOUT);
     writeFileSync(join(root, "tests", "app.test.js"), SAMPLE_TEST);

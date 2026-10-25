@@ -8,13 +8,33 @@ runtime application imports DI, and application `NIRAL_AI_*` settings are separa
 ## CLI Commands
 
 ```sh
-niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
+niral di setup
 niral di status
 niral di ask "Explain this project's routing" --root ./myapp --read-only
 niral di ask "Add a contact page" --root ./myapp
 niral di chat --root ./myapp
 niral di new myblog "Customize the blog home page" --template blog
 niral di ask "Explain Niral server blocks" --no-tools
+```
+
+Bare `niral di setup` first offers OpenAI, Claude (Anthropic), Azure OpenAI or Custom.
+Named providers automatically set protocol and authentication; no endpoint probing
+or model selection happens. You enter the exact model/deployment and credential
+variable name, never the key. Numbered choices also accept the displayed names.
+
+| Choice | Preset |
+| --- | --- |
+| `openai` | Responses, bearer auth, `https://api.openai.com/v1` |
+| `claude` | Messages, x-api-key auth, `https://api.anthropic.com/v1`, version `2023-06-01` |
+| `azure` | Responses, api-key auth; enter an HTTPS resource URL or `/openai/v1` base. The resource URL is expanded to `/openai/v1`; no API-version query is needed. Enter your deployment name as the model. |
+| `custom` | Manually choose protocol, exact API base, model, auth, credential variable and optional API version. Use this for compatible gateways or other API paths/auth modes. |
+
+Amazon Bedrock is not supported by the current adapters.
+Ctrl-C or end-of-input cancels without saving; `niral di setup --replace` prompts for replacement.
+Noninteractive setup still requires explicit flags:
+
+```sh
+niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
 ```
 
 Replace the placeholder endpoint/model with your chosen provider's exact values.

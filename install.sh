@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# நிரல் · niral installer — https://niral.zyora.club
-#   curl -fsSL https://niral.zyora.club/install.sh | bash
+# நிரல் · niral installer — https://niral.site
+#   curl -fsSL https://niral.site/install.sh | bash
 # Installs the framework to ~/.niral (zero dependencies — the download IS the install).
 
 set -euo pipefail

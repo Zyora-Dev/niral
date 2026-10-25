@@ -1,0 +1,179 @@
+<server>
+  export async function send(fields) {
+    const { sendContact } = await projectImport("lib/contact.js")
+    try {
+      return await sendContact(fields)
+    } catch {
+      return { error: "Your message could not be saved. Please try again or email developer@niral.site." }
+    }
+  }
+</server>
+
+<script>
+  import SiteHeader from "../components/SiteHeader.niral"
+  import SiteFooter from "../components/SiteFooter.niral"
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "Contact Niral | Questions, Feedback and Partnerships"
+  const description = "Contact the Niral team about the web framework, technical questions, feedback or partnerships. Send a message, email us or connect through WhatsApp."
+  let { form = null } = $props
+  const sending = formAction("send")
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+</script>
+
+<head>
+  <title>Contact Niral | Questions, Feedback and Partnerships</title>
+  <meta name="description" content="Contact the Niral team about the web framework, technical questions, feedback or partnerships. Send a message, email us or connect through WhatsApp." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
+  <link rel="canonical" href="https://niral.site/contact" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="Contact Niral | Questions, Feedback and Partnerships" />
+  <meta property="og:description" content="Contact the Niral team about the web framework, technical questions, feedback or partnerships. Send a message, email us or connect through WhatsApp." />
+  <meta property="og:url" content="https://niral.site/contact" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Contact Niral | Questions, Feedback and Partnerships" />
+  <meta name="twitter:description" content="Contact the Niral team about the web framework, technical questions, feedback or partnerships. Send a message, email us or connect through WhatsApp." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
+</head>
+<Seo title={seoTitle} description={description} path="/contact" pageType="ContactPage" />
+
+<div class="contact-page">
+  <a class="skip-link" href="#contact-main">Skip to content</a>
+  <SiteHeader />
+
+  <main id="contact-main" class="frame">
+    <div class="page-heading"><p class="eyebrow">NIRAL / CONTACT</p><h1>Contact us<span>.</span></h1><p>Questions, ideas, or something you need a hand with?<br />Get in touch with the Niral team.</p></div>
+    <div class="contact-layout">
+      <aside class="contact-details" aria-label="Contact details">
+        <div class="direct-contact"><img src={icons + "mail.svg"} alt="" width="22" height="22" /><div><h2>Email us</h2><a href="mailto:developer@niral.site">developer@niral.site<img src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div></div>
+        <div class="direct-contact"><img src={icons + "message-circle.svg"} alt="" width="22" height="22" /><div><h2>WhatsApp</h2><a href="https://wa.me/918940189694" target="_blank" rel="noopener noreferrer">+91 89401 89694<img src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div></div>
+        <div class="contact-origin"><span class="origin-line"></span><p>Built in India.<br />Made for everyone.</p></div>
+        <a class="docs-link" href="/docs/getting-started">Explore the documentation<img src={icons + "arrow-right.svg"} alt="" width="16" height="16" /></a>
+      </aside>
+      <section class="form-section" aria-labelledby="form-title">
+        {#if sending.result?.success || form?.success}
+          <div class="success-message" role="status"><img src={icons + "circle-check.svg"} alt="" width="36" height="36" /><h2>Message received.</h2><p>Thank you for reaching out to Niral.<br />We have received your message.</p><a href="/contact">Send another message<img src={icons + "arrow-right.svg"} alt="" width="16" height="16" /></a></div>
+        {:else}
+          <h2 id="form-title">Send a message</h2>
+          <form method="post" action="?/send" on:submit={sending.submit} aria-busy={sending.pending}>
+            <div class="field-row">
+              <div class="field"><label for="contact-name">Your name</label><input id="contact-name" name="name" autocomplete="name" placeholder="Full name" required maxlength="100" value={form?.values?.name || ""} aria-invalid={Boolean(sending.errors.name || form?.errors?.name)} aria-describedby="name-error" /><p id="name-error" class="field-error">{sending.errors.name || form?.errors?.name || ""}</p></div>
+              <div class="field"><label for="contact-email">Email address</label><input id="contact-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254" value={form?.values?.email || ""} aria-invalid={Boolean(sending.errors.email || form?.errors?.email)} aria-describedby="email-error" /><p id="email-error" class="field-error">{sending.errors.email || form?.errors?.email || ""}</p></div>
+            </div>
+            <div class="field"><label for="contact-topic">Topic</label><select id="contact-topic" name="topic" required aria-invalid={Boolean(sending.errors.topic || form?.errors?.topic)} aria-describedby="topic-error"><option value="" disabled selected={!form?.values?.topic}>Select a topic</option><option selected={form?.values?.topic === "General question"}>General question</option><option selected={form?.values?.topic === "Technical support"}>Technical support</option><option selected={form?.values?.topic === "Partnership"}>Partnership</option><option selected={form?.values?.topic === "Feedback"}>Feedback</option></select><p id="topic-error" class="field-error">{sending.errors.topic || form?.errors?.topic || ""}</p></div>
+            <div class="field"><label for="contact-message">Your message</label><textarea id="contact-message" name="message" placeholder="Tell us what you have in mind..." required minlength="10" maxlength="5000" rows="6" aria-invalid={Boolean(sending.errors.message || form?.errors?.message)} aria-describedby="message-error">{form?.values?.message || ""}</textarea><p id="message-error" class="field-error">{sending.errors.message || form?.errors?.message || ""}</p></div>
+            <div class="website-field" aria-hidden="true"><label for="contact-website">Website</label><input id="contact-website" name="website" tabindex="-1" autocomplete="off" /></div>
+            {#if sending.error || form?.error}<p class="form-error" role="alert">{sending.error || form?.error}</p>{/if}
+            <div class="submit-row"><p>We use these details to respond to your enquiry.<br />Please don't include passwords or API keys.</p><button type="submit" disabled={sending.pending}>{sending.pending ? "Sending..." : "Send message"}<img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></button></div>
+          </form>
+        {/if}
+      </section>
+    </div>
+  </main>
+  <SiteFooter />
+</div>
+
+<style>
+  :global(html) { color-scheme: dark; }
+  :global(body) { margin: 0; background: #090909; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #090909; }
+  * { box-sizing: border-box; }
+  .contact-page { --gold: #f2b544; min-height: 100vh; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; background: linear-gradient(120deg, #202023, #0d0d0f 65%, #090909); }
+  h1, h2, p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--gold); }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+  .frame { width: min(1160px, calc(100% - 80px)); margin-inline: auto; }
+  .site-header { background: #090909; border-bottom: 1px solid #373739; }
+  .navigation { display: flex; align-items: center; gap: 44px; width: min(1360px, calc(100% - 64px)); min-height: 76px; margin: auto; }
+  .brand { display: block; position: relative; width: 110px; flex: 0 0 110px; }
+  .brand img { display: block; width: 100%; height: auto; filter: brightness(0) invert(1); }
+  .brand::after { content: ""; position: absolute; inset: 0; background: var(--gold); mask: url("/niral-logo.svg") center / 100% 100% no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
+  .nav-links { display: flex; gap: 28px; font-size: 13px; }
+  [aria-current="page"] { color: var(--gold); }
+  .get-started { display: inline-flex; gap: 20px; align-items: center; margin-left: auto; padding: 8px 16px; background: #fafafa; color: #090909; border-radius: 5px; font-size: 12px; }
+  .get-started:hover { color: #090909; background: var(--gold); }
+  .mobile-nav { display: none; }
+  .skip-link { position: absolute; left: 16px; top: -60px; z-index: 50; background: var(--gold); color: #090909; padding: 10px 16px; }
+  .skip-link:focus { top: 12px; }
+  .page-heading { padding: 72px 0 48px; border-bottom: 1px solid #414144; }
+  .eyebrow { color: var(--gold); font: 12px/1.6 "Geist Mono", monospace; margin-bottom: 20px; }
+  h1 { font-size: 60px; line-height: 1.1; font-weight: 550; margin-bottom: 24px; }
+  h1 span { color: var(--gold); }
+  .page-heading > p:last-child { font-size: 16px; line-height: 1.8; }
+  .contact-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 80px; padding-block: 52px 80px; }
+  .contact-details { padding-top: 8px; }
+  .direct-contact { display: flex; align-items: flex-start; gap: 18px; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid #414144; }
+  .direct-contact > img { margin-top: 3px; flex-shrink: 0; }
+  .direct-contact img, .docs-link img, .page-footer > a:last-child img, .success-message img, .mobile-nav img { filter: invert(1); }
+  .direct-contact h2 { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+  .direct-contact a { display: inline-flex; align-items: center; gap: 12px; font-size: 14px; overflow-wrap: anywhere; }
+  .direct-contact a img { flex-shrink: 0; }
+  .contact-origin { display: flex; align-items: flex-start; gap: 18px; margin: 36px 0; font-size: 14px; line-height: 1.8; }
+  .origin-line { width: 22px; height: 2px; margin-top: 12px; background: var(--gold); flex-shrink: 0; }
+  .docs-link { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; }
+  .form-section { min-width: 0; }
+  .form-section > h2 { font-size: 24px; font-weight: 500; margin-bottom: 28px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .field { margin-bottom: 22px; min-width: 0; }
+  label { display: block; margin-bottom: 10px; font-size: 13px; }
+  input, select, textarea, button { font: inherit; }
+  input, select, textarea { width: 100%; min-width: 0; border: 1px solid #555559; border-radius: 5px; background: #141416; color: #fafafa; padding: 13px 14px; font-size: 14px; }
+  input, select { min-height: 48px; }
+  textarea { display: block; resize: vertical; min-height: 160px; max-height: 500px; }
+  input::placeholder, textarea::placeholder { color: #b4b4bb; }
+  [aria-invalid="true"] { border-color: #ffafa0; }
+  .field-error { color: #ffbeb0; font-size: 12px; margin-top: 6px; }
+  .field-error:empty { display: none; }
+  .form-error { border-left: 2px solid #ffafa0; padding-left: 14px; margin-bottom: 24px; color: #ffbeb0; font-size: 14px; }
+  .website-field { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .submit-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .submit-row p { font-size: 12px; line-height: 1.8; }
+  button { display: inline-flex; align-items: center; justify-content: center; gap: 18px; min-height: 48px; flex-shrink: 0; padding: 12px 20px; border: 1px solid var(--gold); border-radius: 5px; background: var(--gold); color: #090909; font-size: 14px; font-weight: 500; cursor: pointer; }
+  button:hover { background: #ffd17a; }
+  button:disabled { opacity: .7; cursor: wait; }
+  .success-message { padding: 48px 0; }
+  .success-message h2 { margin: 24px 0 16px; font-size: 30px; font-weight: 500; }
+  .success-message p { line-height: 1.9; }
+  .success-message a { display: inline-flex; align-items: center; gap: 14px; margin-top: 32px; font-size: 14px; }
+  .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid #414144; padding-block: 24px; font-size: 12px; }
+  .page-footer > a:last-child { display: inline-flex; align-items: center; gap: 12px; }
+  @media (max-width: 1000px) {
+    .contact-layout { grid-template-columns: 260px minmax(0, 1fr); gap: 40px; }
+    .field-row { grid-template-columns: 1fr; gap: 0; }
+    .submit-row { align-items: flex-start; flex-direction: column; }
+    .nav-links { gap: 18px; }
+  }
+  @media (max-width: 760px) {
+    .frame, .navigation { width: calc(100% - 40px); }
+    .navigation { min-height: 68px; gap: 16px; }
+    .nav-links { display: none; }
+    .mobile-nav { display: block; }
+    .mobile-nav summary { display: grid; place-items: center; width: 40px; height: 40px; list-style: none; border: 1px solid #555559; border-radius: 5px; cursor: pointer; }
+    .mobile-nav summary::-webkit-details-marker { display: none; }
+    .mobile-nav > div { position: absolute; top: 67px; right: 20px; left: 20px; z-index: 10; padding: 8px; background: #19191c; border: 1px solid #555559; border-radius: 5px; }
+    .mobile-nav > div a { display: block; padding: 12px 16px; }
+    .page-heading { padding-block: 48px 32px; }
+    h1 { font-size: 44px; }
+    .page-heading > p:last-child { font-size: 14px; }
+    .contact-layout { grid-template-columns: 1fr; gap: 40px; padding-block: 36px 56px; }
+    .form-section { grid-row: 1; }
+    .contact-details { border-top: 1px solid #414144; padding-top: 36px; }
+    .field-row { grid-template-columns: 1fr 1fr; gap: 20px; }
+    .submit-row { flex-direction: row; align-items: center; }
+    .page-footer { flex-wrap: wrap; }
+  }
+  @media (max-width: 480px) {
+    .brand { width: 94px; flex-basis: 94px; }
+    .get-started { font-size: 11px; padding-inline: 10px; gap: 8px; }
+    .field-row { grid-template-columns: 1fr; gap: 0; }
+    .submit-row { flex-direction: column; align-items: stretch; }
+    .submit-row button { width: 100%; }
+    .page-footer > span { order: 3; flex-basis: 100%; }
+  }
+</style>

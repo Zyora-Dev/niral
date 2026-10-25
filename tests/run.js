@@ -1827,6 +1827,50 @@ test("parser: <head> block captured, absent from template", () => {
   eq(c.template.filter((n) => n.type === "Element").length, 1, "head not in template");
 });
 
+test("default error pages: escaped diagnostics, private production failures and HTTP statuses", async () => {
+  const { errorPage } = await import("../src/server/page.js");
+  const { createDevServer } = await import("../src/dev/server.js");
+  const { createProdServer } = await import("../src/server/prod.js");
+  const { build } = await import("../src/build/build.js");
+  const error = new Error('<script>alert("private")</script>');
+  const diagnostic = errorPage({ dev: true, error });
+  ok(diagnostic.includes("&lt;script&gt;"), "diagnostic text escaped");
+  ok(!diagnostic.includes("<script>"), "no injected script");
+  const encodedStack = errorPage({ dev: true, error: { message: "Failed", stack: "Error: Failed\n at load (data:text/javascript;base64,cHJpdmF0ZQ==:37:11)\n at file:///app/helper.js:4:2" } });
+  ok(!encodedStack.includes("cHJpdmF0ZQ==") && !encodedStack.includes("data:text/javascript"), "encoded server source is not exposed");
+  ok(encodedStack.includes("[generated server module]:37:11") && encodedStack.includes("file:///app/helper.js:4:2"), "stack positions retained");
+  const generic = errorPage({ error, path: "/private-path" });
+  ok(!generic.includes("private") && !generic.includes("STACK TRACE"), "production ignores diagnostic inputs");
+  ok(errorPage({ status: 404, path: "/<img>" }).includes("/&lt;img&gt;"), "404 path escaped");
+  const dir = _fs.mkdtempSync(join(_os.tmpdir(), "niral-default-errors-"));
+  const servers = [];
+  try {
+    _fs.mkdirSync(join(dir, "routes"));
+    _fs.writeFileSync(join(dir, "routes", "index.niral"), "<h1>Home</h1>");
+    _fs.writeFileSync(join(dir, "routes", "boom.niral"), '<server>export function load() { throw new Error("private-server-message") }</server><h1>Unreachable</h1>');
+    build({ root: dir });
+    for (const devMode of [true, false]) {
+      const server = devMode ? createDevServer({ root: dir, port: 0, watch: false }) : createProdServer({ dist: join(dir, "dist"), port: 0 });
+      servers.push(server);
+      const port = await new Promise((ready) => server.listen(ready));
+      const missing = await fetch(`http://localhost:${port}/missing`);
+      eq(missing.status, 404);
+      ok(missing.headers.get("content-type").includes("text/html"), "HTML fallback");
+      ok((await missing.text()).includes("Page not found"), "default 404 screen");
+      const failure = await fetch(`http://localhost:${port}/boom`);
+      eq(failure.status, 500);
+      const html = await failure.text();
+      ok(html.includes("Something went wrong") && html.includes("noindex"), "default 500 screen");
+      eq(html.includes("private-server-message"), devMode, "message only exposed in dev");
+      eq(html.includes("STACK TRACE"), devMode, "stack only exposed in dev");
+      eq(html.includes("/@niral/client.js"), devMode, "dev recovery client only");
+    }
+  } finally {
+    for (const server of servers) server.close();
+    _fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("dev server: <head> SSR'd into the page + custom 404/error pages", async () => {
   const { createDevServer } = await import("../src/dev/server.js");
   const { mkdtempSync, writeFileSync, mkdirSync } = _fs;
@@ -4775,7 +4819,10 @@ test("niral create: scaffolded app boots — SSR + RPC stub + static page", asyn
   try {
     const home = await (await fetch(`http://localhost:${port}/`)).text();
     ok(home.includes("It works."), "index SSR'd");
-    ok(home.includes("server said hi at"), "load() data flowed into props");
+    ok(/SERVER RENDERED AT<\/dt><dd[^>]*>\d/.test(home), "load() data flowed into props");
+    ok(home.includes('aria-label="Increase count"') && home.includes('for="new-item"'), "starter controls are labelled");
+    const logo = await fetch(`http://localhost:${port}/niral-logo.svg`);
+    ok(logo.status === 200 && (await logo.text()).includes("<svg"), "starter logo is served locally");
     ok(home.includes("import __page from"), "hydrated");
     const about = await (await fetch(`http://localhost:${port}/about`)).text();
     ok(about.includes("Zero JavaScript") && !about.includes("import __page"), "about is static — no hydration");

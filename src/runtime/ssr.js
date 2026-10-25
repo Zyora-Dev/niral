@@ -85,9 +85,9 @@ export function sClose(e) {
 }
 
 /** Dynamic text — empty renders the claimable <!--n:t--> placeholder. */
-export function sText(v) {
+export function sText(v, placeholder = true) {
   const s = v == null ? "" : String(v);
-  return s === "" ? "<!--n:t-->" : escText(s);
+  return s === "" && placeholder ? "<!--n:t-->" : escText(s);
 }
 
 /** Dynamic text inside <script>/<style> — raw, no placeholder (shim RAW_TEXT path). */

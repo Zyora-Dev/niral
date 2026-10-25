@@ -138,7 +138,8 @@ export function serialize(node) {
   out += ">";
   if (VOID_ELEMENTS.has(tag)) return out;
   for (const c of node.childNodes) {
-    out += RAW_TEXT.has(tag) && c.nodeType === 3 ? c.data : serialize(c);
+    out += tag === "textarea" && c.nodeType === 3 ? escText(c.data)
+      : RAW_TEXT.has(tag) && c.nodeType === 3 ? c.data : serialize(c);
   }
   return out + `</${tag}>`;
 }

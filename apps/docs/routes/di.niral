@@ -1,0 +1,306 @@
+<script>
+  import SiteHeader from "../components/SiteHeader.niral"
+  import SiteFooter from "../components/SiteFooter.niral"
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "Niral DI | Developer Intelligence in Your Terminal"
+  const description = "Explore Niral DI, the developer intelligence CLI. Choose your AI provider and model, understand code and review workspace changes with per-tool approval."
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+  let selectedProvider = $state("openai")
+  let copyStatus = $state("")
+  const providers = [
+    { id: "openai", name: "OpenAI", protocol: "Responses", auth: "Bearer token", endpoint: "https://api.openai.com/v1", model: "Your exact model name", detail: "The preset supplies the protocol, API base and authentication. You choose the model and credential variable." },
+    { id: "claude", name: "Claude", protocol: "Messages", auth: "x-api-key", endpoint: "https://api.anthropic.com/v1", model: "Your exact model name", detail: "The Anthropic preset uses API version 2023-06-01. No model is selected or substituted for you." },
+    { id: "azure", name: "Azure OpenAI", protocol: "Responses", auth: "api-key", endpoint: "https://YOUR-RESOURCE.openai.azure.com/openai/v1", model: "Your deployment name", detail: "Enter an HTTPS resource URL or /openai/v1 base. A resource URL is expanded automatically; the preset needs no API-version query." },
+    { id: "custom", name: "Custom", protocol: "responses / chat-completions / anthropic", auth: "bearer / api-key / x-api-key / none", endpoint: "Your compatible API base", model: "Your exact model or deployment", detail: "Set protocol, base URL, authentication and optional API version explicitly. HTTPS is required except for loopback endpoints; local endpoints can use explicit auth none." }
+  ]
+  const commands = [
+    { name: "Configure", label: "Choose your provider", code: "niral di setup", text: "Interactive provider setup. Saves settings and the credential variable name, never the key. No API request is made." },
+    { name: "Inspect", label: "Check local settings", code: "niral di status", text: "Offline configuration and credential-availability checks, without printing the credential." },
+    { name: "Understand", label: "Read without writing", code: 'niral di ask "Explain this project\'s routes" --root ./myapp --read-only', text: "One bounded run with listing and reading tools only. Every tool still requires your approval." },
+    { name: "Change", label: "Make a reviewed edit", code: 'niral di ask "Add a contact page" --root ./myapp', text: "Inspect files, review proposed full contents, and approve individual writes. Existing files are checked for changes before replacement." },
+    { name: "Continue", label: "Work conversationally", code: "niral di chat --root ./myapp", text: "Retains up to eight user/assistant exchanges and 32 KiB of text context in memory. /clear resets context; /exit leaves the session." },
+    { name: "Create", label: "Start from a template", code: 'niral di new myblog "Customize the home page" --template blog', text: "Confirms before scaffolding a new or empty directory. Templates: minimal, blog and dashboard. The scaffold survives a later model failure." },
+    { name: "Prompt", label: "Run without workspace tools", code: 'niral di ask "Explain server blocks" --no-tools', text: "Sends only your explicit prompt. This is the supported noninteractive mode; no workspace content is attached automatically." }
+  ]
+  const stages = [
+    { number: "01", icon: "message-square", name: "You set the task", text: "An explicit prompt, workspace root, provider and model." },
+    { number: "02", icon: "git-pull-request", name: "The model proposes", text: "A structured tool call with validated arguments." },
+    { number: "03", icon: "shield-check", name: "You approve", text: "Review each call. Only y approves; Enter denies." },
+    { number: "04", icon: "file-check-2", name: "DI applies", text: "Check paths and hashes, back up originals, then write." }
+  ]
+  const tools = [
+    { name: "list_files", limit: "100 entries", text: "One visible directory at a time. No recursive workspace scan." },
+    { name: "read_file", limit: "24 KiB", text: "UTF-8 source/text content and its SHA-256 hash, only after approval." },
+    { name: "write_file", limit: "24 KiB", text: "Full-content create or replace. Existing files require the current read hash." }
+  ]
+  async function copyCommand(code) {
+    try {
+      await navigator.clipboard.writeText(code)
+      copyStatus = "Command copied."
+    } catch {
+      copyStatus = "Clipboard unavailable. Select the command to copy it."
+    }
+  }
+</script>
+
+<head>
+  <title>Niral DI | Developer Intelligence in Your Terminal</title>
+  <meta name="description" content="Explore Niral DI, the developer intelligence CLI. Choose your AI provider and model, understand code and review workspace changes with per-tool approval." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
+  <link rel="canonical" href="https://niral.site/di" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="Niral DI | Developer Intelligence in Your Terminal" />
+  <meta property="og:description" content="Explore Niral DI, the developer intelligence CLI. Choose your AI provider and model, understand code and review workspace changes with per-tool approval." />
+  <meta property="og:url" content="https://niral.site/di" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Niral DI | Developer Intelligence in Your Terminal" />
+  <meta name="twitter:description" content="Explore Niral DI, the developer intelligence CLI. Choose your AI provider and model, understand code and review workspace changes with per-tool approval." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
+</head>
+<Seo title={seoTitle} description={description} path="/di" />
+
+<div class="di-page">
+  <a class="skip-link" href="#di-main">Skip to content</a>
+  <SiteHeader current="di" />
+  <main id="di-main">
+    <section class="intro" aria-labelledby="di-title">
+      <div class="wrap">
+        <p class="eyebrow"><img src={icons + "terminal.svg"} alt="" width="18" height="18" /> DEVELOPER INTELLIGENCE / BUILT INTO NIRAL</p>
+        <h1 id="di-title">Niral <span>DI.</span></h1>
+        <p class="intro-line">Your project. Your model.<br />Your call.</p>
+        <p class="intro-description">Developer Intelligence in your terminal. Understand a codebase, make reviewed changes, and start a Niral app with your chosen provider. Every workspace tool waits for your approval.</p>
+        <div class="intro-actions"><a class="primary-link" href="#setup">Set up DI <img src={icons + "arrow-down.svg"} alt="" width="18" height="18" /></a><a class="text-link" href="#commands">Explore the commands <img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a></div>
+        <div class="facts"><span><strong>0</strong> runtime dependencies</span><span><strong>3</strong> provider protocols</span><span><strong>5</strong> CLI commands</span><span><img src={icons + "user-check.svg"} alt="" width="20" height="20" /> Per-tool approval</span></div>
+      </div>
+    </section>
+
+    <section class="section wrap" id="workflow" aria-labelledby="workflow-title">
+      <div class="section-heading"><p class="eyebrow">01 / THE WORKFLOW</p><h2 id="workflow-title">Intelligence proposes.<br />You decide.</h2><p>A bounded tool loop connects your selected model to a small set of workspace operations. Approval is required for reads, not just writes.</p></div>
+      <figure class="flow-figure">
+        <ol class="flow-grid">
+          {#for stage of stages key stage.number}<li><div class="flow-top"><span>{stage.number}</span><img src={icons + stage.icon + ".svg"} alt="" width="26" height="26" /></div><h3>{stage.name}</h3><p>{stage.text}</p></li>{/for}
+        </ol>
+        <figcaption><img src={icons + "corner-down-right.svg"} alt="" width="18" height="18" /> Tool results return to the model. The next tool request needs a new approval.</figcaption>
+      </figure>
+      <div class="boundary"><div><span class="small-label">ON YOUR MACHINE</span><h3>Configuration, approvals and backups</h3><p>Settings reference a credential variable. Originals are backed up before approved writes. No local transcript is written.</p></div><div class="boundary-crossing"><img src={icons + "arrow-left-right.svg"} alt="" width="24" height="24" /><span>Prompt + approved<br />tool results</span></div><div><span class="small-label">AT YOUR CHOSEN ENDPOINT</span><h3>Model requests and responses</h3><p>Approved file content can reach your provider. Its retention policy and charges apply. Local tooling does not mean local inference.</p></div></div>
+    </section>
+
+    <section class="setup-band" id="setup" aria-labelledby="setup-title"><div class="wrap section">
+      <div class="section-heading"><p class="eyebrow">02 / GET STARTED</p><h2 id="setup-title">One CLI.<br />Your exact configuration.</h2><p>Use your existing Niral installation and Node 22 or newer. No separate DI package or Niral Cloud account is required.</p></div>
+      <div class="setup-grid"><ol class="setup-steps"><li><span>01</span><div><h3>Choose your provider</h3><p>Run setup. Choose OpenAI, Claude, Azure OpenAI or Custom, then enter your exact model or deployment.</p></div></li><li><span>02</span><div><h3>Keep the credential private</h3><p>Enter the environment variable name, never the key. Supply its value privately through your terminal or credential manager. DI does not load .env files.</p></div></li><li><span>03</span><div><h3>Check, then start a task</h3><p>Status runs offline. Begin with a read-only question to understand the project and review each requested read.</p></div></li></ol>
+        <div class="terminal" aria-label="DI getting started commands"><div class="terminal-heading"><img src={icons + "terminal.svg"} alt="" width="18" height="18" /><span>YOUR TERMINAL</span></div><div class="terminal-body"><p class="terminal-comment">Configure the provider</p><div class="code-row"><code>niral di setup</code><button type="button" class="copy" aria-label="Copy setup command" title="Copy setup command" on:click={() => copyCommand("niral di setup")}><img src={icons + "copy.svg"} alt="" width="17" height="17" /></button></div><p class="terminal-comment">Check settings without an API request</p><code>niral di status</code><p class="terminal-comment">Ask about an existing app</p><code>niral di ask "Explain this project's routes" --root ./myapp --read-only</code></div><p class="terminal-foot">Already installed through npm? The existing launcher also accepts <code>npx niral di setup</code>.</p></div>
+      </div>
+      <div class="provider-section"><h3>Your provider, without substitutions.</h3><div class="provider-tabs" role="group" aria-label="Provider configuration">{#for provider of providers key provider.id}<button type="button" aria-pressed={selectedProvider === provider.id ? "true" : "false"} on:click={() => selectedProvider = provider.id}>{provider.name}</button>{/for}</div>
+        {#for provider of providers key provider.id}{#if selectedProvider === provider.id}<div class="provider-detail"><dl><div><dt>Protocol</dt><dd>{provider.protocol}</dd></div><div><dt>Authentication</dt><dd>{provider.auth}</dd></div><div><dt>Model</dt><dd>{provider.model}</dd></div><div class="endpoint"><dt>API base</dt><dd><code>{provider.endpoint}</code></dd></div></dl><p>{provider.detail}</p></div>{/if}{/for}
+        <p class="fine-print">No endpoint probing, model fallback or automatic provisioning. Compatible endpoints must support the chosen protocol and function calling. Amazon Bedrock is not currently supported.</p>
+      </div>
+    </div></section>
+
+    <section class="section wrap" id="commands" aria-labelledby="commands-title"><div class="section-heading"><p class="eyebrow">03 / COMMAND REFERENCE</p><h2 id="commands-title">From the first question<br />to the next change.</h2><p>Five commands, with workspace, read-only and prompt-only modes. DI never starts a server, installs dependencies or deploys your app.</p></div>
+      <div class="command-list">{#for command of commands key command.name}<article class="command-row"><div><span class="small-label">{command.name}</span><h3>{command.label}</h3></div><div class="command-content"><div class="code-row"><code>{command.code}</code><button type="button" class="copy" aria-label={"Copy " + command.name + " command"} title={"Copy " + command.name + " command"} on:click={() => copyCommand(command.code)}><img src={icons + "copy.svg"} alt="" width="17" height="17" /></button></div><p>{command.text}</p></div></article>{/for}</div>
+      <p class="copy-status" role="status" aria-live="polite">{copyStatus}</p>
+    </section>
+
+    <section class="safety-band" id="safety" aria-labelledby="safety-title"><div class="wrap section"><div class="section-heading"><p class="eyebrow">04 / ACCESS AND CONTROL</p><h2 id="safety-title">Small tool surface.<br />Explicit boundaries.</h2><p>There is no auto-approve option, shell execution or delete tool. Every requested operation is validated, authorized and executed sequentially.</p></div>
+      <div class="tool-grid">{#for tool of tools key tool.name}<article><span class="tool-limit">{tool.limit}</span><h3><code>{tool.name}</code></h3><p>{tool.text}</p></article>{/for}</div>
+      <figure class="write-flow"><figcaption>AN APPROVED WRITE</figcaption><ol><li><img src={icons + "file-search.svg"} alt="" width="22" height="22" /><strong>Read</strong><span>Capture current hash</span></li><li><img src={icons + "user-check.svg"} alt="" width="22" height="22" /><strong>Review</strong><span>Approve full new content</span></li><li><img src={icons + "shield-check.svg"} alt="" width="22" height="22" /><strong>Check</strong><span>Reject stale file edits</span></li><li><img src={icons + "archive.svg"} alt="" width="22" height="22" /><strong>Back up</strong><span>Preserve the original</span></li><li><img src={icons + "file-check-2.svg"} alt="" width="22" height="22" /><strong>Write</strong><span>Temporary file + rename</span></li></ol></figure>
+      <div class="safety-notes"><article><h3>What stays outside the tool surface</h3><p>Paths outside the workspace, dot paths, conventional data, dependency, build, backup and secret paths, symlinks, hard-linked reads/writes, binary files and unsupported extensions. NIRAL_HOME is excluded too.</p><p>Supported: .niral, .js, .mjs, .cjs, .ts, .jsx, .tsx, .css, .html, .md, .json, .txt and .sql.</p></article><article><h3>What still needs your judgment</h3><p>Gitignore rules are not interpreted. Secrets embedded in ordinary source can still be disclosed through an approved read. Path and hash checks are guardrails, not an OS sandbox or a prompt-injection defense.</p><p>Approval shows full replacement content, not a computed diff. Cancellation stops pending work; it does not undo completed edits.</p></article></div>
+      <div class="budget"><div><strong>8</strong><span>default model turns</span></div><div><strong>32</strong><span>default tool-call budget</span></div><div><strong>5 min</strong><span>default whole-run timeout</span></div><div><strong>32 KiB</strong><span>maximum prompt</span></div></div>
+    </div></section>
+
+    <section class="section wrap" id="details" aria-labelledby="details-title"><div class="section-heading"><p class="eyebrow">05 / THE DETAILS</p><h2 id="details-title">Know what happens next.</h2></div>
+      <div class="questions">
+        <details><summary>Where are settings and backups stored?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>Settings live in NIRAL_HOME/di.json, defaulting to ~/.niral/di.json, with mode 0600. Only provider settings and the credential variable name are stored. App-side NIRAL_AI_* settings are separate.</p><p>Before a write, original content, absolute path and hash are saved under <code>{"NIRAL_HOME/di-backups/<run-id>/"}</code>. New files have a null original. Backups are retained without pruning; restore manually after reviewing subsequent changes.</p></div></details>
+        <details><summary>Can I configure DI noninteractively?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>Yes. Supply explicit settings. Replace these endpoint and model placeholders with your provider's exact values; the credential itself stays out of arguments.</p><pre><code>niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY</code></pre><p>The API base excludes the final /responses, /chat/completions or /messages operation path and query parameters. Use --api-version VERSION when needed. Existing configuration requires --replace. Ctrl-C or end-of-input cancels interactive setup without saving.</p></div></details>
+        <details><summary>Does DI run checks or roll back changes?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>No. Review changes, then run niral check, niral test and niral build yourself. There is no automatic test run, dependency installation, rollback, deployment or retry. A failed or cancelled run may already have completed approved edits.</p></div></details>
+        <details><summary>Is the conversation saved or streamed?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>Responses are completed, non-streaming responses. Chat keeps a bounded text history in memory; file results are not automatically retained across runs. No local transcript is written. Provider retention and charges follow your chosen provider's policies; Responses store:false is not a general retention guarantee.</p></div></details>
+        <details><summary>What provider compatibility is verified?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>Deterministic mocked tests cover protocols, approvals, filesystem boundaries and the CLI. A separate live Azure Responses smoke test verified a basic two-turn, authorized tool round trip on one selected deployment. That is not proof of every model, provider or protocol feature. Streaming and broader live-provider checks remain future work.</p></div></details>
+        <details><summary>What are the provider and agent limits?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>The agent defaults to 8 turns, 32 tool calls, 64 KiB of tool results and a 300-second whole-run timeout. Denied calls still consume the budget. The last allowed turn cannot execute tools because no turn would remain to interpret the results.</p><p>Provider defaults are 4,096 output tokens, a 120-second request/body timeout, a 2 MiB serialized request limit and a 4 MiB response limit. Truncated, malformed or unsupported responses are errors, not executable tool requests. There are no automatic retries.</p></div></details>
+        <details><summary>Can developers use the provider and agent APIs directly?<img src={icons + "plus.svg"} alt="" width="20" height="20" /></summary><div><p>The framework exposes createProvider in src/di/provider.js and runAgent in src/di/agent.js. Providers accept explicit configuration and return content, structured tool calls, usage and protocol-specific continuation state. Preserve that state intact between requests within the same protocol.</p><p>A host supplies tool schemas, mandatory validators and executors. Authorization must return exactly true. The loop validates the whole batch before executing any call; unknown tools, repeated IDs, malformed arguments and exceeded budgets stop the run. Schemas are not permissions.</p><p>Custom hosts must provide their own confinement, backups and disclosure controls. Cancellation is cooperative; in-process work cannot be forcibly rolled back. The CLI model is instructed to inspect applicable AGENTS.md files, but instructions never replace approval.</p><a class="text-link" href="https://github.com/Zyora-Dev/niral/blob/main/src/di/README.md">Provider and host API reference <img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a></div></details>
+      </div>
+      <div class="closing"><div><h3>Part of Niral. Separate from your app runtime.</h3><p>Explore the full CLI reference and start with a project you know.</p></div><a class="text-link" href="/docs/cli">CLI reference <img src={icons + "arrow-up-right.svg"} alt="" width="18" height="18" /></a></div>
+    </section>
+  </main>
+  <SiteFooter />
+</div>
+
+<style>
+  :global(html) { color-scheme: dark; }
+  :global(body) { margin: 0; background: #090909; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #090909; }
+  *, *::before, *::after { box-sizing: border-box; }
+  h1, h2, h3, p, figure, ol, dl, dd { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+  .di-page { --gold: #f2b544; --line: #424247; color: #f6f6f7; background: #101012; font: 15px/1.75 "Geist", sans-serif; letter-spacing: 0; }
+  .wrap { width: min(1200px, calc(100% - 64px)); margin-inline: auto; }
+  .skip-link { position: absolute; top: -80px; left: 20px; padding: 12px 20px; background: var(--gold); color: #101010; z-index: 60; }
+  .skip-link:focus { top: 12px; }
+  .intro { padding: 64px 0 0; background-image: linear-gradient(90deg, #ffffff04 1px, transparent 1px), linear-gradient(#ffffff04 1px, transparent 1px); background-size: 64px 64px; border-bottom: 1px solid var(--line); }
+  .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--gold); font: 12px/1.6 "Geist Mono", monospace; }
+  .eyebrow img { filter: invert(1); }
+  h1 { font-size: 88px; font-weight: 550; line-height: 1.1; margin-top: 28px; }
+  h1 span { color: var(--gold); }
+  .intro-line { font-size: 32px; line-height: 1.3; margin-top: 24px; }
+  .intro-description { max-width: 640px; margin-top: 22px; font-size: 16px; }
+  .intro-actions { display: flex; align-items: center; gap: 28px; margin-top: 28px; }
+  .primary-link, .text-link { display: inline-flex; align-items: center; gap: 14px; font-size: 14px; font-weight: 550; }
+  .primary-link { background: var(--gold); color: #101010; padding: 12px 20px; border-radius: 5px; }
+  .primary-link:hover { background: #ffd184; }
+  .text-link img, .facts img, .flow-top img, figcaption img, .boundary img, .terminal img, .copy img, .write-flow img, summary img { filter: invert(1); }
+  .text-link:hover { color: var(--gold); }
+  .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; padding-block: 24px; margin-top: 52px; border-top: 1px solid var(--line); font-size: 13px; }
+  .facts span { display: flex; align-items: center; gap: 12px; }
+  .facts strong { font: 28px/1.2 "Geist Mono", monospace; color: var(--gold); }
+  .section { padding-block: 76px; scroll-margin-top: 96px; }
+  .section-heading { max-width: 650px; margin-bottom: 40px; }
+  h2 { font-size: 38px; line-height: 1.22; font-weight: 500; margin-top: 18px; }
+  .section-heading > p:last-child:not(.eyebrow) { margin-top: 20px; }
+  h3 { font-size: 17px; font-weight: 550; line-height: 1.5; }
+  .flow-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .flow-grid li { padding: 26px; position: relative; border-right: 1px solid var(--line); background: #19191c; }
+  .flow-grid li:last-child { border: 0; background: #242426; }
+  .flow-grid li:nth-child(3) { background: #302719; }
+  .flow-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+  .flow-top span { color: var(--gold); font: 14px "Geist Mono", monospace; }
+  .flow-grid p { font-size: 13px; margin-top: 12px; }
+  .flow-figure figcaption { display: flex; align-items: center; gap: 12px; font-size: 13px; margin-top: 16px; }
+  .boundary { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 28px; border-top: 1px dashed #77777b; padding-top: 32px; margin-top: 40px; }
+  .small-label { font: 12px/1.7 "Geist Mono", monospace; color: var(--gold); }
+  .boundary h3 { margin: 8px 0 12px; }
+  .boundary p { font-size: 13px; }
+  .boundary-crossing { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center; font-size: 12px; }
+  .setup-band { background: #18181b; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
+  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
+  .setup-steps { list-style: none; padding: 0; display: grid; gap: 28px; }
+  .setup-steps li { display: flex; align-items: start; gap: 20px; }
+  .setup-steps li > span { font: 13px/2 "Geist Mono", monospace; color: var(--gold); }
+  .setup-steps p { margin-top: 8px; font-size: 14px; }
+  .terminal { min-width: 0; border: 1px solid #65656b; border-radius: 6px; background: #0c0c0e; }
+  .terminal-heading { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--line); font: 12px "Geist Mono", monospace; }
+  .terminal-body { padding: 24px; }
+  code { font: 13px/1.8 "Geist Mono", monospace; overflow-wrap: anywhere; }
+  .terminal-body > code { display: block; }
+  .terminal-comment { font-size: 12px; color: var(--gold); margin-top: 22px; margin-bottom: 8px; }
+  .terminal-comment:first-child { margin-top: 0; }
+  .terminal-foot { border-top: 1px solid var(--line); padding: 18px 24px; font-size: 12px; }
+  .terminal-foot code { font-size: 12px; }
+  .code-row { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+  .code-row code { min-width: 0; }
+  .copy { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid #626269; border-radius: 4px; background: transparent; cursor: pointer; }
+  .copy:hover { background: #37373c; }
+  .provider-section { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 32px; }
+  .provider-tabs { display: flex; gap: 8px; margin-top: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .provider-tabs button { padding: 10px 20px; min-height: 44px; color: #fafafa; background: transparent; border: 1px solid #626269; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .provider-tabs button[aria-pressed="true"] { color: #101010; background: var(--gold); border-color: var(--gold); }
+  .provider-detail { padding-block: 26px; min-height: 240px; }
+  .provider-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; }
+  dt { font-size: 12px; color: #f6f6f7; margin-bottom: 8px; }
+  dd { font-size: 14px; overflow-wrap: anywhere; }
+  .endpoint { grid-column: 1 / -1; }
+  .provider-detail p { margin-top: 20px; font-size: 13px; }
+  .fine-print { font-size: 12px; max-width: 900px; }
+  .command-row { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; padding-block: 28px; border-top: 1px solid var(--line); }
+  .command-row h3 { margin-top: 8px; }
+  .command-content p { font-size: 13px; margin-top: 16px; max-width: 720px; }
+  .command-content .code-row { padding: 14px 16px; background: #202023; border-left: 2px solid var(--gold); }
+  .copy-status { min-height: 28px; margin-top: 16px; font-size: 13px; color: var(--gold); }
+  .safety-band { background: #19191c; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
+  .tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .tool-grid article { padding: 24px 0; border-top: 2px solid var(--gold); }
+  .tool-limit { color: var(--gold); font: 26px/1.4 "Geist Mono", monospace; }
+  .tool-grid h3 { margin-top: 18px; }
+  .tool-grid h3 code { font-size: 16px; }
+  .tool-grid p { margin-top: 10px; font-size: 13px; }
+  .write-flow { padding-block: 30px; border-block: 1px solid var(--line); margin-top: 24px; }
+  .write-flow figcaption { font: 12px "Geist Mono", monospace; color: var(--gold); }
+  .write-flow ol { list-style: none; padding: 28px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 28px; }
+  .write-flow li { display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .write-flow li:not(:last-child)::after { content: ""; position: absolute; top: 11px; left: 44px; right: 0; border-top: 1px dashed #949499; }
+  .write-flow strong { font-size: 15px; font-weight: 500; }
+  .write-flow li span { font-size: 12px; }
+  .safety-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 36px; }
+  .safety-notes p { font-size: 13px; margin-top: 16px; }
+  .budget { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; border-top: 1px solid var(--line); margin-top: 36px; padding-top: 32px; }
+  .budget div { display: flex; flex-direction: column; gap: 10px; }
+  .budget strong { font: 30px/1.2 "Geist Mono", monospace; color: var(--gold); }
+  .budget span { font-size: 12px; }
+  .questions details { border-top: 1px solid var(--line); }
+  .questions details:last-child { border-bottom: 1px solid var(--line); }
+  summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; list-style: none; padding: 22px 0; font-size: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary img { flex-shrink: 0; transition: transform .2s; }
+  details[open] summary img { transform: rotate(45deg); }
+  .questions details > div { padding: 0 0 28px; max-width: 880px; font-size: 14px; }
+  .questions p + p { margin-top: 16px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 18px; background: #202023; border-left: 2px solid var(--gold); }
+  .closing { display: flex; align-items: center; gap: 28px; margin-top: 56px; padding-top: 32px; }
+  .closing p { font-size: 13px; margin-top: 8px; }
+  .closing .text-link { margin-left: auto; white-space: nowrap; }
+  @media (max-width: 1050px) {
+    .flow-grid li { padding: 22px 18px; }
+    .setup-grid { gap: 32px; }
+    .boundary { grid-template-columns: 1fr 140px 1fr; }
+    .command-row { grid-template-columns: 200px minmax(0, 1fr); gap: 28px; }
+  }
+  @media (max-width: 760px) {
+    .wrap { width: calc(100% - 40px); }
+    .intro { padding-top: 40px; }
+    h1 { font-size: 64px; }
+    .intro-line { font-size: 26px; }
+    .intro-description { font-size: 15px; }
+    .facts { grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 36px; }
+    .section { padding-block: 48px; scroll-margin-top: 80px; }
+    h2 { font-size: 30px; }
+    .flow-grid { grid-template-columns: 1fr 1fr; }
+    .flow-grid li { padding: 24px; border-bottom: 1px solid var(--line); }
+    .flow-grid li:nth-child(2) { border-right: 0; }
+    .flow-grid li:nth-child(3) { border-bottom: 0; }
+    .boundary { grid-template-columns: 1fr; gap: 24px; }
+    .boundary-crossing { flex-direction: row; justify-content: start; text-align: left; }
+    .boundary-crossing img { transform: rotate(90deg); }
+    .setup-grid, .safety-notes { grid-template-columns: 1fr; gap: 32px; }
+    .provider-detail dl { grid-template-columns: 1fr 1fr; }
+    .provider-detail { min-height: 320px; }
+    .provider-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+    .provider-tabs button { padding-inline: 12px; }
+    .command-row { grid-template-columns: 1fr; gap: 18px; }
+    .tool-grid { grid-template-columns: 1fr; gap: 0; }
+    .write-flow ol { grid-template-columns: 1fr; gap: 24px; }
+    .write-flow li { display: grid; grid-template-columns: 28px 80px minmax(0, 1fr); align-items: center; gap: 14px; }
+    .write-flow li:not(:last-child)::after { top: 32px; bottom: -16px; left: 11px; right: auto; border-top: 0; border-left: 1px dashed #949499; }
+    .budget { grid-template-columns: 1fr 1fr; gap: 28px; }
+    .closing { flex-wrap: wrap; gap: 20px; }
+    .closing > div { flex: 1 1 220px; }
+    .closing .text-link { margin-left: 0; }
+  }
+  @media (max-width: 400px) {
+    .wrap { width: calc(100% - 32px); }
+    .eyebrow { font-size: 10px; }
+    h1 { font-size: 52px; }
+    .intro-actions { align-items: start; flex-direction: column; gap: 20px; }
+    .facts { font-size: 12px; gap: 20px 12px; }
+    .facts span { gap: 8px; }
+    .flow-grid { grid-template-columns: 1fr; }
+    .flow-grid li { border-right: 0; }
+    .flow-grid li:nth-child(3) { border-bottom: 1px solid var(--line); }
+    .flow-top { margin-bottom: 20px; }
+    .provider-detail dl { grid-template-columns: 1fr; }
+    .provider-detail { min-height: 380px; }
+    .terminal-body { padding: 18px; }
+    .write-flow li { grid-template-columns: 24px 70px minmax(0, 1fr); gap: 10px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .intro .eyebrow, h1, .intro-line, .intro-description { animation: arrive .5s ease-out both; }
+    .intro-line { animation-delay: .08s; }
+    .intro-description { animation-delay: .16s; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  }
+</style>

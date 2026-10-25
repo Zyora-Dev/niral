@@ -1,0 +1,58 @@
+<script>
+  let { current = "" } = $props
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+</script>
+
+<header class="site-header">
+  <nav class="navigation" aria-label="Main navigation">
+    <a class="wordmark" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="102" height="34" /></a>
+    <div class="desktop-links"><a href="/#features">Framework</a><a href="/docs/getting-started">Documentation</a><a href="/#performance">Performance</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About</a><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a></div>
+    <div class="nav-actions"><a class="icon-button github-link" href="https://github.com/Zyora-Dev/niral" aria-label="Niral on GitHub" title="Niral on GitHub"><img src={icons + "github.svg"} alt="" width="20" height="20" /></a><a class="button button-small" href="/docs/getting-started">Get started <img src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div>
+    <details class="mobile-menu"><summary aria-label="Navigation menu"><img src={icons + "menu.svg"} alt="" width="22" height="22" /></summary><div><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a><a href="/docs/getting-started">Documentation</a><a href="/docs/benchmarks">Benchmarks</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a></div></details>
+  </nav>
+</header>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+  .site-header { --gold: #f2b544; --border: #343436; height: 76px; position: sticky; top: 0; z-index: 30; background: #090909f5; color: #fafafa; border-bottom: 1px solid var(--border); backdrop-filter: blur(16px); font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; }
+  .navigation { width: min(1360px, calc(100% - 64px)); height: 100%; margin: auto; display: flex; align-items: center; gap: 48px; }
+  .wordmark { display: flex; align-items: center; }
+  .wordmark img { display: block; width: 102px; height: 34px; object-fit: contain; filter: grayscale(1) brightness(1.8); }
+  .desktop-links { display: flex; gap: 28px; font-size: 13px; }
+  .desktop-links a:hover { color: var(--gold); }
+  a[aria-current="page"] { color: var(--gold); text-decoration: underline; text-underline-offset: 7px; }
+  .desktop-links .di-link, .mobile-menu .di-link { color: var(--gold); display: flex; align-items: center; gap: 8px; font-weight: 650; }
+  .di-link img { filter: invert(78%) sepia(80%) saturate(450%) hue-rotate(342deg); }
+  .di-link[aria-current="page"] { text-decoration: underline; text-underline-offset: 7px; text-decoration-thickness: 2px; }
+  .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: 20px; min-height: 48px; padding: 12px 22px; border: 1px solid #f6f6f6; background: #f6f6f6; color: #101010; border-radius: 6px; font-size: 14px; font-weight: 550; white-space: nowrap; transition: background .15s, border-color .15s; }
+  .button-small { min-height: 36px; padding: 7px 14px; font-size: 12px; gap: 16px; }
+  .icon-button { display: inline-grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #fafafa; }
+  .icon-button:hover { background: #303032; border-color: #555558; }
+  .github-link img, .mobile-menu img { filter: invert(1); }
+  .mobile-menu { display: none; }
+  .mobile-menu summary { list-style: none; display: grid; place-items: center; width: 40px; height: 40px; cursor: pointer; border: 1px solid var(--border); border-radius: 5px; }
+  .mobile-menu summary::-webkit-details-marker { display: none; }
+  .mobile-menu > div { position: absolute; top: 63px; left: 16px; right: 16px; background: #18181a; border: 1px solid #555558; border-radius: 6px; padding: 8px; box-shadow: 0 20px 40px #0009; }
+  .mobile-menu a { display: block; padding: 12px 16px; }
+  .mobile-menu a:hover { background: #29292c; }
+  @media (max-width: 1100px) {
+    .navigation { gap: 28px; }
+    .desktop-links { gap: 18px; }
+    .desktop-links a:nth-child(3) { display: none; }
+  }
+  @media (max-width: 800px) {
+    .site-header { height: 64px; }
+    .navigation { width: calc(100% - 40px); gap: 20px; }
+    .desktop-links, .github-link { display: none; }
+    .mobile-menu { display: block; }
+  }
+  @media (max-width: 580px) {
+    .navigation { width: calc(100% - 32px); gap: 12px; }
+    .wordmark img { width: 86px; height: 30px; }
+    .nav-actions { gap: 0; }
+    .button-small { padding-inline: 12px; font-size: 11px; gap: 10px; }
+  }
+</style>

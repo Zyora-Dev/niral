@@ -1,0 +1,78 @@
+<script>
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+</script>
+
+<footer class="site-footer" id="footer">
+  <div class="footer-inner">
+    <div class="footer-directory">
+      <div class="footer-about">
+        <a class="footer-symbol" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="960" height="468" /></a>
+        <p>The zero-dependency<br />full-stack framework.<br />Built in India.<br />Made for everyone.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <div><h3>Learn</h3><a href="/docs/getting-started">Getting started</a><a href="/docs/components">Components</a><a href="/docs/cli">CLI reference</a></div>
+        <div><h3>Build</h3><a href="/di">Developer Intelligence</a><a href="/docs/server">Server functions</a><a href="/docs/auth">Authentication</a><a href="/docs/realtime">Realtime</a></div>
+        <div><h3>Resources</h3><a href="/docs/ai">AI & RAG</a><a href="/docs/deployment">Deployment</a><a href="/docs/benchmarks">Benchmarks</a></div>
+        <div><h3>Company</h3><a href="/about">About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a><a href="/changelog">Changelog</a><a href="/contact">Contact us</a><a href="https://console.zyoralabs.com">zHost console</a></div>
+      </nav>
+      <div class="footer-contact">
+        <h3>Get in touch</h3>
+        <address>
+          <a class="footer-email" href="mailto:developer@niral.site"><img src={icons + "mail.svg"} alt="" width="15" height="15" />developer@niral.site</a>
+          <a class="footer-whatsapp" href="https://wa.me/918940189694" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp +91 89401 89694"><img src={icons + "message-circle.svg"} alt="" width="15" height="15" />+91 89401 89694<img src={icons + "arrow-up-right.svg"} alt="" width="15" height="15" /></a>
+        </address>
+      </div>
+    </div>
+    <div class="footer-copyright">© 2026 <a href="https://zyoralabs.com">ZyoraLabs</a>. All rights reserved.</div>
+  </div>
+</footer>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+  h3, p { margin: 0; }
+  .site-footer { --gold: #f2b544; background: #000; color: #fafafa; scroll-margin-top: 76px; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; }
+  .footer-inner { width: min(1120px, calc(100% - 96px)); margin-inline: auto; padding-top: 96px; }
+  .footer-directory { display: grid; grid-template-columns: 150px minmax(0, 1fr) 220px; gap: 48px; align-items: start; }
+  .footer-symbol { display: block; position: relative; width: 120px; max-width: 100%; margin-bottom: 26px; }
+  .footer-symbol img { display: block; width: 100%; height: auto; filter: brightness(0) invert(1); }
+  .footer-symbol::after { content: ""; position: absolute; inset: 0; background: var(--gold); mask: url("/niral-logo.svg") center / 100% 100% no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
+  .footer-about p { font-size: 13px; line-height: 1.8; }
+  .footer-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+  .footer-links h3, .footer-contact h3 { font-size: 12px; font-weight: 400; line-height: 1.6; margin-bottom: 24px; }
+  .footer-links a { display: block; width: fit-content; max-width: 100%; padding-block: 7px; font-size: 12px; line-height: 1.65; }
+  .footer-links a:hover, .footer-copyright a:hover { color: var(--gold); }
+  .footer-contact { min-width: 0; }
+  .footer-contact address { display: grid; gap: 10px; font-style: normal; }
+  .footer-contact address a { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+  .footer-contact img { flex: 0 0 15px; }
+  .footer-email { background: #1c1c1c; border: 1px solid #414141; }
+  .footer-email img { filter: invert(1); }
+  .footer-email:hover { border-color: var(--gold); }
+  .footer-whatsapp { background: var(--gold); color: #080808; border: 1px solid var(--gold); }
+  .footer-whatsapp img:last-child { margin-left: auto; }
+  .footer-whatsapp:hover { background: #ffd17a; }
+  .footer-copyright { border-top: 1px solid #343434; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
+  @media (max-width: 1100px) {
+    .footer-directory { grid-template-columns: 1fr 220px; gap: 40px; }
+    .footer-links { grid-column: 1 / -1; grid-row: 2; gap: 24px; }
+    .footer-contact { grid-column: 2; grid-row: 1; }
+  }
+  @media (max-width: 800px) {
+    .footer-inner { width: calc(100% - 64px); padding-top: 64px; }
+    .footer-copyright { margin-top: 48px; }
+  }
+  @media (max-width: 580px) {
+    .footer-inner { width: calc(100% - 48px); padding-top: 48px; }
+    .footer-directory { grid-template-columns: 1fr; gap: 36px; }
+    .footer-about { display: flex; align-items: flex-start; gap: 24px; }
+    .footer-symbol { flex: 0 0 100px; margin-bottom: 0; }
+    .footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; }
+    .footer-links h3, .footer-contact h3 { margin-bottom: 12px; }
+    .footer-links a { min-height: 40px; padding-block: 10px; }
+    .footer-contact { grid-column: auto; grid-row: auto; }
+    .footer-contact address { max-width: 280px; }
+    .footer-copyright { margin-top: 40px; font-size: 11px; padding-block: 24px; }
+  }
+</style>

@@ -1,544 +1,522 @@
-<script mode="static">
-  const demo = "&lt;server&gt;\n<span class='k'>export async function</span> <span class='f'>load</span>() {\n  <span class='k'>return</span> { items: <span class='k'>await</span> db.all() }          <span class='c'>// SSR data — never ships</span>\n}\n<span class='k'>export async function</span> <span class='f'>add</span>(text) {\n  <span class='f'>publish</span>(\"todos\", { text })                <span class='c'>// realtime to every tab</span>\n}\n&lt;/server&gt;\n\n&lt;script&gt;\n  <span class='k'>let</span> { items } = <span class='r'>$props</span>\n  <span class='k'>let</span> list = <span class='r'>$state</span>(items)\n  <span class='f'>live</span>(\"todos\", (t) =&gt; list = [...list, t])\n&lt;/script&gt;\n\n{#for t of list key t.id}\n  &lt;li transition:fade&gt;{t.text}&lt;/li&gt;\n{/for}"
-  const ld = '<script type="application/ld+json">' + JSON.stringify({
-    "@context": "https://schema.org",
-    "@graph": [
-      { "@type": "SoftwareApplication", "name": "Niral", "applicationCategory": "DeveloperApplication", "operatingSystem": "Node.js 22+", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }, "description": "A zero-dependency, compiler-first full-stack web framework. Svelte-class performance, batteries included (SSR, auth, database, realtime, jobs, AI), deploy in three commands.", "url": "https://niral.site", "downloadUrl": "https://www.npmjs.com/package/create-niral", "author": { "@type": "Organization", "name": "ZyoraLabs", "url": "https://zyoralabs.com" } },
-      { "@type": "WebSite", "name": "Niral", "url": "https://niral.site", "publisher": { "@type": "Organization", "name": "ZyoraLabs" } }
-    ]
-  }) + '<\/script>'
+<script>
+  import SiteHeader from "../components/SiteHeader.niral"
+  import SiteFooter from "../components/SiteFooter.niral"
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "Niral | Zero-Dependency Full-Stack Node.js Framework"
+  const description = "Build full-stack Node.js apps with Niral: a compiler-first framework with SSR, reactive components, auth, databases and realtime. Zero runtime dependencies."
+  let example = $state("counter")
+  let count = $state(0)
+  let doubled = $derived(count * 2)
+  let draft = $state("")
+  let tasks = $state([{ id: 1, text: "Create a Niral app", done: true }, { id: 2, text: "Build something yours", done: false }])
+  let nextTaskId = 3
+  let hosting = $state("server")
+  let copied = $state("")
+  let copyError = $state("")
+  const icons = "https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/"
+  const install = "npx create-niral my-app"
+  const examples = {
+    counter: '<script>\n  let count = $state(0)\n  let doubled = $derived(count * 2)\n<\/script>\n\n<button on:click={() => count--}>−</button>\n<strong>{count}</strong>\n<button on:click={() => count++}>+</button>\n\n<p>Doubled: {doubled}</p>',
+    todos: '<script>\n  let draft = $state("")\n  let items = $state([])\n\n  function add() {\n    if (!draft.trim()) return\n    items = [...items, draft.trim()]\n    draft = ""\n  }\n<\/script>\n\n<input bind:value={draft} />\n<button on:click={add}>Add</button>\n{#for item of items}\n  <p>{item}</p>\n{/for}'
+  }
+  const deployments = {
+    server: { command: 'niral build\nniral deploy', title: 'Your server. Your infrastructure.', detail: 'Generate the systemd, nginx and atomic-release kit. Deploy to a VPS you control, with rollback built in.', href: '/docs/deployment', link: 'Self-hosting guide' },
+    cloud: { command: 'zhost login\nzhost link my-app\nzhost deploy', title: 'From your terminal to zHost.', detail: 'ZyoraLabs\' deployment cloud detects Niral, builds your app and gives it a live URL. No nginx or CI to configure.', href: '/docs/zhost', link: 'zHost deployment guide' }
+  }
+  const benchmarks = [{ name: "Niral", rate: "2,374", width: 100 }, { name: "SolidStart", rate: "1,885", width: 79 }, { name: "Astro", rate: "698", width: 29 }, { name: "SvelteKit", rate: "599", width: 25 }, { name: "Next.js", rate: "303", width: 13 }]
+  const resources = [
+    { icon: "book-open", title: "Start building", description: "Your first route, component and server function.", href: "/docs/getting-started", label: "Getting started" },
+    { icon: "terminal", title: "Meet your CLI", description: "Create, develop, check, test and ship from one tool.", href: "/docs/cli", label: "CLI reference" },
+    { icon: "code-xml", title: "Stay in your editor", description: "Syntax, diagnostics and language support for VS Code.", href: "https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode", label: "VS Code extension" }
+  ]
+  function addTask(event) {
+    event.preventDefault()
+    const text = draft.trim()
+    if (!text) return
+    tasks = [...tasks, { id: nextTaskId++, text, done: false }]
+    draft = ""
+  }
+  function toggleTask(id) {
+    tasks = tasks.map(task => task.id === id ? { ...task, done: !task.done } : task)
+  }
+  async function copyText(text, key) {
+    copied = ""
+    copyError = ""
+    try {
+      await navigator.clipboard.writeText(text)
+      copied = key
+    } catch {
+      copyError = "Clipboard unavailable. Select and copy the command or code."
+    }
+  }
+  function changeExample(value) {
+    example = value
+    copied = ""
+    copyError = ""
+  }
+  function changeHosting(value) {
+    hosting = value
+    copied = ""
+    copyError = ""
+  }
 </script>
 
 <head>
-  <title>Niral — the zero-dependency full-stack framework</title>
-  <meta name="description" content="Niral is a zero-dependency, compiler-first full-stack web framework — Svelte-class performance, faster than Next.js, with auth, database, realtime, jobs, AI and one-command cloud deploys built in. By ZyoraLabs." />
-  <meta name="keywords" content="niral, full-stack framework, zero dependency framework, javascript framework, node.js framework, ssr framework, svelte alternative, next.js alternative, web framework, zyoralabs" />
-  <meta name="author" content="ZyoraLabs" />
-  <meta name="robots" content="index, follow" />
-  <meta name="theme-color" content="#0a0c10" />
+  <title>Niral | Zero-Dependency Full-Stack Node.js Framework</title>
+  <meta name="description" content="Build full-stack Node.js apps with Niral: a compiler-first framework with SSR, reactive components, auth, databases and realtime. Zero runtime dependencies." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/" />
-  <link rel="icon" type="image/png" href="/n.png" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/n.png" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Niral" />
-  <meta property="og:title" content="Niral — the zero-dependency full-stack framework" />
-  <meta property="og:description" content="Zero dependencies. Faster than Next.js. Auth, database, realtime, jobs, AI &amp; one-command cloud deploys — built in. By ZyoraLabs." />
+  <meta property="og:title" content="Niral | Zero-Dependency Full-Stack Node.js Framework" />
+  <meta property="og:description" content="Build full-stack Node.js apps with Niral: a compiler-first framework with SSR, reactive components, auth, databases and realtime. Zero runtime dependencies." />
   <meta property="og:url" content="https://niral.site/" />
   <meta property="og:image" content="https://niral.site/n.png" />
-  <meta property="og:image:alt" content="Niral — the zero-dependency full-stack framework" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Niral — the zero-dependency full-stack framework" />
-  <meta name="twitter:description" content="Zero dependencies. Faster than Next.js. Batteries included. Deploy in three commands." />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Niral | Zero-Dependency Full-Stack Node.js Framework" />
+  <meta name="twitter:description" content="Build full-stack Node.js apps with Niral: a compiler-first framework with SSR, reactive components, auth, databases and realtime. Zero runtime dependencies." />
   <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
 </head>
+<Seo title={seoTitle} description={description} path="/" software={true} />
 
-<main>
-  {@html ld}
-  <nav class="nav">
-    <div class="nav-inner">
-      <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral" height="30" /></a>
-      <input type="checkbox" id="navtoggle" class="nav-toggle" aria-hidden="true" />
-      <label for="navtoggle" class="nav-burger" aria-label="Toggle menu"><span></span><span></span><span></span></label>
-      <div class="nav-links">
-        <a href="/docs/getting-started">Docs</a>
-        <a href="/docs/benchmarks">Benchmarks</a>
-        <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
-        <a class="nav-cta" href="/docs/getting-started">Get started</a>
+<div class="homepage" id="top">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <SiteHeader />
+  <main id="main-content">
+    <section class="opening" aria-labelledby="page-title">
+      <div class="opening-inner frame">
+        <img class="opening-art" src="/n.png" alt="" width="620" height="620" />
+        <a class="release-link" href="/changelog"><span class="release-dot"></span> Built independently. Built to ship. <img src={(icons) + "arrow-right.svg"} alt="" width="16" height="16" /></a>
+        <h1 id="page-title">The Niral<br /><span>web framework.</span></h1>
+        <p class="opening-copy">From the first line to the full stack.<br />A compiler, a server, and everything in between.<br /><strong>Zero runtime dependencies.</strong></p>
+        <div class="opening-actions"><a class="button button-gold" href="/docs/getting-started">Start building <img src={(icons) + "arrow-up-right.svg"} alt="" width="18" height="18" /></a><a class="button button-outline" href="#playground">See it in action <img src={(icons) + "arrow-down.svg"} alt="" width="18" height="18" /></a></div>
+        <div class="install-line"><span class="terminal-prompt" aria-hidden="true">$</span><code>{install}</code><button class="icon-button" on:click={() => copyText(install, "install")} aria-label={copied === "install" ? "Command copied" : "Copy install command"} title={copied === "install" ? "Copied" : "Copy command"}><img src={(icons) + (copied === 'install' ? 'check' : 'copy') + ".svg"} alt="" width="16" height="16" /></button><span class="node-label">Node.js 22+</span></div>
       </div>
-    </div>
-  </nav>
-
-  <section class="hero">
-    <div class="glow"></div>
-    <p class="badge"><span class="pulse"></span>zero dependencies · one $5 box to a fleet</p>
-    <img class="hero-logo" src="/n.png" alt="Niral" width="104" height="104" />
-    <h1>The full-stack framework<br />with <em>zero</em> dependencies.</h1>
-    <p class="sub">
-      Compiler-first components. Fine-grained reactivity. SSR at Svelte speed —
-      served <b>7.5× faster than Next.js</b>. Auth, jobs, realtime, AI and
-      deploys built in, not bolted on. <b>node_modules not required.</b>
-    </p>
-    <div class="cta">
-      <code class="install"><span class="prompt">$</span> npx create-niral my-app<span class="caret">▍</span></code>
-      <a class="btn" href="/docs/getting-started">Get started →</a>
-    </div>
-    <p class="hero-note">One command — SSR, hydration, a server RPC and tests, running in seconds.<br />No npm? <code class="alt">curl -fsSL https://niral.zyora.club/install.sh | bash</code></p>
-  </section>
-
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <span>SSR</span><span>◆</span><span>Postgres</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Clustering</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
-      <span>SSR</span><span>◆</span><span>Postgres</span><span>◆</span><span>Passkeys</span><span>◆</span><span>Jobs & Cron</span><span>◆</span><span>Clustering</span><span>◆</span><span>Streaming RPC</span><span>◆</span><span>SQLite</span><span>◆</span><span>AI + RAG</span><span>◆</span><span>WebSockets</span><span>◆</span><span>Migrations</span><span>◆</span><span>i18n</span><span>◆</span><span>Mail</span><span>◆</span><span>TypeScript</span><span>◆</span><span>Atomic deploys</span><span>◆</span>
-    </div>
-  </div>
-
-  <section class="numbers">
-    <div class="num"><b>2,200<i>/s</i></b><span>requests served, dynamic SSR — 7.5× Next.js, 3.8× SvelteKit</span></div>
-    <div class="num"><b>6.6<i>ms</i></b><span>hydration for 1000 rows — ties Svelte, 3× faster than React</span></div>
-    <div class="num"><b>0.2<i>s</i></b><span>production builds — atomic releases, one-symlink rollback</span></div>
-    <div class="num"><b>0</b><span>dependencies — the entire framework is Node stdlib</span></div>
-  </section>
-
-  <section class="code-demo">
-    <p class="eyebrow">The model</p>
-    <h2>One file. Whole feature.</h2>
-    <p class="section-sub">Data loading, a server function, realtime fan-out and an animated list — this is the complete source.</p>
-    <div class="window-wrap">
-      <div class="window-halo"></div>
-      <div class="window">
-        <div class="window-bar">
-          <span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span>
-          <span class="window-title">routes/todos.niral</span>
+      <div class="architecture frame" aria-label="Niral development model">
+        <div><span class="stage-number">01</span><span><b>Write a component</b><small>HTML, CSS & JavaScript</small></span><code>.niral</code></div>
+        <div><span class="stage-number">02</span><span><b>Let the compiler work</b><small>Direct DOM + server-rendered HTML</small></span><img src={(icons) + "workflow.svg"} alt="" width="22" height="22" /></div>
+        <div><span class="stage-number">03</span><span><b>Run it on your terms</b><small>One process. Your infrastructure.</small></span><img src={(icons) + "server.svg"} alt="" width="22" height="22" /></div>
+      </div>
+    </section>
+    <section class="section frame playground-section" id="playground" aria-labelledby="playground-title">
+      <div class="section-top"><div><p class="overline">Small by design</p><h2 id="playground-title">A little code.<br />A lot of possibility.</h2></div><p>Familiar syntax. Fine-grained reactivity.<br />No virtual DOM standing between<br class="desktop-break" /> your idea and the browser.</p></div>
+      <div class="workbench">
+        <div class="workbench-toolbar"><div class="example-switch" role="group" aria-label="Choose an example"><button class={example === "counter" ? "selected" : ""} aria-pressed={example === "counter"} on:click={() => changeExample("counter")}>Counter</button><button class={example === "todos" ? "selected" : ""} aria-pressed={example === "todos"} on:click={() => changeExample("todos")}>Todo list</button></div><a href="/docs/components">Component guide <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div>
+        <div class="workbench-body">
+          <div class="source-pane"><div class="pane-heading"><span><img src={(icons) + "file-code-2.svg"} alt="" width="16" height="16" /> routes/{example}.niral</span><button class="icon-button" on:click={() => copyText(examples[example], "example")} aria-label={copied === "example" ? "Example copied" : "Copy example code"} title={copied === "example" ? "Copied" : "Copy code"}><img src={(icons) + (copied === 'example' ? 'check' : 'copy') + ".svg"} alt="" width="16" height="16" /></button></div><pre><code>{examples[example]}</code></pre></div>
+          <div class="result-pane"><div class="pane-heading"><span><img src={(icons) + "app-window.svg"} alt="" width="16" height="16" /> Live preview</span><span class="preview-status">Niral runtime</span></div><div class="example-result">
+            {#if example === "counter"}
+              <div class="counter-demo"><p class="demo-label">A little state goes a long way.</p><output class="counter-value" aria-live="polite">{count}</output><div class="counter-controls"><button class="icon-button" on:click={() => count--} aria-label="Decrease count" title="Decrease"><img src={(icons) + "minus.svg"} alt="" width="20" height="20" /></button><button class="icon-button" on:click={() => count = 0} aria-label="Reset count" title="Reset"><img src={(icons) + "rotate-ccw.svg"} alt="" width="18" height="18" /></button><button class="icon-button" on:click={() => count++} aria-label="Increase count" title="Increase"><img src={(icons) + "plus.svg"} alt="" width="20" height="20" /></button></div><p class="derived-value">$derived <span>{count} × 2 = <b>{doubled}</b></span></p></div>
+            {:else}
+              <div class="todo-demo"><div class="todo-heading"><h3>Make something.</h3><span>{tasks.filter(task => task.done).length}/{tasks.length}</span></div><form on:submit={addTask}><label class="sr-only" for="new-task">New task</label><input id="new-task" bind:value={draft} placeholder="What’s next?" maxlength="80" required /><button class="icon-button" type="submit" aria-label="Add task" title="Add task"><img src={(icons) + "plus.svg"} alt="" width="20" height="20" /></button></form><ul class="task-list">{#for task of tasks key task.id}<li><label class={task.done ? "task-done" : ""}><input type="checkbox" checked={task.done} on:change={() => toggleTask(task.id)} /><span>{task.text}</span></label><button class="icon-button" on:click={() => tasks = tasks.filter(item => item.id !== task.id)} aria-label={"Delete " + task.text} title="Delete task"><img src={(icons) + "x.svg"} alt="" width="16" height="16" /></button></li>{/for}</ul>{#if tasks.length === 0}<p class="empty-tasks">A clean slate.</p>{/if}</div>
+            {/if}
+          </div></div>
         </div>
-        <pre><code>{@html demo}</code></pre>
+        <div class="workbench-bottom"><span><img src={(icons) + "check.svg"} alt="" width="15" height="15" /> Compiled to direct DOM updates</span><span>No virtual DOM. No runtime dependencies.</span></div>
       </div>
-    </div>
-  </section>
-
-  <section class="pipeline">
-    <p class="eyebrow">Workflow</p>
-    <h2>From idea to production, one tool.</h2>
-    <div class="steps">
-      <div class="step"><code>niral create</code><span>scaffolded app with SSR, RPC & tests</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><code>niral dev</code><span>HMR, error overlays, live channels</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><code>niral test</code><span>boots your real app, CI-ready</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><code>niral deploy</code><span>systemd + nginx + atomic releases</span></div>
-    </div>
-    <p class="pipeline-note">Plus <a href="/docs/cli">doctor · migrate · check · export</a> — and graceful drains on every restart, so a deploy never drops a request.</p>
-  </section>
-
-  <section class="grid-section">
-    <p class="eyebrow">Capabilities</p>
-    <h2>Batteries included. Actually included.</h2>
-    <p class="section-sub">Everything below ships in the framework or scaffolds into code you own — never an npm install.</p>
-    <div class="grid">
-      <a class="card span2" href="/docs/server"><b>Server functions</b><span>RPC with compile-time stubs, streaming responses, form actions that work without JS — and the function body structurally never reaches the browser.</span></a>
-      <a class="card" href="/docs/auth"><b>Auth built in</b><span>Passkeys, TOTP 2FA, OAuth, route guards — scaffolded into your project, zero deps.</span></a>
-      <a class="card" href="/docs/realtime"><b>Realtime</b><span>Live channels on framework-owned WebSockets, with session-aware guards.</span></a>
-      <a class="card span2" href="/docs/ai"><b>AI-native</b><span>ai.chat / stream / embed against any OpenAI-compatible endpoint. RAG included — and a fully-local llama.cpp option, one command away.</span></a>
-      <a class="card" href="/docs/jobs"><b>Jobs & cron</b><span>Durable queue that survives deploys. Retries, backoff, dead-letters — no Redis. Share it across a cluster with one env var.</span></a>
-      <a class="card" href="/docs/server"><b>Polyglot backends</b><span>Write server blocks in Python, Ruby or Go — same file, same sessions, same RPC.</span></a>
-      <a class="card" href="/docs/typescript"><b>Real TypeScript</b><span>niral check drives the actual TS compiler — diagnostics map to your .niral lines.</span></a>
-      <a class="card" href="/docs/deployment"><b>Atomic deploys</b><span>Hashed releases, one-symlink rollback, security headers and CSP nonces by default.</span></a>
-      <a class="card span2" href="/docs/scaling"><b>Scales to a fleet</b><span>Start on one $5 box with SQLite. Add Postgres — managed or self-hosted, TLS built in, zero-dep driver. Then go multi-server: stateless nodes, realtime over LISTEN/NOTIFY, a shared job queue. Every tier opt-in, still zero dependencies.</span></a>
-    </div>
-  </section>
-
-  <section class="bench">
-    <p class="eyebrow">Performance</p>
-    <h2>Measured, not marketed.</h2>
-    <p class="section-sub">Production servers, real HTTP, dynamic SSR on every request — the same 1000-row page, 100 connections. <a href="/docs/benchmarks">Full methodology →</a></p>
-    <div class="bars">
-      <div class="bar-row"><span class="bar-label">niral</span><div class="bar-track"><div class="bar b-niral" style="width: 100%"></div></div><span class="bar-val">2,374 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">solidstart</span><div class="bar-track"><div class="bar b-other" style="width: 79%"></div></div><span class="bar-val">1,885 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">astro</span><div class="bar-track"><div class="bar b-other" style="width: 29%"></div></div><span class="bar-val">698 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">sveltekit</span><div class="bar-track"><div class="bar b-other" style="width: 25%"></div></div><span class="bar-val">599 req/s</span></div>
-      <div class="bar-row"><span class="bar-label">next.js</span><div class="bar-track"><div class="bar b-other" style="width: 13%"></div></div><span class="bar-val">303 req/s</span></div>
-    </div>
-    <p class="bench-note">Zero errors, every framework, every run. The bench is in the repo — run it yourself.</p>
-  </section>
-
-  <section class="vps">
-    <p class="eyebrow">Economics</p>
-    <h2>Your whole product on a $5 server.</h2>
-    <p class="section-sub">App, database, background jobs, realtime, deploys — one process, one tiny VPS. No managed services, no sidecars, no surprise bills.</p>
-    <div class="vps-grid">
-      <div class="vps-card v1">
-        <div class="vps-num">~200<i>MB</i></div>
-        <b>memory under load</b>
-        <span>measured at 100 concurrent connections — fits a 512 MB VPS with room to spare. Next.js needs ~450 MB for the same page.</span>
-        <div class="meter"><div class="meter-fill m-niral"></div></div>
-        <div class="meter"><div class="meter-fill m-next"></div></div>
-        <p class="meter-key"><em>niral</em> vs next.js — RSS after the same load test</p>
+    </section>
+    <section class="features-section" id="features" aria-labelledby="features-title"><div class="section frame">
+      <div class="section-top"><div><p class="overline">One connected stack</p><h2 id="features-title">The pieces fit.<br />Because they belong together.</h2></div><p>Not a shopping list of packages.<br />The capabilities your application needs,<br class="desktop-break" /> built into the framework.</p></div>
+      <div class="capability-grid">
+        <article class="capability server-capability"><div class="capability-heading"><img src={(icons) + "server.svg"} alt="" width="22" height="22" /><span>Server functions</span></div><h3>Your backend.<br />One function call away.</h3><p>Load data, call typed RPCs, stream responses, or submit forms without JavaScript. The server code stays on the server.</p><div class="rpc-visual"><div><span>SERVER</span><code>{'export async function save(data) {'}<br /><span class="indent">{'return { ok: true }'}</span><br />{'}'}</code></div><div><span>CLIENT</span><code>await save(data)</code><img src={(icons) + "arrow-up-right.svg"} alt="" width="18" height="18" /></div></div><a class="capability-link" href="/docs/server">Server functions <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability auth-capability"><div class="capability-heading"><img src={(icons) + "shield-check.svg"} alt="" width="22" height="22" /><span>Authentication</span></div><h3>A proper welcome.<br />A secure way in.</h3><p>Passkeys, OAuth, two-factor authentication and route guards. Scaffolded into code you own.</p><div class="auth-visual" aria-label="Authentication methods"><div><img src={(icons) + "fingerprint.svg"} alt="" width="36" height="36" /><span>Passkeys</span></div><div><img src={(icons) + "key-round.svg"} alt="" width="36" height="36" /><span>OAuth</span></div><div><img src={(icons) + "scan-line.svg"} alt="" width="36" height="36" /><span>Two-factor</span></div></div><a class="capability-link" href="/docs/auth">Authentication <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability compact-capability"><div class="capability-heading"><img src={(icons) + "database.svg"} alt="" width="22" height="22" /><span>Database</span></div><div class="database-visual"><span>SQLite</span><img src={(icons) + "arrow-right.svg"} alt="to" width="20" height="20" /><span>Postgres</span></div><h3>Small start. Room to grow.</h3><p>SQLite by default. Postgres with built-in TLS when you need more. Migrations included.</p><a class="capability-link" href="/docs/scaling">Data & scaling <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability compact-capability"><div class="capability-heading"><img src={(icons) + "radio.svg"} alt="" width="22" height="22" /><span>Realtime</span></div><div class="realtime-visual" aria-label="Publish to connected browsers"><span>publish()</span><div><img src={(icons) + "monitor.svg"} alt="Browser" width="24" height="24" /><img src={(icons) + "smartphone.svg"} alt="Phone" width="24" height="24" /><img src={(icons) + "monitor.svg"} alt="Browser" width="24" height="24" /></div></div><h3>Keep every screen in sync.</h3><p>Live channels over framework-owned WebSockets, with session-aware access guards.</p><a class="capability-link" href="/docs/realtime">Realtime channels <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability compact-capability"><div class="capability-heading"><img src={(icons) + "clock-3.svg"} alt="" width="22" height="22" /><span>Jobs & cron</span></div><div class="queue-visual" aria-label="Durable job lifecycle"><span>Queue</span><img src={(icons) + "arrow-right.svg"} alt="then" width="16" height="16" /><span>Retry</span><img src={(icons) + "arrow-right.svg"} alt="then" width="16" height="16" /><span>Done</span></div><h3>Work that keeps working.</h3><p>Durable jobs, schedules, backoff and dead letters. Survives deploys. No Redis required.</p><a class="capability-link" href="/docs/jobs">Background jobs <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability detail-capability"><div class="capability-heading"><img src={(icons) + "file-check-2.svg"} alt="" width="22" height="22" /><span>TypeScript</span></div><h3>Real compiler. Real confidence.</h3><p>Type checking with the actual TypeScript compiler. Diagnostics map to your .niral lines.</p><a class="capability-link" href="/docs/typescript">TypeScript support <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability detail-capability"><div class="capability-heading"><img src={(icons) + "braces.svg"} alt="" width="22" height="22" /><span>Polyglot</span></div><h3>Your language. Same framework.</h3><p>Write server blocks in Python, Ruby or Go. Keep the same sessions, components and RPC.</p><a class="capability-link" href="/docs/server">Polyglot backends <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
+        <article class="capability detail-capability"><div class="capability-heading"><img src={(icons) + "sparkles.svg"} alt="" width="22" height="22" /><span>AI & retrieval</span></div><h3>Choose your model.</h3><p>Chat, streams, embeddings and RAG. OpenAI-compatible endpoints or a local llama.cpp option.</p><a class="capability-link" href="/docs/ai">AI integrations <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></article>
       </div>
-      <div class="vps-card v2">
-        <div class="vps-num">0.2<i>s</i></div>
-        <b>builds on the server itself</b>
-        <span>no bundler, no OOM. Webpack/Vite builds famously crash small VPSes — niral builds a hashed release in a blink, on the box it runs on.</span>
-      </div>
-      <div class="vps-card v3">
-        <div class="vps-num">0</div>
-        <b>sidecar services</b>
-        <span>Jobs, sessions and database ride on SQLite by default — no Redis, no workers to babysit. Reach for Postgres only when you outgrow one box.</span>
-      </div>
-      <div class="vps-card v4">
-        <div class="vps-num">1</div>
-        <b>command to production</b>
-        <span><code>niral deploy</code> generates the whole kit — provisioning script, systemd, nginx, atomic releases, graceful restarts. Your server, your rules.</span>
-      </div>
-    </div>
-    <p class="bench-note">2,200 req/s was measured on a laptop — a small VPS at a fraction of that still serves hundreds of thousands of views a day.</p>
-  </section>
-
-  <section class="scale">
-    <p class="eyebrow">Scale</p>
-    <h2>One box today. A fleet when you're ready.</h2>
-    <p class="section-sub">Same app, same code — Niral grows with you. Each tier is one env var, never a rewrite, and always zero&#8209;dependency.</p>
-    <div class="tiers">
-      <div class="tier">
-        <span class="tier-step">Start</span>
-        <b>One process · SQLite</b>
-        <span class="tier-desc">A $5 box runs everything — app, database, jobs, realtime. Most products never need more.</span>
-        <code class="tier-cmd">niral deploy</code>
-      </div>
-      <div class="tier-join"><span>→</span></div>
-      <div class="tier">
-        <span class="tier-step">Grow</span>
-        <b>Add Postgres</b>
-        <span class="tier-desc">Heavier data? Point at managed Postgres — Neon, Supabase, RDS — or your own. TLS built in, no <code>pg</code>.</span>
-        <code class="tier-cmd">NIRAL_DATABASE_URL=…</code>
-      </div>
-      <div class="tier-join"><span>→</span></div>
-      <div class="tier">
-        <span class="tier-step">Fleet</span>
-        <b>Go multi-server</b>
-        <span class="tier-desc">Stateless nodes behind a load balancer. Realtime fans out over LISTEN/NOTIFY, jobs share one queue. No Redis.</span>
-        <code class="tier-cmd">NIRAL_CLUSTER=1</code>
-      </div>
-    </div>
-    <p class="bench-note">Opt-in at every step — you never switch frameworks, you flip a switch when you outgrow the last tier. <a href="/docs/scaling">How scaling works →</a></p>
-  </section>
-
-  <section class="cloud">
-    <p class="eyebrow">Instant deploys</p>
-    <h2>Your machine to a live URL in three commands.</h2>
-    <p class="section-sub"><b>zHost</b> — ZyoraLabs' deployment cloud — detects Niral automatically, builds in seconds, and runs your app sandboxed at <code>{"<slug>"}.zyora.in</code>. No server, no nginx, no CI.</p>
-    <div class="cloud-term">
-      <div class="cloud-bar"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span><span class="cloud-title">zhost deploy</span></div>
-      <div class="cloud-body">
-        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t1">zhost login</span><span class="cl-caret c1"></span></p>
-        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t2">zhost link my-app</span><span class="cl-caret c2"></span></p>
-        <p class="cl-line"><span class="cl-p">$</span><span class="cl-type t3">zhost deploy</span><span class="cl-caret c3"></span></p>
-        <p class="cl-line cl-d cl-out o1">› Packing source… uploading 3 KB</p>
-        <p class="cl-line cl-d cl-out o2">queued → building → deploying → <b>live</b></p>
-        <p class="cl-line cl-ok cl-out o3">✓ Live → https://my-app.zyora.in</p>
-      </div>
-    </div>
-    <p class="bench-note">Start at <a href="https://console.zyoralabs.com">console.zyoralabs.com</a> — create a project, follow Settings. <a href="/docs/zhost">Full guide →</a></p>
-  </section>
-
-  <section class="philosophy">
-    <div class="phil">
-      <i>01</i>
-      <b>Compiler, not runtime</b>
-      <span>Components compile to direct DOM instructions and string-concat SSR. No virtual DOM, no diffing — the work happens once, at build time.</span>
-    </div>
-    <div class="phil">
-      <i>02</i>
-      <b>Nothing to trust but your own repo</b>
-      <span>Zero dependencies means no supply chain, no audits, no upstream breakage. Every line that runs is a line you can read.</span>
-    </div>
-    <div class="phil">
-      <i>03</i>
-      <b>Secrets can't escape</b>
-      <span>Reading env vars in client code is a compile error. Env files never build, never serve, never commit, never sync on deploy.</span>
-    </div>
-  </section>
-
-  <section class="final-cta">
-    <p class="tamil-sm">நிரல் · "program" in Tamil</p>
-    <h2>Start with one command.</h2>
-    <div class="cta">
-      <code class="install"><span class="prompt">$</span> npx create-niral my-app</code>
-      <a class="btn" href="/docs/getting-started">Read the docs →</a>
-    </div>
-  </section>
-
-  <footer class="footer">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <img class="footer-logo" src="/niral-logo.svg" alt="Niral" height="30" />
-        <p class="footer-tag">The zero-dependency full-stack framework.<br />Built in India. Made for everyone.</p>
-      </div>
-      <div class="footer-col">
-        <b>Learn</b>
-        <a href="/docs/getting-started">Getting started</a>
-        <a href="/docs/components">Components</a>
-        <a href="/docs/server">Server functions</a>
-        <a href="/docs/zhost">Instant deploys</a>
-        <a href="/docs/deployment">Deployment</a>
-      </div>
-      <div class="footer-col">
-        <b>Framework</b>
-        <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
-        <a href="https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode">VS Code extension</a>
-        <a href="/changelog">Changelog</a>
-        <a href="/docs/benchmarks">Benchmarks</a>
-        <a href="/docs/scaling">Scaling</a>
-        <a href="/docs/cli">CLI reference</a>
-        <a href="/docs/ai">AI & RAG</a>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© 2026 · Powered by <a class="zyora" href="https://zyoralabs.com">ZyoraLabs</a></span>
-      <span class="footer-dot">·</span>
-      <span>நிரல் — every line readable, every claim reproducible</span>
-    </div>
-  </footer>
-</main>
+      <div class="zero-deps"><img src={(icons) + "package-check.svg"} alt="" width="24" height="24" /><p><strong>All of this. Zero runtime dependencies.</strong><span>No dependency tree to maintain. Every line that runs is a line you can read.</span></p><code>{'"dependencies": {}'}</code></div>
+    </div></section>
+    <section class="section frame performance-section" id="performance" aria-labelledby="performance-title">
+      <div class="performance-story"><p class="overline">Built to do less work</p><h2 id="performance-title">The compiler does more.<br />Your server does less.</h2><p>Direct DOM instructions in the browser.<br />String-concatenated HTML on the server.<br />Less machinery between a request and a response.</p><div class="performance-stats"><div><b>6.6<span>ms</span></b><span>1,000-row hydration</span></div><div><b>0.2<span>s</span></b><span>Production build</span></div><div><b>~200<span>MB</span></b><span>Memory under load</span></div></div><a class="inline-link" href="/docs/benchmarks">Read the methodology <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div>
+      <div class="benchmark-panel"><div class="benchmark-header"><h3>Dynamic SSR</h3><span>requests / second</span></div><div class="benchmark-chart">{#for result of benchmarks key result.name}<div class={result.name === "Niral" ? "benchmark-row niral-result" : "benchmark-row"}><div><span>{result.name}</span><b>{result.rate}</b></div><div class="benchmark-track"><div style={"width: " + result.width + "%"}></div></div></div>{/for}</div><p>1,000 rows · 100 connections · Production-mode servers<br />Same-machine measurements, not VPS capacity. Results vary with hardware and load.</p><a href="https://github.com/Zyora-Dev/niral/tree/main/bench">Reproduce the benchmark <img src={(icons) + "arrow-up-right.svg"} alt="" width="15" height="15" /></a></div>
+    </section>
+    <section class="shipping-section" id="deploy" aria-labelledby="deploy-title"><div class="section frame">
+      <div class="section-top"><div><p class="overline">No platform required</p><h2 id="deploy-title">Your app.<br />Your way to production.</h2></div><p>One $5 server is a perfectly good destination.<br />So is a fleet. Start with what you need.</p></div>
+      <div class="shipping-layout"><div class="hosting-story"><div class="hosting-switch" role="group" aria-label="Deployment destination"><button class={hosting === "server" ? "selected" : ""} aria-pressed={hosting === "server"} on:click={() => changeHosting("server")}><img src={(icons) + "server.svg"} alt="" width="18" height="18" /> Own server</button><button class={hosting === "cloud" ? "selected" : ""} aria-pressed={hosting === "cloud"} on:click={() => changeHosting("cloud")}><img src={(icons) + "cloud.svg"} alt="" width="18" height="18" /> zHost</button></div><h3>{deployments[hosting].title}</h3><p>{deployments[hosting].detail}</p><a class="inline-link" href={deployments[hosting].href}>{deployments[hosting].link} <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div><div class="deploy-terminal"><div class="pane-heading"><span><img src={(icons) + "terminal.svg"} alt="" width="16" height="16" /> Terminal</span><button class="icon-button" on:click={() => copyText(deployments[hosting].command, "deploy")} aria-label={copied === "deploy" ? "Commands copied" : "Copy deploy commands"} title={copied === "deploy" ? "Copied" : "Copy commands"}><img src={(icons) + (copied === 'deploy' ? 'check' : 'copy') + ".svg"} alt="" width="16" height="16" /></button></div><pre><code>{deployments[hosting].command}</code></pre><div class="terminal-foot"><img src={(icons) + "package-check.svg"} alt="" width="16" height="16" /><span>{hosting === "server" ? "Atomic releases. One-symlink rollback." : "Builds in the cloud. Runs at <slug>.zyora.in."}</span></div></div></div>
+      <div class="growth-path"><a href="/docs/deployment"><span>01 / START</span><h3>One process. One server.</h3><p>App, SQLite, sessions, jobs and realtime together.</p></a><a href="/docs/scaling"><span>02 / GROW</span><h3>Add Postgres when ready.</h3><p>Managed or self-hosted. TLS included. Same app.</p></a><a href="/docs/scaling"><span>03 / SCALE</span><h3>Go from one node to many.</h3><p>Stateless nodes, shared jobs and realtime fan-out.</p></a></div>
+    </div></section>
+    <section class="section frame resources-section" aria-labelledby="resources-title"><div class="section-top"><div><p class="overline">Make it yours</p><h2 id="resources-title">A good place to begin.</h2></div><a class="inline-link" href="/docs/getting-started">All documentation <img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div><div class="resource-grid">{#for resource of resources key resource.title}<a class="resource-card" href={resource.href}><img class="resource-icon" src={(icons) + (resource.icon) + ".svg"} alt="" width="28" height="28" /><h3>{resource.title}</h3><p>{resource.description}</p><span>{resource.label}<img src={(icons) + "arrow-up-right.svg"} alt="" width="16" height="16" /></span></a>{/for}</div></section>
+  </main>
+  <SiteFooter />
+  {#if copied || copyError}<div class="copy-notice" role="status">{copyError || "Copied to clipboard"}<button class="icon-button" on:click={() => { copied = ""; copyError = "" }} aria-label="Dismiss notification" title="Dismiss"><img src={(icons) + "x.svg"} alt="" width="16" height="16" /></button></div>{/if}
+</div>
 
 <style>
-  :global(html) { scroll-behavior: smooth; }
-  :global(body) { margin: 0; background: #0a0c10; color: #e8eaed; background-image: radial-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px); background-size: 28px 28px; }
-  :global(::selection) { background: #34d39933; }
-  main { font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.6; }
-  section { max-width: 920px; margin: 0 auto; padding: 3.6rem 1.4rem; }
-  h2 { font-size: 1.75rem; letter-spacing: -.018em; text-align: center; margin: 0 0 .5rem; }
-  .section-sub { text-align: center; color: #9aa3ad; max-width: 560px; margin: 0 auto 2rem; font-size: .97rem; }
-  .section-sub a { color: #34d399; text-decoration: none; }
-  .eyebrow { text-align: center; color: #34d399; font-size: .74rem; font-weight: 650; text-transform: uppercase; letter-spacing: .16em; margin: 0 0 .6rem; }
-
-  /* nav — sticky glass */
-  .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(10, 12, 16, .72); border-bottom: 1px solid rgba(255, 255, 255, .05); }
-  .nav-inner { max-width: 980px; margin: 0 auto; padding: .85rem 1.4rem; display: flex; justify-content: space-between; align-items: center; position: relative; }
-  .mark { display: flex; align-items: center; gap: .55rem; text-decoration: none; }
-  .brand-logo { height: 30px; width: auto; display: block; }
-  .mark-glyph { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; background: linear-gradient(135deg, #34d399, #0ea5e9); color: #04120b; font-weight: 700; font-size: .95rem; }
-  .mark-name { color: #e8eaed; font-weight: 650; letter-spacing: .01em; }
-  .nav-links { display: flex; align-items: center; gap: 1.3rem; }
-  .nav-links a { color: #9aa3ad; text-decoration: none; font-size: .92rem; transition: color .15s; }
-  .nav-links a:hover { color: #e8eaed; }
-  .nav-cta { background: #14181d; border: 1px solid #262c33; border-radius: 9px; padding: .42rem .9rem; color: #7ee2b8 !important; transition: border-color .15s, box-shadow .15s; }
-  .nav-cta:hover { border-color: #34d399; box-shadow: 0 0 18px rgba(52, 211, 153, .18); }
-  .nav-toggle { display: none; }
-  .nav-burger { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 40px; height: 40px; padding: 8px; border: 1px solid #262c33; border-radius: 9px; background: #14181d; cursor: pointer; }
-  .nav-burger span { display: block; height: 2px; width: 100%; background: #cbd2da; border-radius: 2px; transition: transform .2s, opacity .2s; }
-
-  /* hero */
-  .hero { text-align: center; padding-top: 4.4rem; position: relative; }
-  .hero > * { animation: rise .7s cubic-bezier(.2, .7, .3, 1) both; }
-  .hero > *:nth-child(2) { animation-delay: .05s; }
-  .hero > *:nth-child(3) { animation-delay: .12s; }
-  .hero > *:nth-child(4) { animation-delay: .2s; }
-  .hero > *:nth-child(5) { animation-delay: .28s; }
-  .hero > *:nth-child(6) { animation-delay: .38s; }
-  .hero > *:nth-child(7) { animation-delay: .48s; }
-  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-  .glow { position: absolute; inset: -8rem 0 auto; height: 28rem; background: radial-gradient(ellipse 62% 55% at 50% 20%, rgba(52, 211, 153, .14), transparent 70%); pointer-events: none; animation: none; }
-  .badge { display: inline-flex; align-items: center; gap: .5rem; background: #11151a; border: 1px solid #232930; border-radius: 999px; padding: .32rem .95rem; font-size: .78rem; color: #9aa3ad; letter-spacing: .03em; margin: 0 0 1.4rem; }
-  .pulse { width: .48rem; height: .48rem; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); animation: pulse 2.2s ease-out infinite; }
-  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
-  .tamil { font-size: 2.8rem; margin: 0; background: linear-gradient(120deg, #34d399, #6ee7b7, #0ea5e9, #34d399); background-size: 280% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .05em; animation: rise .7s cubic-bezier(.2, .7, .3, 1) both, sheen 9s linear infinite; }
-  .hero-logo { width: 104px; height: 104px; margin: 0 auto .3rem; display: block; animation: rise .7s cubic-bezier(.2, .7, .3, 1) both; filter: drop-shadow(0 10px 34px rgba(52, 211, 153, .28)); }
-  @keyframes sheen { to { background-position: 280% 0; } }
-  h1 { font-size: 3.2rem; line-height: 1.1; margin: .6rem 0 1.1rem; letter-spacing: -.028em; }
-  h1 em { font-style: normal; background: linear-gradient(120deg, #34d399, #0ea5e9); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .sub { color: #9aa3ad; max-width: 640px; margin: 0 auto 2.1rem; font-size: 1.08rem; }
-  .sub b { color: #cdd3da; }
-  .cta { display: flex; gap: .9rem; justify-content: center; align-items: center; flex-wrap: wrap; }
-  .install { background: #14181d; border: 1px solid #262c33; border-radius: 11px; padding: .74rem 1.15rem; font-size: .95rem; color: #7ee2b8; box-shadow: 0 0 0 1px rgba(52, 211, 153, .0), 0 10px 30px rgba(0, 0, 0, .25); }
-  .prompt { color: #5f6b76; margin-right: .5rem; }
-  .caret { color: #34d399; margin-left: .18rem; animation: blink 1.15s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  .btn { position: relative; overflow: hidden; background: #34d399; color: #04120b; padding: .74rem 1.35rem; border-radius: 11px; font-weight: 650; text-decoration: none; transition: transform .12s, box-shadow .12s; }
-  .btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .45) 50%, transparent 60%); transform: translateX(-130%); transition: transform .55s ease; }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(52, 211, 153, .3); }
-  .btn:hover::after { transform: translateX(130%); }
-  .hero-note { color: #5f6b76; font-size: .84rem; margin-top: 1.2rem; line-height: 2; }
-  .hero-note :global(code.alt), .hero-note code.alt { background: #11151a; border: 1px solid #1b2027; border-radius: 7px; padding: .15rem .55rem; color: #9aa3ad; font-size: .78rem; }
-
-  /* capability marquee */
-  .marquee { overflow: hidden; padding: 1.1rem 0 .4rem; -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
-  .marquee-track { display: flex; align-items: center; gap: 2rem; width: max-content; animation: marquee 34s linear infinite; }
-  .marquee-track span { color: #5f6b76; font-size: .86rem; letter-spacing: .04em; white-space: nowrap; }
-  .marquee-track span:nth-child(even) { color: #234135; font-size: .6rem; }
-  @keyframes marquee { to { transform: translateX(-50%); } }
-
-  /* stat tiles */
-  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
-  .num { background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.35rem 1.2rem; text-align: center; transition: border-color .15s, transform .15s; }
-  .num:hover { border-color: #2c3742; transform: translateY(-2px); }
-  .num b { display: block; font-size: 2rem; color: #34d399; letter-spacing: -.02em; }
-  .num b i { font-style: normal; font-size: 1.05rem; color: #6ee7b7; }
-  .num span { color: #9aa3ad; font-size: .85rem; display: block; margin-top: .3rem; }
-
-  /* code window */
-  .window-wrap { position: relative; overflow-x: clip; }
-  .window-halo { position: absolute; inset: -1.6rem -2.2rem; background: radial-gradient(ellipse 60% 70% at 50% 45%, rgba(52, 211, 153, .09), transparent 70%); filter: blur(6px); pointer-events: none; }
-  .window { position: relative; background: #0e1115; border: 1px solid #232930; border-radius: 15px; overflow: hidden; box-shadow: 0 24px 70px rgba(0, 0, 0, .45); transition: transform .25s ease, border-color .25s ease; }
-  .window:hover { transform: translateY(-3px); border-color: #2c3742; }
-  .window-bar { display: flex; align-items: center; gap: .42rem; padding: .68rem 1rem; border-bottom: 1px solid #1b2027; background: #11151a; }
-  .dot { width: .68rem; height: .68rem; border-radius: 50%; }
-  .d1 { background: #f6726f; } .d2 { background: #f5bd4f; } .d3 { background: #55ca62; }
-  .window-title { margin-left: .6rem; color: #5f6b76; font-size: .8rem; font-family: ui-monospace, monospace; }
-  pre { margin: 0; padding: 1.25rem 1.4rem; overflow-x: auto; font-size: .88rem; line-height: 1.6; }
-  code { color: #d7dde3; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  pre :global(.c) { color: #5f6b76; font-style: italic; }
-  pre :global(.k) { color: #7aa2f7; }
-  pre :global(.f) { color: #e0af68; }
-  pre :global(.r) { color: #34d399; font-weight: 500; }
-
-  /* pipeline */
-  .steps { display: flex; align-items: stretch; justify-content: center; gap: .5rem; margin-top: 1.6rem; }
-  .step { flex: 1 1 0; min-width: 0; background: #11151a; border: 1px solid #232930; border-radius: 13px; padding: .95rem 1rem; text-align: center; }
-  .step code { display: block; color: #7ee2b8; font-size: .9rem; margin-bottom: .25rem; }
-  .step span { color: #9aa3ad; font-size: .78rem; }
-  .arrow { flex: 0 0 auto; align-self: center; color: #34d399; font-size: 1.1rem; }
-  .pipeline-note { text-align: center; color: #9aa3ad; font-size: .88rem; margin-top: 1.5rem; }
-  .pipeline-note a { color: #34d399; text-decoration: none; }
-  @media (max-width: 640px) { .steps { flex-direction: column; } .arrow { transform: rotate(90deg); } }
-
-  /* feature bento */
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-  .card { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 15px; padding: 1.2rem 1.25rem; text-decoration: none; color: inherit; transition: border-color .18s, transform .18s, box-shadow .18s; overflow: hidden; }
-  .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #34d399, #0ea5e9); transform: scaleX(0); transform-origin: left; transition: transform .3s ease; }
-  .card:hover { border-color: #2c3742; transform: translateY(-3px); box-shadow: 0 14px 40px rgba(0, 0, 0, .3); }
-  .card:hover::before { transform: scaleX(1); }
-  .card.span2 { grid-column: span 2; background: linear-gradient(180deg, #121820, #11151a); }
-  .card b { display: block; margin-bottom: .3rem; color: #e8eaed; }
-  .card span { color: #9aa3ad; font-size: .88rem; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } .card.span2 { grid-column: span 2; } }
-  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } .card.span2 { grid-column: auto; } }
-
-  /* benchmark bars */
-  .bars { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: .85rem; }
-  .bar-row { display: grid; grid-template-columns: 88px 1fr 110px; align-items: center; gap: .9rem; }
-  .bar-label { color: #cdd3da; font-size: .88rem; text-align: right; }
-  .bar-track { background: #11151a; border: 1px solid #1b2027; border-radius: 999px; height: 1.05rem; overflow: hidden; }
-  .bar { height: 100%; border-radius: 999px; }
-  .b-niral { position: relative; overflow: hidden; background: linear-gradient(90deg, #34d399, #6ee7b7); }
-  .b-niral::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%); transform: translateX(-120%); animation: shimmer 2.8s ease-in-out infinite; }
-  @keyframes shimmer { 40%, 100% { transform: translateX(120%); } }
-  .b-other { background: #2c3742; }
-  .bar-val { color: #9aa3ad; font-size: .85rem; }
-  .bench-note { text-align: center; color: #5f6b76; font-size: .84rem; margin-top: 1.6rem; }
-
-  /* small-server economics — animated cards */
-  .vps-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-  @media (max-width: 560px) { .vps-grid { grid-template-columns: 1fr; } }
-  .vps-card { position: relative; background: #11151a; border: 1px solid #232930; border-radius: 16px; padding: 1.4rem 1.3rem 1.3rem; overflow: hidden; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
-  .vps-card::before { content: ""; position: absolute; inset: 0; background: radial-gradient(140px 90px at 20% 0%, rgba(52, 211, 153, .10), transparent 70%); opacity: 0; transition: opacity .25s; pointer-events: none; }
-  .vps-card:hover { transform: translateY(-4px); border-color: #34d39966; box-shadow: 0 14px 44px rgba(0, 0, 0, .35); }
-  .vps-card:hover::before { opacity: 1; }
-  .vps-num { font-size: 2.3rem; font-weight: 700; letter-spacing: -.03em; background: linear-gradient(120deg, #34d399, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1.1; }
-  .vps-num i { font-style: normal; font-size: 1.15rem; }
-  .vps-card b { display: block; color: #e8eaed; margin: .35rem 0 .35rem; }
-  .vps-card span { color: #9aa3ad; font-size: .86rem; display: block; }
-  .vps-card code { color: #7ee2b8; background: #0e1115; padding: .05rem .4rem; border-radius: 6px; font-size: .82rem; }
-  .meter { background: #0e1115; border: 1px solid #1b2027; border-radius: 999px; height: .5rem; margin-top: .7rem; overflow: hidden; }
-  .meter + .meter { margin-top: .4rem; }
-  .meter-fill { height: 100%; border-radius: 999px; width: 0; }
-  .m-niral { background: linear-gradient(90deg, #34d399, #6ee7b7); animation: fill-niral 1.1s .2s cubic-bezier(.2, .7, .3, 1) forwards; }
-  .m-next { background: #2c3742; animation: fill-next 1.1s .35s cubic-bezier(.2, .7, .3, 1) forwards; }
-  @keyframes fill-niral { to { width: 44%; } }
-  @keyframes fill-next { to { width: 100%; } }
-  .meter-key { color: #5f6b76; font-size: .74rem; margin: .5rem 0 0; }
-  .meter-key em { color: #34d399; font-style: normal; }
-  /* staggered scroll-in where the browser supports it — graceful no-op elsewhere */
-  @supports (animation-timeline: view()) {
-    .vps-card { animation: card-rise both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
-    .v2 { animation-range: entry 8% entry 63%; }
-    .v3 { animation-range: entry 16% entry 71%; }
-    .v4 { animation-range: entry 24% entry 79%; }
+  :global(html) { scroll-behavior: smooth; color-scheme: dark; }
+  :global(body) { margin: 0; background: #090909; color: #fafafa; }
+  :global(::selection) { color: #090909; background: #f2b544; }
+  .homepage { --gold: #f2b544; --border: #343436; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; background: #090909; }
+  *, *::before, *::after { box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  button, input { font: inherit; }
+  button { cursor: pointer; }
+  a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+  button img, .inline-link img, .capability img, .architecture img, .release-link img, .resource-card img, .pane-heading img, .workbench-toolbar img, .workbench-bottom img, .benchmark-panel a img, .zero-deps img, .terminal-foot img, .mobile-menu img { filter: invert(1); }
+  h1, h2, h3, p { margin: 0; }
+  h2 { font-size: 44px; line-height: 1.15; font-weight: 550; text-wrap: balance; }
+  h3 { font-size: 22px; line-height: 1.35; font-weight: 550; }
+  code, pre { font-family: "Geist Mono", monospace; }
+  .frame { width: min(1240px, calc(100% - 80px)); margin-inline: auto; }
+  .section { padding-block: 104px; scroll-margin-top: 72px; }
+  .section-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 48px; margin-bottom: 44px; }
+  .section-top > p { max-width: 390px; color: #ededee; font-size: 15px; line-height: 1.8; padding-bottom: 4px; }
+  .overline { display: flex; align-items: center; gap: 10px; color: var(--gold); font: 12px/1.5 "Geist Mono", monospace; margin-bottom: 18px; }
+  .overline::before { content: ""; width: 16px; height: 1px; background: var(--gold); }
+  .inline-link { display: inline-flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
+  .inline-link:hover { color: var(--gold); }
+  .site-header { height: 76px; position: sticky; top: 0; z-index: 30; background: #090909f5; border-bottom: 1px solid var(--border); backdrop-filter: blur(16px); }
+  .navigation { width: min(1360px, calc(100% - 64px)); height: 100%; margin: auto; display: flex; align-items: center; gap: 48px; }
+  .wordmark { display: flex; align-items: center; }
+  .wordmark img { display: block; width: 102px; height: 34px; object-fit: contain; filter: grayscale(1) brightness(1.8); }
+  .desktop-links { display: flex; gap: 28px; font-size: 13px; }
+  .desktop-links a:hover { color: var(--gold); }
+  .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: 20px; min-height: 48px; padding: 12px 22px; border: 1px solid #f6f6f6; background: #f6f6f6; color: #101010; border-radius: 6px; font-size: 14px; font-weight: 550; white-space: nowrap; transition: background .15s, border-color .15s; }
+  .button-small { min-height: 36px; padding: 7px 14px; font-size: 12px; gap: 16px; }
+  .button-gold { background: var(--gold); border-color: var(--gold); }
+  .button-gold:hover { background: #ffd17a; border-color: #ffd17a; }
+  .button-outline { background: #111113; border-color: #555558; color: #fafafa; }
+  .button-outline img { filter: invert(1); }
+  .button-outline:hover { background: #262628; }
+  .icon-button { display: inline-grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #fafafa; }
+  .icon-button:hover { background: #303032; border-color: #555558; }
+  .github-link img { filter: invert(1); }
+  .mobile-menu { display: none; }
+  .mobile-menu summary { list-style: none; display: grid; place-items: center; width: 40px; height: 40px; cursor: pointer; border: 1px solid var(--border); border-radius: 5px; }
+  .mobile-menu summary::-webkit-details-marker { display: none; }
+  .mobile-menu > div { position: absolute; top: 63px; left: 16px; right: 16px; background: #18181a; border: 1px solid #555558; border-radius: 6px; padding: 8px; box-shadow: 0 20px 40px #0009; }
+  .mobile-menu a { display: block; padding: 12px 16px; }
+  .mobile-menu a:hover { background: #29292c; }
+  .skip-link { position: fixed; left: 16px; top: -60px; z-index: 100; background: var(--gold); padding: 10px 16px; color: #090909; }
+  .skip-link:focus { top: 12px; }
+  .opening { overflow: hidden; border-bottom: 1px solid var(--border); }
+  .opening-inner { position: relative; isolation: isolate; padding: 68px 56px 56px; border-inline: 1px solid var(--border); }
+  .opening-art { position: absolute; z-index: -1; width: 620px; height: 620px; object-fit: contain; right: -54px; bottom: -32px; filter: grayscale(1); opacity: .22; pointer-events: none; }
+  .opening-inner::before { content: ""; position: absolute; z-index: -2; inset: 0; background: #0c0c0e; }
+  .release-link { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 26px; }
+  .release-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+  h1 { font-size: 88px; line-height: 1.03; font-weight: 550; margin-bottom: 26px; }
+  h1 span { color: var(--gold); }
+  .opening-copy { font-size: 17px; line-height: 1.7; color: #f0f0f1; }
+  .opening-copy strong { font-weight: 500; color: #fff; }
+  .opening-actions { display: flex; gap: 12px; margin-top: 28px; }
+  .install-line { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; font-size: 12px; }
+  .terminal-prompt { color: var(--gold); }
+  .node-label { padding-left: 16px; border-left: 1px solid #555558; }
+  .architecture { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-inline: 1px solid var(--border); border-top: 1px solid var(--border); }
+  .architecture > div { min-width: 0; display: flex; align-items: center; gap: 18px; padding: 26px 28px; }
+  .architecture > div + div { border-left: 1px solid var(--border); }
+  .stage-number { color: var(--gold); font: 12px "Geist Mono", monospace; }
+  .architecture b { font-size: 13px; display: block; font-weight: 500; }
+  .architecture small { font-size: 12px; display: block; margin-top: 4px; }
+  .architecture code, .architecture img { margin-left: auto; font-size: 12px; }
+  .workbench { border: 1px solid #48484c; border-radius: 8px; overflow: hidden; background: #101012; }
+  .workbench-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 20px; background: linear-gradient(120deg, #28282b, #18181b); border-bottom: 1px solid #48484c; }
+  .example-switch, .hosting-switch { display: inline-flex; align-items: center; gap: 4px; }
+  .example-switch button, .hosting-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: transparent; color: #fafafa; padding: 9px 16px; border: 1px solid transparent; border-radius: 5px; font-size: 13px; }
+  .example-switch button:hover, .hosting-switch button:hover { background: #323236; }
+  .example-switch button.selected, .hosting-switch button.selected { background: #3a3a3e; border-color: #636367; }
+  .workbench-toolbar > a { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; }
+  .workbench-body { display: grid; grid-template-columns: 1.15fr 1fr; }
+  .source-pane, .result-pane { min-width: 0; }
+  .source-pane { border-right: 1px solid #48484c; }
+  .pane-heading { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); padding: 8px 24px; font-size: 12px; }
+  .pane-heading > span:first-child { display: inline-flex; align-items: center; gap: 10px; }
+  .preview-status { font-size: 11px; }
+  pre { font-size: 13px; line-height: 1.9; margin: 0; tab-size: 2; }
+  .source-pane pre { padding: 28px; height: 394px; overflow: auto; color: #f4d49a; }
+  .example-result { min-height: 394px; height: 394px; padding: 32px; display: grid; align-items: center; background: linear-gradient(135deg, #222225, #141416); overflow-y: auto; }
+  .counter-demo { text-align: center; }
+  .demo-label { font-size: 14px; }
+  .counter-value { display: block; font: 84px/1.4 "Geist", sans-serif; font-variant-numeric: tabular-nums; margin: 8px 0; }
+  .counter-controls { display: flex; justify-content: center; gap: 12px; }
+  .counter-controls button { border-color: #626266; background: #262629; width: 44px; height: 42px; }
+  .counter-controls button:hover { border-color: var(--gold); }
+  .derived-value { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid #4b4b4e; max-width: 280px; margin: 28px auto 0; padding-top: 18px; font: 12px "Geist Mono", monospace; }
+  .derived-value b { color: var(--gold); }
+  .todo-demo { width: 100%; max-width: 380px; margin: auto; }
+  .todo-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .todo-heading h3 { font-size: 22px; }
+  .todo-heading > span { font: 12px "Geist Mono", monospace; }
+  .todo-demo form { display: flex; align-items: center; gap: 8px; }
+  .todo-demo input:not([type="checkbox"]) { min-width: 0; flex: 1; width: 100%; background: #101012; color: #fafafa; border: 1px solid #636367; border-radius: 5px; padding: 10px 12px; font-size: 14px; }
+  .todo-demo input::placeholder { color: #b5b5ba; }
+  .task-list { list-style: none; padding: 0; margin: 20px 0 0; }
+  .task-list li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #444448; }
+  .task-list label { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; cursor: pointer; font-size: 14px; }
+  .task-list label span { overflow-wrap: anywhere; }
+  .task-list input { accent-color: var(--gold); width: 16px; height: 16px; flex: 0 0 16px; }
+  .task-done span { text-decoration: line-through; }
+  .empty-tasks { font-size: 14px; padding-top: 20px; }
+  .workbench-bottom { display: flex; justify-content: space-between; gap: 16px; padding: 16px 24px; border-top: 1px solid #48484c; font-size: 12px; }
+  .workbench-bottom span:first-child { display: inline-flex; align-items: center; gap: 10px; }
+  .features-section { background: #101012; border-block: 1px solid var(--border); }
+  .capability-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .capability { min-width: 0; display: flex; flex-direction: column; background: linear-gradient(135deg, #252528, #19191b); border: 1px solid #444448; border-radius: 8px; padding: 32px; overflow: hidden; }
+  .capability-heading { display: flex; align-items: center; gap: 12px; font-size: 13px; margin-bottom: 24px; }
+  .capability-heading img { filter: invert(80%) sepia(52%) saturate(649%) hue-rotate(341deg) brightness(102%); }
+  .capability h3 { margin-bottom: 12px; }
+  .capability > p { font-size: 14px; line-height: 1.8; color: #f0f0f1; max-width: 490px; margin-bottom: 24px; }
+  .server-capability { grid-column: span 7; }
+  .auth-capability { grid-column: span 5; }
+  .server-capability h3, .auth-capability h3 { font-size: 30px; line-height: 1.2; }
+  .capability-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 22px; border-top: 1px solid #49494d; font-size: 13px; }
+  .capability-link:hover { color: var(--gold); }
+  .rpc-visual { margin-block: auto 28px; font-size: 12px; }
+  .rpc-visual > div { display: flex; align-items: flex-start; gap: 24px; padding: 20px 0; border-top: 1px dashed #5a5a5d; }
+  .rpc-visual > div > span { font: 10px/2 "Geist Mono", monospace; width: 48px; flex-shrink: 0; color: #f4d49a; }
+  .rpc-visual code { font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+  .rpc-visual img { margin-left: auto; }
+  .indent { padding-left: 16px; }
+  .auth-visual { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-block: auto 28px; padding-block: 26px; }
+  .auth-visual > div { text-align: center; }
+  .auth-visual img { margin-bottom: 16px; }
+  .auth-visual span { display: block; font-size: 12px; }
+  .compact-capability, .detail-capability { grid-column: span 4; }
+  .compact-capability h3, .detail-capability h3 { font-size: 21px; }
+  .database-visual, .queue-visual { min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 28px; font: 14px "Geist Mono", monospace; }
+  .database-visual span { padding-block: 16px; border-bottom: 2px solid #bd9447; }
+  .queue-visual { font-size: 12px; }
+  .queue-visual span { padding: 8px 0; border-bottom: 1px solid #bd9447; }
+  .realtime-visual { min-height: 100px; margin-bottom: 28px; text-align: center; }
+  .realtime-visual > span { display: block; color: #f4d49a; font: 12px "Geist Mono", monospace; margin-bottom: 20px; }
+  .realtime-visual > div { border-top: 1px dashed #727276; padding-top: 18px; display: flex; justify-content: space-around; }
+  .detail-capability { background: #171719; }
+  .zero-deps { display: flex; align-items: center; gap: 20px; padding-top: 32px; }
+  .zero-deps strong { display: block; font-weight: 500; font-size: 14px; }
+  .zero-deps p span { display: block; font-size: 13px; margin-top: 4px; }
+  .zero-deps code { margin-left: auto; font-size: 13px; white-space: nowrap; color: #f4d49a; }
+  .performance-section { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 80px; }
+  .performance-story > p:not(.overline) { font-size: 15px; line-height: 1.9; margin-top: 24px; }
+  .performance-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 36px 0; padding-block: 24px; border-block: 1px solid var(--border); }
+  .performance-stats b { display: block; font-size: 28px; line-height: 1.3; font-weight: 500; }
+  .performance-stats b span { font-size: 14px; margin-left: 3px; }
+  .performance-stats div > span { font-size: 11px; display: block; margin-top: 8px; }
+  .benchmark-panel { border: 1px solid #49494c; padding: 32px; border-radius: 8px; background: linear-gradient(140deg, #222225, #131315); }
+  .benchmark-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 32px; }
+  .benchmark-header h3 { font-size: 17px; }
+  .benchmark-header > span { font-size: 11px; }
+  .benchmark-chart { display: grid; gap: 24px; }
+  .benchmark-row > div:first-child { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; margin-bottom: 9px; }
+  .benchmark-row b { font: 12px "Geist Mono", monospace; }
+  .benchmark-track { height: 6px; background: #39393d; border-radius: 2px; overflow: hidden; }
+  .benchmark-track > div { height: 100%; background: #a2a2a8; }
+  .niral-result { color: #ffd17a; }
+  .niral-result .benchmark-track > div { background: var(--gold); }
+  .benchmark-panel > p { font-size: 11px; margin-top: 28px; }
+  .benchmark-panel > a { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-top: 12px; }
+  .shipping-section { background: #131315; border-block: 1px solid var(--border); }
+  .shipping-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+  .hosting-switch { padding: 5px; border: 1px solid #505054; border-radius: 7px; margin-bottom: 28px; }
+  .hosting-story h3 { font-size: 24px; margin-bottom: 14px; }
+  .hosting-story p { font-size: 15px; line-height: 1.8; max-width: 470px; min-height: 82px; }
+  .hosting-story .inline-link { margin-top: 24px; }
+  .deploy-terminal { min-width: 0; background: #09090b; border: 1px solid #555559; border-radius: 8px; overflow: hidden; }
+  .deploy-terminal pre { padding: 32px; height: 162px; overflow: auto; color: #f6d59a; font-size: 15px; line-height: 2; }
+  .terminal-foot { min-height: 54px; display: flex; align-items: center; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border); font-size: 12px; }
+  .growth-path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; margin-top: 56px; border-top: 1px solid #47474b; padding-top: 32px; }
+  .growth-path a > span { font: 11px "Geist Mono", monospace; color: var(--gold); }
+  .growth-path h3 { font-size: 17px; margin: 12px 0 8px; }
+  .growth-path p { font-size: 13px; line-height: 1.8; }
+  .growth-path a:hover h3 { color: var(--gold); }
+  .resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .resource-card { display: flex; flex-direction: column; border: 1px solid #424246; background: linear-gradient(145deg, #202023, #131315); padding: 28px; border-radius: 8px; transition: border-color .15s; }
+  .resource-card:hover { border-color: #b49765; }
+  .resource-icon { margin-bottom: 32px; }
+  .resource-card h3 { font-size: 22px; margin-bottom: 12px; }
+  .resource-card p { font-size: 14px; line-height: 1.8; margin-bottom: 28px; }
+  .resource-card > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; font-size: 13px; }
+  .site-footer { background: #000; color: #fafafa; scroll-margin-top: 76px; }
+  .footer-inner { width: min(1120px, calc(100% - 96px)); margin-inline: auto; padding-top: 96px; }
+  .footer-directory { display: grid; grid-template-columns: 150px minmax(0, 1fr) 220px; gap: 48px; align-items: start; }
+  .footer-symbol { display: block; position: relative; width: 120px; max-width: 100%; margin-bottom: 26px; }
+  .footer-symbol img { display: block; width: 100%; height: auto; filter: brightness(0) invert(1); }
+  .footer-symbol::after { content: ""; position: absolute; inset: 0; background: var(--gold); mask: url("/niral-logo.svg") center / 100% 100% no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
+  .footer-about p { font-size: 13px; line-height: 1.8; }
+  .footer-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+  .footer-links h3, .footer-contact h3 { font-size: 12px; font-weight: 400; line-height: 1.6; margin-bottom: 24px; }
+  .footer-links a { display: block; width: fit-content; max-width: 100%; padding-block: 7px; font-size: 12px; line-height: 1.65; }
+  .footer-links a:hover, .footer-copyright a:hover { color: var(--gold); }
+  .footer-contact { min-width: 0; }
+  .footer-contact address { display: grid; gap: 10px; font-style: normal; }
+  .footer-contact address a { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+  .footer-contact img { flex: 0 0 15px; }
+  .footer-email { background: #1c1c1c; border: 1px solid #414141; }
+  .footer-email img { filter: invert(1); }
+  .footer-email:hover { border-color: var(--gold); }
+  .footer-whatsapp { background: var(--gold); color: #080808; border: 1px solid var(--gold); }
+  .footer-whatsapp img:last-child { margin-left: auto; }
+  .footer-whatsapp:hover { background: #ffd17a; }
+  .footer-copyright { border-top: 1px solid #343434; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
+  .copy-notice { position: fixed; right: 24px; bottom: 24px; z-index: 60; display: flex; align-items: center; gap: 16px; max-width: min(460px, calc(100% - 32px)); padding: 12px 16px; background: #29292c; color: #fff; border: 1px solid #717176; border-radius: 7px; box-shadow: 0 8px 24px #0008; font-size: 14px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  @media (min-width: 1101px) and (prefers-reduced-motion: no-preference) { .opening-inner > :not(.opening-art) { animation: appear .55s ease-out both; } .opening-copy { animation-delay: .08s; } .opening-actions { animation-delay: .16s; } }
+  @keyframes appear { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 1100px) {
+    .navigation { gap: 28px; }
+    .desktop-links { gap: 18px; }
+    .desktop-links a:nth-child(3) { display: none; }
+    .opening-inner { padding-inline: 36px; }
+    h1 { font-size: 76px; }
+    .opening-art { right: -140px; opacity: .13; }
+    .architecture > div { padding: 24px 20px; gap: 12px; }
+    .architecture code, .architecture img { display: none; }
+    .section-top { gap: 28px; }
+    h2 { font-size: 38px; }
+    .capability { padding: 26px; }
+    .server-capability, .auth-capability, .compact-capability, .detail-capability { grid-column: span 6; }
+    .performance-section, .shipping-layout { gap: 40px; }
+    .performance-stats { gap: 10px; }
+    .performance-stats b { font-size: 24px; }
+    .zero-deps { flex-wrap: wrap; }
+    .zero-deps code { margin-left: 44px; }
+    .footer-directory { grid-template-columns: 1fr 220px; gap: 40px; }
+    .footer-links { grid-column: 1 / -1; grid-row: 2; gap: 24px; }
+    .footer-contact { grid-column: 2; grid-row: 1; }
   }
-  @keyframes card-rise { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
-
-  /* scale — growth tiers */
-  .tiers { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: .6rem; }
-  .tier { position: relative; background: linear-gradient(180deg, #121820, #11151a); border: 1px solid #232930; border-radius: 16px; padding: 1.3rem 1.2rem; overflow: hidden; transition: transform .18s, border-color .18s, box-shadow .18s; }
-  .tier::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #34d399, #0ea5e9); transform: scaleX(0); transform-origin: left; transition: transform .3s ease; }
-  .tier:hover { transform: translateY(-4px); border-color: #34d39966; box-shadow: 0 16px 44px rgba(0, 0, 0, .35); }
-  .tier:hover::before { transform: scaleX(1); }
-  .tier-step { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #04120b; background: linear-gradient(120deg, #34d399, #6ee7b7); padding: .2rem .6rem; border-radius: 999px; margin-bottom: .75rem; }
-  .tier b { display: block; color: #e8eaed; font-size: 1.05rem; margin-bottom: .4rem; }
-  .tier-desc { color: #9aa3ad; font-size: .87rem; display: block; margin-bottom: 1rem; }
-  .tier-desc code, .card code { color: #7ee2b8; background: #0e1115; padding: .02rem .32rem; border-radius: 5px; font-size: .82em; }
-  .tier-cmd { display: block; color: #7ee2b8; background: #0e1115; border: 1px solid #1b2027; padding: .5rem .65rem; border-radius: 9px; font-size: .8rem; font-family: ui-monospace, "SF Mono", monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tier-join { display: flex; align-items: center; justify-content: center; color: #34d399aa; font-size: 1.35rem; }
-  @supports (animation-timeline: view()) {
-    .tier { animation: card-rise both; animation-timeline: view(); animation-range: entry 2% entry 60%; }
+  @media (max-width: 800px) {
+    .frame { width: calc(100% - 40px); }
+    .site-header { height: 64px; }
+    .navigation { width: calc(100% - 40px); gap: 20px; }
+    .desktop-links, .github-link { display: none; }
+    .mobile-menu { display: block; }
+    .opening-inner { padding: 48px 28px 36px; }
+    h1 { font-size: 66px; }
+    .opening-art { right: -200px; bottom: -80px; }
+    .architecture { grid-template-columns: 1fr; }
+    .architecture > div { padding: 16px 28px; }
+    .architecture > div + div { border-left: 0; border-top: 1px solid var(--border); }
+    .architecture small { display: inline; margin-left: 12px; }
+    .architecture b { display: inline; }
+    .section { padding-block: 72px; }
+    .section-top { flex-direction: column; align-items: flex-start; gap: 24px; margin-bottom: 32px; }
+    .desktop-break { display: none; }
+    .section-top > p { max-width: 520px; }
+    .workbench-body { grid-template-columns: 1fr; }
+    .source-pane { border-right: 0; border-bottom: 1px solid #48484c; }
+    .source-pane pre { height: 292px; }
+    .example-result { min-height: 350px; height: 350px; }
+    .workbench-bottom { flex-wrap: wrap; gap: 8px; }
+    .performance-section, .shipping-layout { grid-template-columns: 1fr; gap: 36px; }
+    .performance-stats { gap: 20px; }
+    .performance-stats b { font-size: 30px; }
+    .hosting-story p { min-height: 0; }
+    .growth-path { gap: 20px; }
+    .resource-grid { grid-template-columns: 1fr; gap: 16px; }
+    .resource-card { display: grid; grid-template-columns: 40px 1fr; column-gap: 20px; }
+    .resource-icon { grid-row: span 3; margin: 0; }
+    .resource-card p { margin-bottom: 20px; }
+    .resource-card > span { grid-column: 2; }
+    .footer-inner { width: calc(100% - 64px); padding-top: 64px; }
+    .footer-directory { grid-template-columns: 1fr 220px; gap: 40px; }
+    .footer-links { grid-column: 1 / -1; grid-row: 2; gap: 24px; }
+    .footer-contact { grid-column: 2; grid-row: 1; }
+    .footer-copyright { margin-top: 48px; }
   }
-  @media (max-width: 720px) {
-    .tiers { grid-template-columns: 1fr; }
-    .tier-join { transform: rotate(90deg); padding: .15rem 0; }
+  @media (max-width: 580px) {
+    .frame { width: calc(100% - 32px); }
+    .navigation { width: calc(100% - 32px); gap: 12px; }
+    .wordmark img { width: 86px; height: 30px; }
+    .nav-actions { gap: 0; }
+    .button-small { padding-inline: 12px; font-size: 11px; gap: 10px; }
+    .opening-inner { padding: 34px 20px 24px; }
+    .release-link { font-size: 10px; gap: 8px; margin-bottom: 26px; }
+    h1 { font-size: 48px; line-height: 1.06; margin-bottom: 24px; }
+    .opening-copy { font-size: 14px; line-height: 1.8; }
+    .opening-art { width: 420px; height: 420px; right: -168px; bottom: -25px; opacity: .12; }
+    .opening-actions { flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .opening-actions .button { min-height: 44px; padding: 10px 14px; font-size: 12px; gap: 12px; }
+    .install-line { gap: 8px; margin-top: 18px; font-size: 11px; }
+    .install-line .icon-button { width: 30px; }
+    .node-label { padding-left: 0; border: 0; flex-basis: 100%; }
+    .architecture > div { padding: 14px 20px; }
+    .architecture small { display: none; }
+    .architecture b { font-size: 12px; }
+    .architecture code, .architecture img { display: block; }
+    .section { padding-block: 56px; }
+    h2 { font-size: 32px; }
+    .section-top > p { font-size: 14px; }
+    .overline { font-size: 11px; margin-bottom: 16px; }
+    .workbench-toolbar { padding: 10px 12px; }
+    .workbench-toolbar > a { font-size: 0; gap: 0; }
+    .workbench-toolbar > a img { width: 20px; height: 20px; }
+    .example-switch button { padding: 8px 12px; font-size: 12px; }
+    .pane-heading { padding-inline: 16px; font-size: 11px; }
+    .preview-status { font-size: 10px; }
+    .source-pane pre { padding: 20px 16px; font-size: 11px; }
+    .example-result { padding: 24px 20px; }
+    .counter-value { font-size: 72px; }
+    .todo-heading h3 { font-size: 20px; }
+    .task-list label, .todo-demo input:not([type="checkbox"]) { font-size: 13px; }
+    .workbench-bottom { padding: 14px 16px; font-size: 10px; }
+    .capability-grid { grid-template-columns: 1fr; gap: 16px; }
+    .capability { grid-column: auto; padding: 24px; }
+    .server-capability h3, .auth-capability h3 { font-size: 27px; }
+    .capability > p { font-size: 14px; }
+    .rpc-visual > div { gap: 12px; }
+    .rpc-visual > div > span { width: 40px; font-size: 9px; }
+    .rpc-visual code { font-size: 10px; }
+    .rpc-visual img { display: none; }
+    .database-visual, .queue-visual, .realtime-visual { min-height: 84px; margin-bottom: 20px; }
+    .zero-deps { gap: 16px; align-items: flex-start; }
+    .zero-deps > img { flex: 0 0 22px; }
+    .zero-deps p { flex: 1; }
+    .zero-deps code { margin-left: 38px; font-size: 11px; }
+    .zero-deps p span { font-size: 12px; }
+    .performance-story > p:not(.overline) { font-size: 14px; }
+    .performance-stats { gap: 12px; }
+    .performance-stats b { font-size: 25px; }
+    .performance-stats b span { font-size: 11px; }
+    .performance-stats div > span { font-size: 10px; }
+    .benchmark-panel { padding: 24px; }
+    .benchmark-header { gap: 8px; }
+    .benchmark-header > span { font-size: 10px; }
+    .hosting-story h3 { font-size: 22px; }
+    .hosting-story p { font-size: 14px; }
+    .deploy-terminal pre { padding: 24px; font-size: 13px; }
+    .terminal-foot { padding-inline: 16px; font-size: 11px; }
+    .terminal-foot img { flex-shrink: 0; }
+    .growth-path { grid-template-columns: 1fr; gap: 24px; margin-top: 36px; }
+    .growth-path a + a { padding-top: 24px; border-top: 1px solid #343436; }
+    .resource-card { padding: 24px; grid-template-columns: 28px 1fr; gap: 0 16px; }
+    .resource-card h3 { font-size: 20px; }
+    .resource-card p { font-size: 13px; }
+    .footer-inner { width: calc(100% - 48px); padding-top: 48px; }
+    .footer-directory { grid-template-columns: 1fr; gap: 36px; }
+    .footer-about { display: flex; align-items: flex-start; gap: 24px; }
+    .footer-symbol { flex: 0 0 100px; margin-bottom: 0; }
+    .footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; }
+    .footer-links h3, .footer-contact h3 { margin-bottom: 12px; }
+    .footer-links a { min-height: 40px; padding-block: 10px; }
+    .footer-contact { grid-column: auto; grid-row: auto; }
+    .footer-contact address { max-width: 280px; }
+    .footer-copyright { margin-top: 40px; font-size: 11px; padding-block: 24px; }
+    .copy-notice { right: 16px; bottom: 16px; font-size: 12px; }
   }
-
-  /* instant deploys — zhost */
-  .cloud-term { max-width: 620px; margin: 1.8rem auto 0; background: #0d1014; border: 1px solid #232930; border-radius: 16px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
-  .cloud-bar { display: flex; align-items: center; gap: .42rem; padding: .6rem .9rem; background: #11151a; border-bottom: 1px solid #1b2027; }
-  .cloud-title { margin-left: .5rem; color: #5f6b76; font-size: .76rem; font-family: ui-monospace, "SF Mono", monospace; }
-  .cloud-body { padding: 1.1rem 1.2rem 1.2rem; overflow-x: auto; min-height: 11.4em; }
-  .cl-line { margin: 0; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; font-size: .86rem; line-height: 1.9; color: #cdd3da; white-space: nowrap; }
-  .cl-p { color: #34d399; margin-right: .6ch; }
-  .cl-d { color: #5f6b76; }
-  .cl-ok { color: #6ee7b7; font-weight: 600; }
-  /* typed commands — the whole sequence loops on a 12s cycle (terminal "clears" and replays) */
-  .cl-type { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; width: 0; }
-  .t1 { animation: type-t1 12s infinite; }
-  .t2 { animation: type-t2 12s infinite; }
-  .t3 { animation: type-t3 12s infinite; }
-  @keyframes type-t1 { 0%, 5% { width: 0; animation-timing-function: steps(11, end); } 12.5%, 94% { width: 11ch; } 96%, 100% { width: 0; } }
-  @keyframes type-t2 { 0%, 18.3% { width: 0; animation-timing-function: steps(17, end); } 28.3%, 94% { width: 17ch; } 96%, 100% { width: 0; } }
-  @keyframes type-t3 { 0%, 35% { width: 0; animation-timing-function: steps(12, end); } 42.5%, 94% { width: 12ch; } 96%, 100% { width: 0; } }
-  /* the block caret blinks on the active line, then hops to the next */
-  .cl-caret { display: inline-block; width: .55ch; height: 1.05em; margin-left: 1px; background: #34d399; vertical-align: text-bottom; opacity: 0; }
-  .c1 { animation: caret-c1 12s step-end infinite; }
-  .c2 { animation: caret-c2 12s step-end infinite; }
-  .c3 { animation: caret-c3 12s step-end infinite; }
-  @keyframes caret-c1 { 0% { opacity: 1; } 2.5% { opacity: 0; } 4%, 12.5% { opacity: 1; } 14%, 100% { opacity: 0; } }
-  @keyframes caret-c2 { 0%, 14% { opacity: 0; } 16% { opacity: 1; } 17.5% { opacity: 0; } 19%, 28.3% { opacity: 1; } 30%, 100% { opacity: 0; } }
-  @keyframes caret-c3 { 0%, 30% { opacity: 0; } 32% { opacity: 1; } 33.5% { opacity: 0; } 35%, 42.5% { opacity: 1; } 44%, 100% { opacity: 0; } }
-  /* output lines appear after `zhost deploy` finishes, then clear with the loop */
-  .cl-out { opacity: 0; }
-  .o1 { animation: out-o1 12s ease-out infinite; }
-  .o2 { animation: out-o2 12s ease-out infinite; }
-  .o3 { animation: out-o3 12s ease-out infinite; }
-  @keyframes out-o1 { 0%, 48% { opacity: 0; transform: translateY(4px); } 51.5%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
-  @keyframes out-o2 { 0%, 55% { opacity: 0; transform: translateY(4px); } 58.5%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
-  @keyframes out-o3 { 0%, 63.3% { opacity: 0; transform: translateY(4px); } 67%, 94% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) {
-    .cl-type { width: auto !important; animation: none; }
-    .cl-out { opacity: 1; transform: none; animation: none; }
-    .cl-caret { display: none; }
+  @media (max-width: 360px) {
+    h1 { font-size: 40px; }
+    .release-link { font-size: 9px; }
+    .opening-actions .button { padding-inline: 12px; font-size: 11px; gap: 8px; }
+    .opening-copy { font-size: 13px; }
+    .install-line { font-size: 10px; gap: 5px; }
+    .install-line .icon-button { width: 26px; }
+    h2 { font-size: 29px; }
   }
-  .cloud .section-sub code { color: #7ee2b8; background: #0e1115; padding: .05rem .35rem; border-radius: 5px; font-size: .85em; }
-  .cloud .section-sub b { color: #e8eaed; }
-
-  /* philosophy */
-  .philosophy { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; border-top: 1px solid #1b2027; border-bottom: 1px solid #1b2027; }
-  .phil i { display: block; font-style: normal; color: #234135; font-weight: 700; font-size: 1.6rem; letter-spacing: .02em; margin-bottom: .35rem; }
-  .phil b { display: block; color: #e8eaed; margin-bottom: .4rem; font-size: 1.02rem; }
-  .phil span { color: #9aa3ad; font-size: .9rem; }
-
-  /* final cta */
-  .final-cta { text-align: center; }
-  .tamil-sm { color: #34d399; font-size: .95rem; margin: 0 0 .4rem; letter-spacing: .04em; }
-  .final-cta h2 { margin-bottom: 1.6rem; }
-
-  /* footer */
-  .footer { position: relative; overflow: hidden; border-top: 1px solid #1b2027; background: #090b0e; margin-top: 2rem; }
-  .footer::before { content: "நிரல்"; position: absolute; left: 50%; bottom: -4.5rem; transform: translateX(-50%); font-size: 12rem; font-weight: 700; color: rgba(52, 211, 153, .04); letter-spacing: .04em; pointer-events: none; white-space: nowrap; }
-  .footer-inner { max-width: 920px; margin: 0 auto; padding: 3rem 1.4rem 2rem; display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2rem; }
-  .footer-mark { display: flex; align-items: center; gap: .55rem; font-weight: 650; margin: 0 0 .7rem; }
-  .footer-logo { height: 30px; width: auto; display: block; margin: 0 0 .9rem; }
-  .footer-tag { color: #9aa3ad; font-size: .88rem; margin: 0; }
-  .footer-col { display: flex; flex-direction: column; gap: .45rem; }
-  .footer-col b { color: #cdd3da; font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .3rem; }
-  .footer-col a { color: #9aa3ad; text-decoration: none; font-size: .9rem; transition: color .15s; }
-  .footer-col a:hover { color: #34d399; }
-  .footer-bottom { max-width: 920px; margin: 0 auto; padding: 1.2rem 1.4rem 2rem; border-top: 1px solid #14181d; color: #5f6b76; font-size: .84rem; display: flex; gap: .6rem; flex-wrap: wrap; }
-  .zyora { color: #34d399; text-decoration: none; font-weight: 600; }
-  .zyora:hover { text-decoration: underline; }
-  .footer-dot { color: #2c3742; }
-
-  @media (max-width: 720px) {
-    h1 { font-size: 2.3rem; }
-    .footer-inner { grid-template-columns: 1fr; gap: 1.6rem; }
-    .arrow { display: none; }
-    .nav-burger { display: flex; }
-    .nav-links { position: absolute; top: calc(100% + 6px); right: 1rem; left: 1rem; flex-direction: column; align-items: stretch; gap: .2rem; background: #0d1116; border: 1px solid #1c232b; border-radius: 12px; padding: .5rem; box-shadow: 0 20px 50px rgba(0,0,0,.5); display: none; z-index: 60; }
-    #navtoggle:checked ~ .nav-links { display: flex; }
-    .nav-links a { padding: .7rem .8rem; border-radius: 8px; font-size: 1rem; }
-    .nav-links a:hover { background: #14181d; }
-    .nav-cta { text-align: center; margin-top: .2rem; }
-    #navtoggle:checked ~ .nav-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-    #navtoggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
-    #navtoggle:checked ~ .nav-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  @media (max-height: 760px) and (min-width: 801px) {
+    .opening-inner { padding-top: 32px; padding-bottom: 28px; }
+    h1 { font-size: 64px; margin-bottom: 18px; }
+    .release-link { margin-bottom: 18px; }
+    .opening-copy { font-size: 15px; }
+    .opening-actions { margin-top: 20px; }
+    .install-line { margin-top: 16px; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: .01s !important; animation-iteration-count: 1 !important; transition-duration: .01s !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { :global(html) { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>

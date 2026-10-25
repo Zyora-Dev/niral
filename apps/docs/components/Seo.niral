@@ -1,0 +1,60 @@
+<script>
+  let { title, description, path, pageType = "WebPage", article = false, software = false, breadcrumbs = [], noindex = false } = $props
+  const origin = "https://niral.site"
+  const canonical = new URL(path, origin).href
+  const image = origin + "/n.png"
+  const organization = { "@type": "Organization", "@id": origin + "/#organization", name: "ZyoraLabs", url: "https://zyoralabs.com" }
+  const website = { "@type": "WebSite", "@id": origin + "/#website", name: "Niral", url: origin + "/", inLanguage: "en", publisher: { "@id": organization["@id"] } }
+  const webpage = { "@type": pageType, "@id": canonical + "#webpage", url: canonical, name: title, description, inLanguage: "en", isPartOf: { "@id": website["@id"] }, publisher: { "@id": organization["@id"] } }
+  const graph = [organization, website, webpage]
+  if (breadcrumbs.length) {
+    webpage.breadcrumb = { "@id": canonical + "#breadcrumb" }
+    graph.push({ "@type": "BreadcrumbList", "@id": canonical + "#breadcrumb", itemListElement: breadcrumbs.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.name, item: new URL(item.path, origin).href })) })
+  }
+  if (article) {
+    webpage.mainEntity = { "@id": canonical + "#article" }
+    graph.push({ "@type": "TechArticle", "@id": canonical + "#article", headline: title, description, url: canonical, inLanguage: "en", image, author: { "@id": organization["@id"] }, publisher: { "@id": organization["@id"] }, mainEntityOfPage: { "@id": webpage["@id"] } })
+  }
+  if (software) {
+    webpage.mainEntity = { "@id": origin + "/#framework" }
+    graph.push({ "@type": "SoftwareSourceCode", "@id": origin + "/#framework", name: "Niral", description, url: origin + "/", codeRepository: "https://github.com/Zyora-Dev/niral", programmingLanguage: "JavaScript", runtimePlatform: "Node.js 22+", author: { "@id": organization["@id"] } })
+  }
+  const structuredData = '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replace(/</g, "\\u003c") + '<\/script>'
+  if (typeof document !== "undefined") {
+    queueMicrotask(() => {
+      document.title = title
+      const links = [...document.head.querySelectorAll('link[rel="canonical"]')]
+      const link = links.shift() ?? document.createElement("link")
+      link.rel = "canonical"
+      link.href = canonical
+      if (!link.parentNode) document.head.appendChild(link)
+      for (const duplicate of links) duplicate.remove()
+      const metadata = [
+        ["name", "description", description],
+        ["name", "robots", noindex ? "noindex, follow" : "index, follow, max-image-preview:large"],
+        ["property", "og:type", article ? "article" : "website"],
+        ["property", "og:site_name", "Niral"],
+        ["property", "og:title", title],
+        ["property", "og:description", description],
+        ["property", "og:url", canonical],
+        ["property", "og:image", image],
+        ["property", "og:image:alt", "Niral web framework logo"],
+        ["name", "twitter:card", "summary"],
+        ["name", "twitter:title", title],
+        ["name", "twitter:description", description],
+        ["name", "twitter:image", image],
+        ["name", "twitter:image:alt", "Niral web framework logo"]
+      ]
+      for (const [attribute, name, content] of metadata) {
+        const matches = [...document.head.querySelectorAll(`meta[${attribute}="${name}"]`)]
+        const meta = matches.shift() ?? document.createElement("meta")
+        meta.setAttribute(attribute, name)
+        meta.setAttribute("content", content)
+        if (!meta.parentNode) document.head.appendChild(meta)
+        for (const duplicate of matches) duplicate.remove()
+      }
+    })
+  }
+</script>
+
+{#if !noindex}{@html structuredData}{/if}

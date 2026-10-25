@@ -1,6 +1,6 @@
 # Niral for VS Code
 
-Language support for [**Niral**](https://niral.zyora.club) — the zero-dependency,
+Language support for [**Niral**](https://niral.site) — the zero-dependency,
 compiler-first full-stack web framework. Rich editing for `.niral` single-file
 components.
 
@@ -39,7 +39,7 @@ can verify their own edits with `niral check` (the real TypeScript compiler) and
 
 ## Links
 
-- **Docs** — https://niral.zyora.club
+- **Docs** — https://niral.site
 - **GitHub** — https://github.com/Zyora-Dev/niral
 - **Issues** — https://github.com/Zyora-Dev/niral/issues
 

@@ -9,6 +9,7 @@ import { runAgent } from "./agent.js";
 import { createWorkspaceTools } from "./workspace.js";
 
 export const DI_HELP = `niral di - Developer Intelligence
+  setup                         choose OpenAI, Claude, Azure OpenAI or Custom
   setup --protocol <chat-completions|responses|anthropic>
         --base-url <API base> --model <exact model/deployment>
         --auth <bearer|api-key|x-api-key|none> [--key-env <variable>]
@@ -26,7 +27,9 @@ new scaffolds an empty target, then assists with approved edits. No shell tools.
 Configuration: NIRAL_HOME/di.json (default ~/.niral/di.json).
 Credentials stay in the named environment variable; no automatic .env loading.
 API base excludes the operation path and query; use --api-version separately.
-No default provider, endpoint or model. No automatic retries or model fallback.`;
+Named presets set protocol/auth; Custom lets you choose them manually.
+No default provider or model. No endpoint probing, retries or model fallback.
+Amazon Bedrock is not supported by the current adapters.`;
 
 const SETUP_FLAGS = new Map([
   ["--protocol", "protocol"], ["--base-url", "baseURL"], ["--model", "model"],
@@ -81,8 +84,72 @@ export async function runDi(args, {
       if (!key || key in config || !rest[index + 1] || rest[index + 1].startsWith("--")) throw new Error("DI: invalid setup arguments; run niral di setup --help");
       config[key] = rest[++index];
     }
-    validateConfig(config);
     if (existsSync(file) && !replace) throw new Error("DI: already configured; use --replace to change provider settings");
+    if (!Object.keys(config).length) {
+      if (!question && !(input.isTTY && error.isTTY)) throw new Error("DI: setup requires a terminal for prompts; pass explicit flags for automation (niral di setup --help)");
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      const terminal = question ? null : createInterface({ input, output: error });
+      const ask = question ?? ((message, options) => terminal.question(message, options));
+      process.once("SIGINT", cancel);
+      terminal?.on("SIGINT", cancel);
+      terminal?.on("close", cancel);
+      const answer = async (label, choices) => {
+        while (true) {
+          controller.signal.throwIfAborted();
+          const value = (await ask(label, { signal: controller.signal })).trim();
+          controller.signal.throwIfAborted();
+          if (value.length > 1024) throw new Error("DI: setup value is too long");
+          const selected = choices && /^[1-9]$/.test(value) ? choices[Number(value) - 1] : value;
+          if (selected && (!choices || choices.includes(selected))) return selected;
+          output.write(choices ? "Choose one of the listed numbers or names.\n" : "A value is required.\n");
+        }
+      };
+      try {
+        output.write("DI setup. Enter exact provider settings; no API key will be requested or stored.\n");
+        const provider = await answer("Provider (1 openai, 2 claude [Anthropic], 3 azure [Azure OpenAI], 4 custom): ", ["openai", "claude", "azure", "custom"]);
+        if (provider === "custom") {
+          config.protocol = await answer("Protocol (1 chat-completions, 2 responses, 3 anthropic): ", ["chat-completions", "responses", "anthropic"]);
+          config.baseURL = await answer("API base URL (without operation path or query): ");
+        } else {
+          config.protocol = provider === "claude" ? "anthropic" : "responses";
+          config.auth = provider === "claude" ? "x-api-key" : provider === "azure" ? "api-key" : "bearer";
+          if (provider === "azure") {
+            const endpoint = await answer("Azure endpoint (resource URL or URL ending in /openai/v1): ");
+            let url;
+            try { url = new URL(endpoint); }
+            catch { throw new Error("DI: invalid Azure endpoint URL"); }
+            if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash
+              || !["/", "/openai/v1", "/openai/v1/"].includes(url.pathname)) {
+              throw new Error("DI: Azure requires an HTTPS resource URL or /openai/v1 base without credentials, query or fragment; use Custom for other API paths");
+            }
+            url.pathname = "/openai/v1";
+            config.baseURL = url.href;
+          } else {
+            config.baseURL = provider === "claude" ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1";
+          }
+          if (provider === "claude") config.apiVersion = "2023-06-01";
+          output.write(`Preset: ${config.protocol}, ${config.auth}, ${JSON.stringify(config.baseURL)}${config.apiVersion ? `, API version ${config.apiVersion}` : ""}.\n`);
+        }
+        config.model = await answer("Exact model or deployment name: ");
+        if (provider === "custom") config.auth = await answer("Authentication (1 bearer, 2 api-key, 3 x-api-key, 4 none): ", ["bearer", "api-key", "x-api-key", "none"]);
+        if (config.auth !== "none") config.keyEnv = await answer("Credential environment variable NAME (not the key): ");
+        if (provider === "custom") {
+          const apiVersion = (await ask("API version (Enter to omit): ", { signal: controller.signal })).trim();
+          controller.signal.throwIfAborted();
+          if (apiVersion.length > 1024) throw new Error("DI: setup value is too long");
+          if (apiVersion) config.apiVersion = apiVersion;
+        }
+      } catch (failure) {
+        if (!controller.signal.aborted) throw failure;
+        output.write("DI setup cancelled. Configuration unchanged.\n");
+        return 1;
+      } finally {
+        process.removeListener("SIGINT", cancel);
+        terminal?.close();
+      }
+    }
+    validateConfig(config);
     mkdirSync(home, { recursive: true, mode: 0o700 });
     const temporary = join(home, `.di-${randomUUID()}.json`);
     try {

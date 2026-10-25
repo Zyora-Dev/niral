@@ -62,56 +62,80 @@ export async function load() {
 </server>
 
 <script>
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "Niral Changelog | Framework Updates and Fixes"
+  const description = "Follow Niral framework updates, new capabilities and fixes from the repository's commit history. Browse changes by month and open the source on GitHub."
   let { groups, generatedAt, total, source } = $props
 </script>
 
 <head>
-  <title>Changelog · Niral</title>
-  <meta name="description" content="Everything that changed in Niral — generated automatically from the commit history on every release." />
+  <title>Niral Changelog | Framework Updates and Fixes</title>
+  <meta name="description" content="Follow Niral framework updates, new capabilities and fixes from the repository's commit history. Browse changes by month and open the source on GitHub." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/changelog" />
-  <meta name="robots" content="index, follow" />
-  <meta name="theme-color" content="#0b0d10" />
-  <link rel="icon" type="image/png" href="/n.png" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Niral" />
-  <meta property="og:title" content="Niral — Changelog" />
-  <meta property="og:description" content="Everything that changed in Niral — generated from the commit history on every release." />
+  <meta property="og:title" content="Niral Changelog | Framework Updates and Fixes" />
+  <meta property="og:description" content="Follow Niral framework updates, new capabilities and fixes from the repository's commit history. Browse changes by month and open the source on GitHub." />
   <meta property="og:url" content="https://niral.site/changelog" />
   <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Niral Changelog | Framework Updates and Fixes" />
+  <meta name="twitter:description" content="Follow Niral framework updates, new capabilities and fixes from the repository's commit history. Browse changes by month and open the source on GitHub." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
 </head>
+<Seo title={seoTitle} description={description} path="/changelog" pageType="CollectionPage" />
 
 <main>
-  <nav class="nav">
+  <nav class="nav" aria-label="Main navigation">
     <div class="nav-inner">
       <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral" height="30" /></a>
       <div class="nav-links">
         <a href="/docs/getting-started">Docs</a>
+        <a href="/docs/benchmarks">Benchmarks</a>
+        <a href="/changelog" aria-current="page">Changelog</a>
         <a href="https://github.com/Zyora-Dev/niral" rel="noopener">GitHub</a>
+        <a class="nav-cta" href="/docs/getting-started">Get started</a>
       </div>
+      <details class="mobile-nav">
+        <summary aria-label="Navigation menu"><img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/menu.svg" alt="" width="22" height="22" /></summary>
+        <div class="mobile-links">
+          <a href="/">Home</a>
+          <a href="/docs/getting-started">Documentation</a>
+          <a href="/docs/benchmarks">Benchmarks</a>
+          <a href="/changelog" aria-current="page">Changelog</a>
+          <a href="https://github.com/Zyora-Dev/niral">GitHub</a>
+        </div>
+      </details>
     </div>
   </nav>
 
   <header class="hero">
-    <p class="eyebrow">Changelog</p>
-    <h1>Every change, automatically</h1>
-    <p class="lead">
-      Synced automatically from the repository commit history —
-      {total} changes and counting. Nothing here is written by hand.
-    </p>
-    <p class="stamp">source: {source} · refreshed {generatedAt} · updates within 10 minutes</p>
+    <p class="eyebrow"><img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/git-branch.svg" alt="" width="18" height="18" /> The Niral release log</p>
+    <h1>Changelog<span>.</span></h1>
+    <p class="lead">The framework, as it evolves.<br />New capabilities, thoughtful improvements, and fixes from the repository.</p>
+    <div class="release-meta">
+      <p><b>{total}</b> changes <span>·</span> {source}</p>
+      <p>Refreshed <time datetime={generatedAt}>{generatedAt}</time></p>
+      <a href="https://github.com/Zyora-Dev/niral/commits">View on GitHub <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/arrow-up-right.svg" alt="" width="16" height="16" /></a>
+    </div>
   </header>
 
-  <section class="log">
+  <section class="log" aria-label="Release history">
     {#for g of groups key g.key}
       <div class="month">
-        <h2>{g.key}</h2>
+        <div class="month-heading"><h2>{g.key}</h2><p>{g.items.length} changes</p></div>
         <ul>
           {#for e of g.items key e.hash}
             <li>
-              <span class="day">{e.day}</span>
+              <time class="day" datetime={e.date}>{e.day}</time>
               <span class="area" data-a="{e.area}">{e.area}</span>
               <span class="text">{e.text}</span>
-              <code class="hash">{e.hash}</code>
+              <a class="hash" href={"https://github.com/Zyora-Dev/niral/commit/" + e.hash} aria-label={"View commit " + e.hash}>{e.hash}<span aria-hidden="true">↗</span></a>
             </li>
           {/for}
         </ul>
@@ -120,70 +144,95 @@ export async function load() {
   </section>
 
   <footer class="foot">
-    <a href="/">← niral.site</a>
-    <span>synced from <code>github.com/Zyora-Dev/niral</code></span>
+    <a href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral home" height="30" /></a>
+    <span>Built in India. Made for everyone.</span>
+    <a href="/docs/getting-started">Read the docs ↗</a>
   </footer>
 </main>
 
 <style>
-  :root { color-scheme: dark; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0b0d10; color: #e6e9ec; font-family: "Geist", -apple-system, sans-serif; }
-  main { min-height: 100vh; }
-
-  .nav { border-bottom: 1px solid #1a1f26; }
-  .nav-inner { max-width: 880px; margin: 0 auto; padding: .9rem 1.4rem; display: flex; align-items: center; justify-content: space-between; }
-  .brand-logo { display: block; height: 30px; width: auto; }
-  .nav-links { display: flex; gap: 1.2rem; }
-  .nav-links a { color: #9aa3ad; text-decoration: none; font-size: .92rem; transition: color .15s; }
-  .nav-links a:hover { color: #34d399; }
-
-  .hero { max-width: 880px; margin: 0 auto; padding: 3.4rem 1.4rem 1rem; }
-  .eyebrow { color: #34d399; font-size: .8rem; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; margin-bottom: .7rem; }
-  h1 { font-size: clamp(1.9rem, 4.5vw, 2.7rem); letter-spacing: -.02em; line-height: 1.12; }
-  .lead { color: #9aa3ad; margin-top: .8rem; max-width: 34rem; line-height: 1.65; }
-  .stamp { color: #566068; font-size: .8rem; margin-top: .9rem; font-family: "Geist Mono", monospace; }
-
-  .log { max-width: 880px; margin: 0 auto; padding: 1.6rem 1.4rem 3rem; }
-  .month { margin-top: 2.2rem; }
-  .month h2 {
-    font-size: .85rem; text-transform: uppercase; letter-spacing: .12em; color: #cdd3da;
-    padding-bottom: .55rem; border-bottom: 1px solid #1a1f26; margin-bottom: .4rem;
+  :global(html) { color-scheme: dark; }
+  :global(body) { margin: 0; background: #080809; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #080809; }
+  * { box-sizing: border-box; }
+  main { --gold: #f2b544; --line: #363639; min-height: 100vh; font-family: "Geist", sans-serif; letter-spacing: 0; line-height: 1.6; background: linear-gradient(125deg, #232326, #101012 1000px, #080809 2000px); }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--gold); }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+  .nav { position: sticky; top: 0; z-index: 50; background: #0b0b0df5; border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
+  .nav-inner { max-width: 1184px; min-height: 80px; margin: auto; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; position: relative; gap: 24px; }
+  .mark { display: flex; }
+  .brand-logo { display: block; height: 30px; width: auto; filter: grayscale(1) brightness(1.6); }
+  .nav-links { display: flex; align-items: center; gap: 30px; }
+  .nav-links a { font-size: 14px; }
+  a[aria-current="page"] { color: var(--gold); }
+  .nav-cta { background: #232326; border: 1px solid #505054; border-radius: 6px; padding: 10px 18px; font-weight: 500; }
+  .nav-cta:hover { border-color: var(--gold); }
+  .mobile-nav { display: none; }
+  .mobile-nav summary { list-style: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .mobile-nav summary::-webkit-details-marker { display: none; }
+  .mobile-nav img, .eyebrow img, .release-meta img { filter: invert(1); }
+  .mobile-links { position: absolute; top: calc(100% - 1px); left: 16px; right: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px; background: #18181b; border: 1px solid #505054; border-radius: 8px; box-shadow: 0 20px 40px #0008; }
+  .mobile-links a { padding: 12px 16px; font-size: 15px; border-radius: 4px; }
+  .mobile-links a:hover { background: #303033; }
+  .hero { max-width: 1184px; margin: auto; padding: 72px 32px 0; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--gold); font-size: 13px; font-weight: 500; margin: 0 0 22px; }
+  h1 { font-size: 64px; font-weight: 500; line-height: 1.12; margin: 0 0 24px; }
+  h1 span { color: var(--gold); }
+  .lead { font-size: 17px; margin: 0 0 44px; max-width: 620px; line-height: 1.8; }
+  .release-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; font-size: 13px; padding-block: 22px; border-block: 1px solid var(--line); }
+  .release-meta p { margin: 0; }
+  .release-meta b { font-weight: 600; }
+  .release-meta span { margin-inline: 8px; }
+  .release-meta a { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+  .log { max-width: 1184px; margin: auto; padding: 24px 32px 72px; }
+  .month { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 56px; padding-block: 40px; }
+  .month + .month { border-top: 1px solid var(--line); }
+  .month-heading { align-self: start; position: sticky; top: 112px; padding-top: 4px; }
+  .month h2 { font-size: 20px; font-weight: 500; line-height: 1.3; margin: 0 0 12px; }
+  .month-heading p { margin: 0; font-size: 13px; }
+  .month ul { margin: 0; padding: 0 0 0 28px; list-style: none; border-left: 1px solid #505054; }
+  .month li { position: relative; display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px 20px; align-items: center; padding: 24px 0; border-bottom: 1px solid var(--line); }
+  .month li:first-child { padding-top: 0; }
+  .month li:last-child { border-bottom: 0; }
+  .month li::before { content: ""; position: absolute; left: -33px; top: 35px; width: 7px; height: 7px; background: var(--gold); border: 1px solid var(--gold); border-radius: 50%; }
+  .month li:first-child::before { top: 11px; }
+  .day { font: 12px "Geist Mono", monospace; white-space: nowrap; }
+  .area { justify-self: start; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 4px; background: #232326; border: 1px solid #505054; overflow-wrap: anywhere; max-width: 100%; }
+  .text { grid-column: 1 / -1; grid-row: 2; line-height: 1.75; font-size: 16px; min-width: 0; overflow-wrap: anywhere; max-width: 720px; }
+  .hash { display: inline-flex; align-items: center; gap: 8px; grid-column: 3; grid-row: 1; font: 12px "Geist Mono", monospace; }
+  .hash span { color: var(--gold); }
+  .foot { max-width: 1120px; margin: auto; padding: 32px 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 24px; font-size: 13px; }
+  @media (max-width: 1000px) {
+    .nav-links { gap: 20px; }
+    .month { grid-template-columns: 170px minmax(0, 1fr); gap: 32px; }
+    .foot { margin-inline: 32px; }
   }
-  .month ul { list-style: none; }
-  .month li {
-    display: grid; grid-template-columns: 4.2rem 7.2rem 1fr auto;
-    gap: .9rem; align-items: baseline;
-    padding: .62rem .4rem; border-bottom: 1px solid #14181d;
+  @media (max-width: 720px) {
+    .nav-inner { min-height: 72px; padding: 14px 24px; }
+    .nav-links { display: none; }
+    .mobile-nav { display: block; }
+    .hero { padding: 44px 24px 0; }
+    h1 { font-size: 44px; }
+    .lead { font-size: 15px; margin-bottom: 28px; }
+    .release-meta { gap: 12px 24px; }
+    .release-meta a { margin-left: 0; }
+    .log { padding: 0 24px 48px; }
+    .month { grid-template-columns: 1fr; gap: 28px; padding-block: 36px; }
+    .month-heading { position: static; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    .month h2 { margin: 0; }
+    .month ul { padding-left: 20px; }
+    .month li { grid-template-columns: 60px minmax(0, 1fr) auto; gap: 12px; }
+    .month li::before { left: -25px; }
+    .text { font-size: 15px; }
+    .area { font-size: 11px; padding: 3px 8px; }
+    .hash { font-size: 11px; gap: 4px; }
+    .foot { flex-wrap: wrap; margin-inline: 24px; padding-block: 28px; }
   }
-  .month li:hover { background: #0e1116; }
-  .day { color: #566068; font-size: .8rem; font-family: "Geist Mono", monospace; white-space: nowrap; }
-  .area {
-    justify-self: start; font-size: .72rem; font-weight: 600; letter-spacing: .04em;
-    padding: .14rem .55rem; border-radius: 999px;
-    background: #12211b; color: #34d399; border: 1px solid #1d3a2e;
-    white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-  }
-  .area[data-a="fix"], .area[data-a="fixes"] { background: #241518; color: #f0868f; border-color: #45242a; }
-  .area[data-a="docs"] { background: #131c26; color: #7db4e8; border-color: #22344a; }
-  .area[data-a="landing"], .area[data-a="branding"], .area[data-a="fonts"] { background: #221c12; color: #e2b465; border-color: #43351f; }
-  .text { color: #c8cdd3; line-height: 1.55; font-size: .93rem; min-width: 0; overflow-wrap: break-word; }
-  .hash { color: #566068; font-size: .76rem; font-family: "Geist Mono", monospace; }
-
-  .foot {
-    max-width: 880px; margin: 0 auto; padding: 1.4rem; border-top: 1px solid #1a1f26;
-    display: flex; justify-content: space-between; align-items: center;
-    color: #566068; font-size: .85rem;
-  }
-  .foot a { color: #9aa3ad; text-decoration: none; }
-  .foot a:hover { color: #34d399; }
-  .foot code { font-family: "Geist Mono", monospace; color: #7d8790; }
-
-  @media (max-width: 640px) {
-    .month li { grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: .25rem .6rem; }
-    .day { grid-column: 1; grid-row: 2; }
-    .area { grid-column: 2; grid-row: 1; justify-self: end; }
-    .text { grid-column: 1; grid-row: 1; }
-    .hash { display: none; }
+  @media (max-width: 360px) {
+    .hero, .log { padding-inline: 20px; }
+    h1 { font-size: 38px; }
+    .month li { grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; }
+    .hash span { display: none; }
   }
 </style>

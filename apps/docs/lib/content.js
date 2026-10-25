@@ -13,6 +13,8 @@ export const GROUPS = [
 export const PAGES = {
   "api-routes": {
     title: "HTTP API routes",
+    seoTitle: "HTTP API Routes and Webhooks | Niral Docs",
+    description: "Build HTTP APIs in Niral with file-based server routes, native Request and Response objects, method handlers, validation and signed webhook examples.",
     body: `
 Export HTTP methods from a \`routes/**/*.server.js\` file. Endpoints run only on the
 server and return native Web \`Response\` objects. No component or browser bundle is required.
@@ -132,6 +134,8 @@ for persistent storage, never a path relative to a release module.
   /* ── START ─────────────────────────────────────────────────── */
   "getting-started": {
     title: "Getting started",
+    seoTitle: "Install Niral and Create Your First App | Niral Docs",
+    description: "Install Niral with Node.js 22+, create your first full-stack app, choose a starter template and learn the commands for development, testing and deployment.",
     body: `
 நிரல் (Niral, Tamil for "program") is a full-stack web framework with **zero dependencies** —
 compiler, signals runtime, router, SSR, WebSockets, auth, jobs, mail and AI helpers are all
@@ -165,7 +169,7 @@ See [CLI updates](/docs/cli) for the separate framework update workflow.
 No npm? Use the installer:
 
 \`\`\`sh
-curl -fsSL https://niral.zyora.club/install.sh | bash
+curl -fsSL https://niral.site/install.sh | bash
 \`\`\`
 
 Or go direct — a git clone IS the framework:
@@ -248,6 +252,8 @@ and reading \`process.env\` in client code is a compile error.
 
   components: {
     title: "Components",
+    seoTitle: "Components, Templates and JSX | Niral Docs",
+    description: "Build Niral components with server blocks, scripts, templates and scoped CSS. Learn props, slots, events, bindings and JSX or TSX without React.",
     body: `
 Components are \`.niral\` files — or \`.jsx\` / \`.tsx\` if you prefer JSX. Same compiler,
 same runtime, no React.
@@ -426,6 +432,8 @@ export default function Todo({ items }) {
 
   reactivity: {
     title: "Reactivity",
+    seoTitle: "Fine-Grained Reactivity and Signals | Niral Docs",
+    description: "Learn Niral's fine-grained reactivity with state, derived values and props. Use signals, effects, batching and context without a virtual DOM.",
     body: `
 Niral compiles runes to **fine-grained signals** — no virtual DOM, no re-renders.
 When state changes, exactly the text nodes and attributes that depend on it update.
@@ -473,6 +481,8 @@ read-only; writing one throws with a hint.
   /* ── BUILD ─────────────────────────────────────────────────── */
   routing: {
     title: "Routing",
+    seoTitle: "File-Based Routing, Layouts and SSR | Niral Docs",
+    description: "Learn Niral file-based routing with dynamic parameters, nested layouts, SSR loaders, error pages and client-side navigation for full-stack Node.js apps.",
     body: `
 File-based routing under \`routes/\`:
 
@@ -556,6 +566,8 @@ Customize the document with \`routes/_shell.html\` — put fonts, meta tags and 
 
   styling: {
     title: "Styling",
+    seoTitle: "Scoped CSS, Tailwind and Transitions | Niral Docs",
+    description: "Style Niral apps with component-scoped CSS, global selectors, the standalone Tailwind integration and built-in transitions for interactive interfaces.",
     body: `
 ## Scoped styles
 
@@ -591,6 +603,8 @@ All powered by the Web Animations API — SSR and hydration never flash.
 
   typescript: {
     title: "TypeScript",
+    seoTitle: "TypeScript and Typed Server Contracts | Niral Docs",
+    description: "Use TypeScript in Niral scripts, server blocks and TSX components. Check types with niral check and get inferred RPC, form action and component contracts.",
     body: `
 Write \`<script lang="ts">\`, \`.ts\` modules, or \`.tsx\` components. Types are
 stripped at compile time; **checking** uses the real TypeScript compiler:
@@ -703,6 +717,8 @@ are not runtime validation or a guarantee that a value is JSON-serializable.
   /* ── SERVER ────────────────────────────────────────────────── */
   server: {
     title: "Server functions",
+    seoTitle: "Server Functions, SSR and Form Actions | Niral Docs",
+    description: "Build Niral backends with server blocks, SSR loaders, RPC endpoints and progressive form actions. Explore middleware, sessions and streaming responses.",
     body: `
 The \`<server>\` block is your backend. Exports become **RPC endpoints** with
 compile-time client stubs; \`load()\` runs during SSR and feeds \`$props\`.
@@ -963,6 +979,8 @@ Full guide: [Databases — SQLite & Postgres](/docs/database).
 
   database: {
     title: "Databases",
+    seoTitle: "SQLite and PostgreSQL Databases | Niral Docs",
+    description: "Add a database to Niral with built-in SQLite or connect to PostgreSQL. Learn persistent data storage, parameterized queries, TLS and multi-server setup.",
     body: `
 Niral has a database in the box. **SQLite is the default** — and for most
 apps, the finish line. When you outgrow one machine, the **same code** talks to
@@ -1074,6 +1092,8 @@ through one Postgres with no extra moving parts.
 
   auth: {
     title: "Authentication",
+    seoTitle: "Authentication, Passkeys and OAuth | Niral Docs",
+    description: "Scaffold Niral authentication with passwords, WebAuthn passkeys, TOTP two-factor authentication and OAuth. Protect routes and manage signed-in users.",
     body: `
 \`\`\`sh
 niral add auth
@@ -1115,6 +1135,8 @@ every provider.
 
   validation: {
     title: "Validation",
+    seoTitle: "Form and RPC Input Validation | Niral Docs",
+    description: "Validate Niral form actions and RPC inputs with built-in schemas. Coerce form values, validate nested data and return useful field-level error messages.",
     body: `
 Built-in coercing schemas — form strings become typed values, errors become
 field messages. No Zod needed.
@@ -1153,6 +1175,8 @@ validation errors are a single message for the field.
 
   realtime: {
     title: "Realtime",
+    seoTitle: "Realtime WebSocket Channels | Niral Docs",
+    description: "Build realtime Niral apps with live WebSocket channels, server-side publishing and automatic reconnects. Authorize subscriptions with channel guards.",
     body: `
 Live channels over framework-owned WebSockets — no socket.io.
 
@@ -1195,6 +1219,8 @@ fails open.
 
   scaling: {
     title: "Scaling to many servers",
+    seoTitle: "Horizontal Scaling and Clustering | Niral Docs",
+    description: "Scale a Niral app across servers with PostgreSQL, a realtime backplane and shared job queues. Configure load balancing, sessions and health checks.",
     body: `
 Niral is built to run beautifully on **one small box** — a ₹300/month VPS, a
 free tier, a shared laptop. Most apps never need more. But when you outgrow a
@@ -1280,7 +1306,13 @@ point your balancer's health check at it so a bad node is pulled automatically.
   /* ── CAPABILITIES ──────────────────────────────────────────── */
   ai: {
     title: "AI",
+    seoTitle: "AI Chat, Streaming, Embeddings and RAG | Niral Docs",
+    description: "Add AI features to Niral apps with server-side chat, streaming, embeddings and retrieval-augmented generation using compatible hosted or local models.",
     body: `
+Looking for AI assistance while developing your app? [Niral DI](/di) runs in your
+terminal with your chosen provider and approval-gated workspace tools. This guide
+covers the separate server-side AI features used inside your application.
+
 Niral speaks the OpenAI-compatible wire format — point it at OpenAI, Azure,
 Ollama, vLLM, llama.cpp or your own model:
 
@@ -1331,6 +1363,8 @@ works offline, no keys, no cloud.
 
   jobs: {
     title: "Jobs & cron",
+    seoTitle: "Background Jobs, Retries and Cron | Niral Docs",
+    description: "Run durable background jobs and cron schedules in Niral. Learn delayed tasks, retry handling, persistent SQLite queues and shared PostgreSQL workers.",
     body: `
 A durable background queue — in the framework, not a Redis cluster.
 
@@ -1382,6 +1416,8 @@ your response returns.
 
   utilities: {
     title: "Mail, i18n & observability",
+    seoTitle: "Email, Internationalization and Monitoring | Niral Docs",
+    description: "Send email over SMTP, translate Niral apps with locale catalogs and monitor requests with built-in observability. Configure helpers without runtime packages.",
     body: `
 ## Mail — own SMTP client
 
@@ -1427,6 +1463,8 @@ Production logs are structured JSON lines with request correlation:
 
   images: {
     title: "Images",
+    seoTitle: "Responsive Images and WebP Optimization | Niral Docs",
+    description: "Add responsive images to Niral with lazy loading, explicit dimensions and priority loading. Generate WebP variants with optional build-time transcoding.",
     body: `
 \`\`\`sh
 niral add image              # a best-practice <Img> component (yours to edit)
@@ -1458,6 +1496,8 @@ Results are content-hash cached — rebuilds are free.
   /* ── SHIP ──────────────────────────────────────────────────── */
   deployment: {
     title: "Deployment",
+    seoTitle: "Deploy Niral: Self-Hosting and Static Export | Niral Docs",
+    description: "Deploy Niral to your own server or zHost. Learn production builds, nginx and systemd setup, atomic releases, rollback, environment checks and static export.",
     body: `
 Two ways to ship: **[zHost](/docs/zhost)** (ZyoraLabs' cloud — easiest, three commands) or
 **your own server** (the generated deploy kit — full control).
@@ -1551,6 +1591,8 @@ hydrate; server features (RPC, actions) need \`niral start\`.
 
   zhost: {
     title: "Instant deploys · zHost",
+    seoTitle: "Deploy Niral Apps to zHost | Niral Docs",
+    description: "Deploy a Niral app to zHost from your terminal. Set up an account, install the CLI, link a project and publish to an HTTPS URL with automatic builds.",
     body: `
 **zHost** is ZyoraLabs' deployment cloud — the fastest way to put a Niral app
 on the internet. No server to provision, no nginx to configure, no CI to wire.
@@ -1639,6 +1681,8 @@ Niral never locks you in: \`niral deploy\` generates a complete self-owned kit
 
   security: {
     title: "Security & Shield",
+    seoTitle: "Security, Shield and Disaster Recovery | Niral Docs",
+    description: "Explore Niral security defaults, Shield request protection, release integrity checks and encrypted snapshots. Learn recovery tools and their limits.",
     body: `
 Niral is **hardened by default** — and with the **Shield**, a niral app also
 watches itself, evicts attackers, and detects tampering. All in-process, no
@@ -1819,6 +1863,8 @@ codebase.
 
   cli: {
     title: "CLI reference",
+    seoTitle: "Niral CLI Commands and Developer Tools | Niral Docs",
+    description: "Find Niral CLI commands for creating apps, development, builds, tests, deployment and migrations. Explore recipes, diagnostics and Developer Intelligence.",
     body: `
 Use \`niral <command>\` through the installed launcher, or
 \`npx niral <command>\` without configuring PATH. Node.js 22+ is required.
@@ -1896,11 +1942,11 @@ migrate projects, update npm packages or restart/deploy production servers.
 ## Developer Intelligence - niral di
 
 DI is part of the local framework, available through the existing npm launcher.
-No Niral Cloud account is required. Choose your provider's exact protocol,
-endpoint and model; there is no default model, substitution or provisioning.
+No Niral Cloud account is required. Choose a provider preset or configure a custom
+endpoint; there is no default model, substitution or provisioning.
 
 \`\`\`sh
-niral di setup --protocol responses --base-url https://your-provider.example/v1 --model YOUR_EXACT_MODEL --auth bearer --key-env NIRAL_DI_API_KEY
+niral di setup
 niral di status
 niral di ask "Explain this project's routes" --root ./myapp --read-only
 niral di ask "Add a contact page" --root ./myapp
@@ -1909,7 +1955,19 @@ niral di new myblog "Customize the home page" --template blog
 niral di ask "Explain server blocks" --no-tools
 \`\`\`
 
-Replace the endpoint/model placeholders, then supply the credential privately in
+Bare \`niral di setup\` offers OpenAI, Claude (Anthropic), Azure OpenAI or Custom.
+Named providers set protocol/auth automatically. OpenAI uses Responses with bearer
+auth at \`https://api.openai.com/v1\`; Claude uses Messages with x-api-key auth at
+\`https://api.anthropic.com/v1\` and version \`2023-06-01\`. Azure uses Responses
+with api-key auth: enter your HTTPS resource URL or \`/openai/v1\` base; a resource
+URL is expanded to \`/openai/v1\`, without an API-version query. Enter the exact
+deployment name for Azure, or exact model name for other providers.
+Custom keeps manual protocol, endpoint, auth and optional version choices.
+There is no endpoint probing. Amazon Bedrock is not yet supported.
+Setup asks for the credential variable name, never the key.
+Ctrl-C or end-of-input cancels without saving.
+For automation, pass explicit flags listed by \`niral di setup --help\`.
+Supply the credential privately in
 the named environment variable. Do not paste keys into CLI arguments, project
 files, shell history or chat. \`setup\` stores settings and the variable name in
 \`NIRAL_HOME/di.json\` (default \`~/.niral/di.json\`, mode 0600), never the key.
@@ -2015,6 +2073,8 @@ LSP-capable editor can use.
 
   benchmarks: {
     title: "Benchmarks",
+    seoTitle: "SSR and Hydration Performance Benchmarks | Niral Docs",
+    description: "Compare Niral SSR throughput and hydration with other web frameworks. Review test conditions, measured results and reproducible benchmark methodology.",
     body: `
 Identical 1000-row SSR'd apps per framework, same machine, alternating-order
 runs, medians reported. Full methodology lives in the repo under

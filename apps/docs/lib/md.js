@@ -94,8 +94,8 @@ export function md(src) {
       const rows = [];
       while (i < lines.length && lines[i].startsWith("|")) rows.push(cells(lines[i++]));
       out.push(
-        `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>` +
-          `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+        `<div class="table-scroll" role="region" aria-label="Reference table" tabindex="0"><table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>` +
+          `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
       );
       continue;
     }

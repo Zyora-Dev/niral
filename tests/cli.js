@@ -95,7 +95,8 @@ export function registerCliTests(test) {
   });
 
   test("CLI version reads the framework manifest and unknown commands fail", () => {
-    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    const { version, bin } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    assert.deepEqual(bin, { niral: "./bin/niral.js" });
     for (const alias of ["--version", "-v", "version"]) {
       const result = spawnSync(process.execPath, [cli, alias], { encoding: "utf8" });
       assert.equal(result.status, 0, result.stderr);

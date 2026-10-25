@@ -22,6 +22,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createDevServer } from "../../src/dev/server.js";
+import { errorPage } from "../../src/server/page.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const NIRAL = join(here, "..", "..", "bin", "niral.js");
@@ -77,20 +79,25 @@ try {
   await test("reactivity updates the real DOM (counter)", async () => {
     const page = await browser.newPage();
     await page.goto(base + "/", { waitUntil: "networkidle" });
-    const btn = page.locator("button.primary");
-    ok((await btn.textContent()).includes("count is 0"), "starts at 0");
+    const btn = page.getByRole("button", { name: "Increase count" });
+    const count = page.locator("output.count");
+    eq(await count.textContent(), "0", "starts at 0");
     await btn.click();
     await btn.click();
-    ok((await btn.textContent()).includes("count is 2"), "DOM updated to 2 after two clicks");
+    eq(await count.textContent(), "2", "DOM updated after two clicks");
+    await page.getByRole("button", { name: "Decrease count" }).click();
+    eq(await count.textContent(), "1", "decrement works");
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    eq(await count.textContent(), "0", "reset works");
     await page.close();
   });
 
   await test("server RPC round-trips from the browser", async () => {
     const page = await browser.newPage();
     await page.goto(base + "/", { waitUntil: "networkidle" });
-    await page.locator("main .panel:nth-child(2) button").click();
-    await page.waitForFunction(() => document.querySelector(".reply")?.textContent?.includes("hello"), null, { timeout: 5000 });
-    ok((await page.locator(".reply").textContent()).includes("hello niral"), "RPC reply rendered");
+    await page.locator(".server-button").click();
+    await page.waitForFunction(() => document.querySelector(".terminal p")?.textContent?.includes("hello"), null, { timeout: 5000 });
+    ok((await page.locator(".terminal p").textContent()).includes("hello niral"), "RPC reply rendered");
     await page.close();
   });
 
@@ -98,6 +105,7 @@ try {
     const page = await browser.newPage();
     await page.goto(base + "/", { waitUntil: "networkidle" });
     const before = await page.locator("main ul li").count();
+    ok(await page.getByRole("button", { name: "Add item" }).isDisabled(), "empty additions disabled");
     await page.fill("input", "a new item from the browser");
     await page.locator("form button").click();
     await page.waitForFunction((n) => document.querySelectorAll("main ul li").length === n + 1, before, { timeout: 5000 });
@@ -108,10 +116,105 @@ try {
   await test("client-side navigation to the static page works", async () => {
     const page = await browser.newPage();
     await page.goto(base + "/", { waitUntil: "networkidle" });
-    await page.getByRole("link", { name: /Zero-JS page/i }).click();
+    await page.getByRole("link", { name: /The static page/i }).click();
     await page.waitForURL("**/about", { timeout: 5000 });
     ok((await page.content()).includes("Zero JavaScript"), "about page rendered after nav");
     await page.close();
+  });
+  await test("starter and static page fit mobile and desktop with local branding", async () => {
+    const page = await browser.newPage();
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ["/", "/about"]) {
+        await page.goto(base + route, { waitUntil: "networkidle" });
+        ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `no overflow: ${route} at ${width}`);
+        ok(await page.locator('img[src="/niral-logo.svg"]').evaluate(image => image.complete && image.naturalWidth > 0), "local logo rendered");
+        if (width === 390 || width === 1440) await page.screenshot({ path: join(tmpdir(), `niral-${route === "/" ? "starter" : "static"}-${width}.png`), fullPage: true });
+      }
+    }
+    await page.close();
+  });
+  await test("default error screens: saffron theme, icons, privacy and responsive layout", async () => {
+    const page = await browser.newPage();
+    try {
+      for (const status of [404, 500]) {
+        for (const dev of [false, true]) {
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.setContent(errorPage({ status, dev, path: "/" + "nested/".repeat(40), error: new Error("<script>private diagnostic</script>") }));
+            await page.waitForFunction(() => [...document.images].every(image => image.complete && image.naturalWidth > 0));
+            ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `error ${status} fits ${width}`);
+            eq(await page.locator(".eyebrow").evaluate(element => getComputedStyle(element).color), "rgb(242, 181, 68)", "saffron status");
+            eq(await page.getByRole("link", { name: "Back to home" }).getAttribute("href"), "/");
+            eq(await page.locator("script").count(), 0, "diagnostic cannot inject scripts");
+            eq(await page.locator(".source").count(), dev ? 1 : 0, "production stack stays private");
+            if (!dev) ok(!(await page.locator("body").textContent()).includes("private diagnostic"), "production message stays private");
+            if (dev && (width === 390 || width === 1440)) await page.screenshot({ path: join(tmpdir(), `niral-error-${status}-${width}.png`), fullPage: true });
+          }
+        }
+      }
+    } finally {
+      await page.close();
+    }
+  });
+  await test("dev diagnostics: escaped text, clipboard, focus, dismissal and responsive layout", async () => {
+    const dev = createDevServer({ root: app, port: 0, watch: false });
+    const page = await browser.newPage();
+    try {
+      const port = await new Promise(ready => dev.listen(ready));
+      await page.goto(`http://localhost:${port}/`, { waitUntil: "networkidle" });
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      const payload = { code: "E_TEST", message: "Unexpected <script>window.injected = true</script>", filename: "/routes/" + "nested/".repeat(25) + "index.niral", line: 12, frame: "12 | <button>" + " text".repeat(80), hint: "Close the <button> element." };
+      const trigger = page.getByRole("button", { name: "Increase count" });
+      await trigger.focus();
+      await page.evaluate(error => window.__NIRAL_HMR__.error(error), payload);
+      const dialog = page.getByRole("alertdialog");
+      eq(await dialog.getAttribute("aria-label"), "Niral compile error");
+      await page.waitForFunction(() => [...document.querySelector("#niral-error-overlay").shadowRoot.querySelectorAll("img")].every(image => image.complete && image.naturalWidth > 0));
+      eq(await dialog.locator(".code").evaluate(element => getComputedStyle(element).color), "rgb(242, 181, 68)", "saffron compile status");
+      eq(await dialog.locator(".message").textContent(), payload.message);
+      ok(!(await page.evaluate(() => window.injected)), "diagnostics do not execute");
+      ok(!(await dialog.locator(".location").textContent()).includes("undefined"), "missing column omitted");
+      await dialog.locator("pre").click();
+      eq(await dialog.count(), 1, "source click does not dismiss");
+      await dialog.getByRole("button", { name: "Copy details" }).click();
+      await page.waitForFunction(() => document.querySelector("#niral-error-overlay").shadowRoot.querySelector(".feedback").textContent === "Details copied");
+      ok((await page.evaluate(() => navigator.clipboard.readText())).includes(payload.message), "clipboard contains exact diagnostic");
+      for (const width of [320, 390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        ok(await dialog.evaluate(host => host.scrollWidth <= innerWidth), `overlay fits ${width}`);
+        const bounds = await dialog.boundingBox();
+        ok(bounds.x === 0 && bounds.y === 0 && bounds.width === width && bounds.height === 900, "overlay covers the viewport");
+        if (width !== 320) await page.screenshot({ path: join(tmpdir(), `niral-overlay-${width}.png`), fullPage: false });
+      }
+      await dialog.getByRole("button", { name: "Dismiss error" }).focus();
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      ok(await dialog.locator(".copy").evaluate(button => button.getRootNode().activeElement === button), "Tab wraps to first control");
+      await page.keyboard.press("Shift+Tab");
+      ok(await dialog.locator("pre").evaluate(frame => frame.getRootNode().activeElement === frame), "Shift+Tab wraps to source");
+      await page.keyboard.press("Escape");
+      eq(await dialog.count(), 0, "Escape dismisses");
+      ok(await trigger.evaluate(button => document.activeElement === button), "focus restored");
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("niral:error", { detail: { message: "Runtime failure", stack: "Error: Runtime failure" } })));
+      eq(await dialog.getAttribute("aria-label"), "Niral runtime error");
+      eq(await dialog.locator("h1").textContent(), "Runtime error");
+      await page.waitForFunction(() => [...document.querySelector("#niral-error-overlay").shadowRoot.querySelectorAll("img")].every(image => image.complete && image.naturalWidth > 0));
+      eq(await dialog.locator(".code").evaluate(element => getComputedStyle(element).color), "rgb(242, 181, 68)", "saffron runtime status");
+      for (const width of [320, 390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        ok(await dialog.evaluate(host => host.scrollWidth <= innerWidth), `runtime overlay fits ${width}`);
+        if (width !== 320) await page.screenshot({ path: join(tmpdir(), `niral-runtime-${width}.png`), fullPage: false });
+      }
+      await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
+      await dialog.getByRole("button", { name: "Copy details" }).click();
+      await page.waitForFunction(() => document.querySelector("#niral-error-overlay").shadowRoot.querySelector(".feedback").textContent.includes("Clipboard unavailable"));
+      await dialog.getByRole("button", { name: "Dismiss error" }).click();
+      eq(await dialog.count(), 0, "explicit dismissal");
+    } finally {
+      await page.close();
+      dev.close();
+    }
   });
 } finally {
   browser?.close();
