@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parse, NiralError, compileClient, rewriteScript, rewriteExpr, collectDeclarations } from "../src/index.js";
 import { signal, derived, effect, root, batch } from "../src/runtime/signals.js";
 import { registerApiTests } from "./api-routes.js";
@@ -699,7 +699,7 @@ test("build: hashed release, atomic current flip, correct artifacts", async () =
 
   const r1 = build({ root: dir });
   ok(existsSync(join(dir, "dist", "releases", r1.hash, "manifest.json")), "release written");
-  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r1.hash), "current → release");
+  eq(resolve(dir, "dist", readlinkSync(join(dir, "dist", "current"))), join(dir, "dist", "releases", r1.hash), "current → release");
 
   const manifest = JSON.parse(readFileSync(join(dir, "dist", "releases", r1.hash, "manifest.json"), "utf8"));
   eq(manifest.routes.length, 3);
@@ -723,7 +723,7 @@ test("build: hashed release, atomic current flip, correct artifacts", async () =
   writeFileSync(join(dir, "routes", "about.niral"), `<script mode="static">let x = $state("v2")</script><p>About {x}</p>`);
   const r3 = build({ root: dir });
   ok(r3.hash !== r1.hash, "changed content → new hash");
-  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r3.hash), "current flipped to new release");
+  eq(resolve(dir, "dist", readlinkSync(join(dir, "dist", "current"))), join(dir, "dist", "releases", r3.hash), "current flipped to new release");
   ok(existsSync(join(dir, "dist", "releases", r1.hash)), "previous release kept for rollback");
 });
 
@@ -741,7 +741,7 @@ test("build: a broken route FAILS the build and leaves current untouched", async
     ok(e instanceof NiralError, "compiler error surfaced");
   }
   ok(threw, "build threw");
-  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r1.hash), "current still on last good release");
+  eq(resolve(dir, "dist", readlinkSync(join(dir, "dist", "current"))), join(dir, "dist", "releases", r1.hash), "current still on last good release");
 });
 
 test("prod server: SSR + hydration + RPC + sessions from a built release", async () => {
@@ -5439,11 +5439,11 @@ test("recover: rollbackRelease flips current to the previous release", async () 
   writeFileSync(join(dir, "routes", "about.niral"), `<script mode="static">let x = $state("v2")</script><p>About {x}</p>`);
   const r2 = build({ root: dir });
   ok(r1.hash !== r2.hash, "two distinct releases");
-  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r2.hash), "current on r2");
+  eq(resolve(dir, "dist", readlinkSync(join(dir, "dist", "current"))), join(dir, "dist", "releases", r2.hash), "current on r2");
 
   const back = rollbackRelease(join(dir, "dist"));
   eq(back.to, r1.hash, "rolled back to r1");
-  eq(readlinkSync(join(dir, "dist", "current")), join("releases", r1.hash), "current now points at r1");
+  eq(resolve(dir, "dist", readlinkSync(join(dir, "dist", "current"))), join(dir, "dist", "releases", r1.hash), "current now points at r1");
 });
 
 test("recover: rotate-secret invalidates existing sessions", async () => {

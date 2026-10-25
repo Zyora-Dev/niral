@@ -26,6 +26,11 @@
 - Workflow YAML/matrix and release-runner syntax pass locally. The initial
   Windows failures are recorded above; this is not a Windows support claim.
 - No npm publication or production deployment. Unrelated local work preserved.
+- Source fix `f01ae36` pushed; CI `40194727900` kept both Linux jobs green.
+  Windows activation errors are resolved; three tests still compared relative
+  link text against absolute junction targets. Their five link assertions now
+  resolve destinations before comparison, retaining `readlinkSync` verification.
+  Follow-up local harness: 253 passed, 0 failed. Windows CI recheck pending.
 
 ## 2026-10-25: Release Reliability And Launcher Update (Published And Verified)
 

@@ -34,6 +34,9 @@ are historical unless explicitly marked as verified with a date.
   retains the previous link and lock for manual recovery. Local main harness:
   253 passed, 0 failed. Full local release gate passes, including Chromium/forms
   and both packed launchers. Actual Windows CI verification remains pending.
+  Fix `f01ae36` / CI `40194727900`: Linux green; Windows activation errors gone,
+  but three tests still expected relative symlink text. Follow-up normalizes all
+  five affected destination assertions; local harness 253/253, Windows recheck pending.
   No npm republication or production deployment is part of this change.
 
 - Release reliability work approved 2026-10-25: user explicitly authorized npm
