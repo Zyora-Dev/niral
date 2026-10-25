@@ -12,6 +12,8 @@ asserting the things only a real browser can prove:
 - a **server RPC** round-trips from the browser
 - **two-way binding** + keyed-list add works
 - **client-side navigation** works
+- local Devtools filters, loader/RPC details, pause/clear/refresh, keyboard focus,
+  mobile bounds and icon loading work; the inspector is absent from production
 
 ## Run
 
@@ -21,6 +23,14 @@ npx playwright install chromium   # one-time browser download
 npm test
 npm run test:forms
 ```
+
+To run only the inspector scenario from this folder:
+
+```sh
+NIRAL_BROWSER_FILTER=Devtools npm test
+```
+
+The scenario builds a disposable fixture, not the documentation website.
 
 The framework itself never depends on Playwright — this folder has its own
 `package.json`, exactly like `bench/`. Keeps the zero-dependency promise intact.

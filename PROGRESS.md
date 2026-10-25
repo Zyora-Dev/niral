@@ -1,5 +1,56 @@
 # Niral Progress
 
+## 2026-10-25: Devtools (Verified, Local Only)
+
+- Added request-scoped route/layout/loader and RPC metadata tracing, capped at
+  100 completed requests and 32 loader spans each. No raw URLs, dynamic values,
+  payloads, headers, cookies or error content are recorded. Loopback, Host/port,
+  origin, Fetch Metadata and forwarded-header checks protect the read-only API.
+- Added a charcoal/saffron shadow-DOM inspector through the dev HMR client:
+  filtering, request details, failure categories, timings, pause, manual refresh,
+  local clear and Escape/focus restoration. Polling stops when closed, hidden or
+  paused. Default dev 404s also load the client; production remains unchanged.
+- Four collector/HTTP tests pass, including concurrent isolation, privacy,
+  history bounds, exact hostile headers, navigation, RPC/stream failures, preserved
+  loader failure categories and successful 303 auth redirects.
+- Framework suite: 245 passed, zero failures (existing TypeScript/cwebp/live
+  Postgres environment gates remain). Browser suite: 9 passed, zero failures;
+  inspector controls/polling/icons and widths 320/390/768/1440 verified, desktop
+  and mobile captures reviewed, production launcher/endpoints absent. Fixed Clear
+  disabling its focused button by moving focus to search.
+- Local disposable preview: http://localhost:51644. README documents access,
+  privacy and limits. No browser-error causal tracing or dedicated form-action
+  spans in this version. No runtime dependencies, commit, push or deployment.
+
+## 2026-10-25: Production Deployment (Verified)
+
+- User authorized deploying committed source `551ba8e` to the existing EC2 site.
+  Preflight: Node 22.23.3, nginx/app/watchdog active, healthy `b6feb5b537db`,
+  no automatic restarts. Private checkpoint:
+  `/root/niral-upgrade-checkpoints/20261025-551ba8e` (source, environment,
+  complete previous release and pointer).
+- Isolated stage `/home/ubuntu/niral-release-20261025-551ba8e`: website tests
+  7 passed, 1 optional browser skip; build `757dc255fd9e`, integrity 63/63.
+  Production smoke passed all 27 sitemap pages, metadata, health, gold default
+  404, installer bytes and private-path isolation. No live contact email sent.
+- Reviewed checksum dry run; six changed framework/documentation files installed
+  without deletes or data/environment transfer. Existing website source already
+  matched. Installed syntax checks pass; production environment is byte-identical
+  to checkpoint.
+- Initial release-match guard stopped before restart: the staged archive included
+  `dev.log` and `prod.log`, correctly excluded by the production sync. A clean
+  staged app excluding logs/data/env builds `b6feb5b537db`, exactly matching the
+  live build and its 61 integrity-checked files; only manifest creation time differs.
+  The app-content hash excludes framework source, so the hash remains unchanged.
+  Future stages must exclude logs even when their input is a Git archive.
+- Built as `niral`, then restarted app and restored watchdog after validation.
+  nginx/app/watchdog active, automatic restarts zero, new app PID 82783; clean
+  startup logs and origin/public health confirmed. No nginx or environment changes.
+- Public HTTPS home/About/contact/DI/Getting Started/installer all return 200;
+  installer bytes match source. New default 404 returns 404 with saffron styling,
+  no dev HMR, all three icons loaded and no browser overflow. No live email sent.
+  Data untouched, full rollback checkpoint retained, no npm publication.
+
 ## 2026-10-25: Source Release Checkpoint
 
 - User authorized committing and pushing all pending framework and website work,

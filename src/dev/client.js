@@ -59,6 +59,10 @@ const hmr = {
 
 window.__NIRAL_HMR__ = hmr;
 
+if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+  import("/@niral/devtools.js").then(module => module.mountDevtools()).catch(() => {});
+}
+
 /* ── error overlay ── */
 
 let overlay = null;

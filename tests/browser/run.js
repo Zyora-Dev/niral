@@ -31,6 +31,7 @@ const NIRAL = join(here, "..", "..", "bin", "niral.js");
 let pass = 0, fail = 0;
 const failures = [];
 async function test(name, fn) {
+  if (process.env.NIRAL_BROWSER_FILTER && !name.includes(process.env.NIRAL_BROWSER_FILTER)) return;
   try { await fn(); pass++; console.log(`  \u2713 ${name}`); }
   catch (e) { fail++; failures.push({ name, e }); console.error(`  \u2717 ${name}\n    ${e.message}`); }
 }
@@ -155,6 +156,74 @@ try {
       }
     } finally {
       await page.close();
+    }
+  });
+  await test("Devtools: local traces, controls, responsive layout and production exclusion", async () => {
+    const dev = createDevServer({ root: app, port: 0, watch: false });
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.goto(base + "/", { waitUntil: "networkidle" });
+      eq(await page.locator("#niral-devtools").count(), 0, "no inspector in production");
+      for (const path of ["/@niral/devtools", "/@niral/devtools.js"]) {
+        eq((await page.request.get(base + path, { headers: { "x-niral-devtools": "1" } })).status(), 404, "production endpoint absent");
+      }
+      const port = await new Promise(ready => dev.listen(ready));
+      await page.goto(`http://localhost:${port}/`, { waitUntil: "networkidle" });
+      await page.locator(".server-button").click();
+      await page.waitForFunction(() => document.querySelector(".terminal p")?.textContent?.includes("hello"));
+      const launcher = page.getByRole("button", { name: "Open Niral Devtools" });
+      await launcher.click();
+      const panel = page.getByRole("region", { name: "Niral Devtools" });
+      await page.waitForFunction(() => document.querySelector("#niral-devtools").shadowRoot.querySelectorAll(".row").length >= 2);
+      await panel.getByRole("button", { name: "Pause updates" }).click();
+      await panel.getByLabel("Trace type").selectOption("route");
+      await panel.locator(".row").first().click();
+      ok((await panel.getByLabel("Request details").textContent()).includes("routes/index.niral"), "selected route module visible");
+      ok(await panel.getByRole("table", { name: "Loader timings" }).isVisible(), "loader timing visible");
+      await panel.getByLabel("Filter traces").fill("not-a-route");
+      eq(await panel.locator(".row").count(), 0, "search filters");
+      await panel.getByLabel("Filter traces").fill("");
+      await panel.getByLabel("Trace type").selectOption("rpc");
+      eq(await panel.locator(".row").count(), 1, "RPC filter");
+      ok((await panel.getByLabel("Request details").textContent()).includes("Function"), "RPC details visible");
+      let polls = 0;
+      page.on("request", request => { if (request.url().endsWith("/@niral/devtools")) polls++; });
+      await page.waitForTimeout(1800);
+      eq(polls, 0, "paused inspector does not poll");
+      await page.evaluate(() => fetch("/devtools-missing?private-query=secret"));
+      await panel.getByLabel("Trace type").selectOption("failed");
+      const refreshed = page.waitForResponse(response => response.url().endsWith("/@niral/devtools"));
+      await panel.getByRole("button", { name: "Refresh traces" }).click();
+      await refreshed;
+      await page.waitForFunction(() => document.querySelector("#niral-devtools").shadowRoot.querySelector(".row")?.textContent.includes("404"));
+      ok(!(await panel.textContent()).includes("private-query"), "raw URLs omitted");
+      await panel.getByLabel("Trace type").selectOption("all");
+      await page.waitForFunction(() => [...document.querySelector("#niral-devtools").shadowRoot.querySelectorAll("img")].every(image => image.complete && image.naturalWidth > 0));
+      for (const width of [320, 390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        const bounds = await panel.boundingBox();
+        ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.y >= 0 && bounds.y + bounds.height <= 900, `panel fits ${width}`);
+        ok(await panel.evaluate(element => element.scrollWidth <= element.clientWidth), `panel content fits ${width}`);
+        ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `page fits ${width}`);
+        if (width === 390 || width === 1440) await page.screenshot({ path: join(tmpdir(), `niral-devtools-${width}.png`), fullPage: false });
+      }
+      await panel.getByRole("button", { name: "Clear visible traces" }).click();
+      eq(await panel.locator(".row").count(), 0, "clear removes visible history");
+      await page.keyboard.press("Escape");
+      ok(await panel.isHidden(), "Escape closes inspector");
+      ok(await launcher.evaluate(button => button.getRootNode().activeElement === button), "focus restored to launcher");
+      const before = polls;
+      await page.waitForTimeout(1800);
+      eq(polls, before, "closed inspector does not poll");
+      await launcher.click();
+      await panel.getByRole("button", { name: "Resume updates" }).click();
+      await panel.getByRole("button", { name: "Close Devtools" }).click();
+      eq(errors.length, 0, "no browser errors: " + errors.join(" | "));
+    } finally {
+      await page.close();
+      dev.close();
     }
   });
   await test("dev diagnostics: escaped text, clipboard, focus, dismissal and responsive layout", async () => {

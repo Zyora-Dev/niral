@@ -22,6 +22,16 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Devtools verified locally (2026-10-25): request-scoped, 100-record metadata
+  buffer with loopback/Host/origin/forwarded-header restrictions; no payloads,
+  raw URLs, dynamic values, headers or error content. Shadow-DOM panel provides
+  filters, route/layout/loader/RPC timings, failure categories and polling controls.
+  Four collector/HTTP tests pass, including auth redirects and loader/stream
+  failures; framework245/browser9 pass with existing environment gates. Desktop
+  and mobile captures reviewed; production launcher/endpoints absent. Preview:
+  http://localhost:51644. No dedicated form-action spans or browser-error causal
+  tracing yet. README updated; not committed, pushed or deployed.
+
 - Source release checkpoint (2026-10-25): user authorized commit/push of pending
   framework and website changes; code commit `f6cd621` contains 43 files. Private
   data and local editor/agent settings excluded. Framework245/browser8 passed;
@@ -330,6 +340,21 @@ are historical unless explicitly marked as verified with a date.
   not changed as part of relocation.
 
 ## Production Reference
+
+- Deployment authorized 2026-10-25 for source `551ba8e`. Healthy preflight on
+  `b6feb5b537db`; private checkpoint `20261025-551ba8e` preserves source/env,
+  full previous release and pointer. Isolated stage builds `757dc255fd9e`,
+  integrity 63/63; website tests 7 pass/1 optional skip and all 27 production
+  page checks pass. Six reviewed files installed, syntax clean and env unchanged;
+  initial activation guard stopped because staging included two log files excluded
+  from production. Clean log-free stage and live build both `b6feb5b537db`,
+  integrity 61/61 and identical content (manifest timestamp aside). Hash covers app
+  inputs, not framework source. Exclude logs/env/data from future Git archive stages.
+  DEPLOYED: build as niral, app/watchdog restarted, nginx and both services active,
+  NRestarts0, PID82783. Origin/public health and main pages/installer200 verified;
+  live gold404/icons/no-overflow verified in browser. Environment byte-identical,
+  data/config untouched, clean startup logs and rollback backup retained. No npm
+  publication or live email. Supersedes local-only framework status above.
 
 - Website deployment authorized 2026-10-18: updated design, contact, DI, About and
   SEO, plus canonical `https://niral.site/install.sh` command. Shell/JS and public

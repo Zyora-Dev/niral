@@ -36,6 +36,7 @@ import { createWorkerPool } from "../server/workers.js";
 import { createLimiter } from "../server/ratelimit.js";
 import { loadRecipe, spawnTailwindWatch } from "../add/tailwind.js";
 import { componentCss } from "../compiler/style.js";
+import { createDevtools, localDevtoolsRequest } from "./devtools.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PATH = "/@niral/runtime/index.js";
@@ -108,6 +109,7 @@ function jsonInScript(value) {
 
 export function createDevServer({ root = ".", port = 5199, watch: watchFiles = true, secret } = {}) {
   const dir = resolve(root);
+  const devtools = createDevtools(dir);
   globalThis.__niralProjectRoot = pathToFileURL(dir + "/").href; // projectImport() base
   const routesDir = join(dir, "routes");
   const sessionSecret = secret ?? process.env.NIRAL_SECRET ?? newSecret();
@@ -168,6 +170,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
     }
 
     const layouts = layoutChain(routesDir, route.rel);
+    devtools.route(route, layouts);
     const layoutEntries = [];
     for (const l of layouts) layoutEntries.push(await loadComponent(l.abs));
     const styleParts = [];
@@ -205,6 +208,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
       await streamBody(() => renderComponent(fn, props), (s) => res.write(s));
       res.end(hydrate + tail);
     } catch (e) {
+      devtools.failure("stream");
       console.error(e);
       // already flushed — surface the failure via the dev overlay
       res.end(
@@ -224,11 +228,15 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
   async function loadAllProps(route, layouts, params, store, locals = null) {
     let merged = { ...params };
     if (store.data.user) merged.user = store.data.user; // identity on every page
+    const load = file => {
+      const task = () => runServerLoad(file, params, store, { pool, locals });
+      return serverInfoFor(file)?.exports.includes("load") ? devtools.load(file, task) : task();
+    };
     for (const l of layouts) {
-      const d = await runServerLoad(l.abs, params, store, { pool, locals });
+      const d = await load(l.abs);
       if (d != null) merged = { ...merged, ...d };
     }
-    const d = await runServerLoad(route.file, params, store, { pool, locals });
+    const d = await load(route.file);
     if (d != null) merged = { ...merged, ...d };
     return merged;
   }
@@ -284,6 +292,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
     let setCookie = null;
     const i18nBoot = i18nFor(cookieHeader, accept);
     const layouts = layoutChain(routesDir, route.rel);
+    devtools.route(route, layouts);
     try {
       // <server> load({ params }) — layouts + page, merged into $props (any language)
       const store = readSession(cookieHeader, sessionSecret);
@@ -298,6 +307,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
         return { redirect: `${LOGIN_PATH}?next=${encodeURIComponent(pathname)}` };
       }
       if (!(e instanceof NiralError)) {
+        devtools.failure("server");
         // runtime failure (load() threw, render crashed) → custom error page
         console.error(e);
         const errPage = await specialPage("_error.niral", { path: pathname, message: String(e?.message ?? e) });
@@ -305,6 +315,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
         return { page: errorPage({ dev: true, path: pathname, error: e }).replace("</body>", HMR_TAG + "</body>"), setCookie: null, status: 500 };
       }
       // compile error — serve a page that boots the HMR client and shows the overlay
+      devtools.failure("compile");
       return {
         page: DEFAULT_SHELL.replace("<!--niral:head-->", '<title>Compile error | Niral</title><meta name="robots" content="noindex">').replace(
           "<!--niral:outlet-->",
@@ -389,6 +400,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     if (!match) return null;
     const { route, params } = match;
     const layouts = layoutChain(routesDir, route.rel);
+    devtools.route(route, layouts);
     try {
       const store = readSession(cookieHeader, sessionSecret);
       let props = await loadAllProps(route, layouts, params, store, locals);
@@ -422,15 +434,17 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
         setCookie,
       };
     } catch {
+      devtools.failure("navigation");
       return { json: { ok: false }, setCookie: null };
     }
   }
 
   const server = createServer((req, res) => {
-    handle(req, res).catch((e) => {
+    devtools.run(req, res, () => handle(req, res).catch((e) => {
+      devtools.failure();
       console.error(e);
       if (!res.headersSent) send(res, 500, MIME[".html"], errorPage({ dev: true, error: e }).replace("</body>", HMR_TAG + "</body>"));
-    });
+    }));
   });
 
   async function handle(req, res) {
@@ -438,6 +452,16 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     let urlPath;
     try { urlPath = decodeURIComponent(reqUrl.pathname); }
     catch { return send(res, 400, "text/plain", "invalid URL encoding"); }
+
+    if (urlPath === "/@niral/devtools") {
+      if (!localDevtoolsRequest(req) || req.headers["x-niral-devtools"] !== "1") return sendJson(res, 403, { error: "local same-origin access required" });
+      if (req.method !== "GET") return sendJson(res, 405, { error: "GET required" });
+      return sendJson(res, 200, { traces: devtools.snapshot() });
+    }
+    if (urlPath === "/@niral/devtools.js") {
+      if (!localDevtoolsRequest(req)) return send(res, 403, "text/plain", "local same-origin access required");
+      return send(res, 200, MIME[".js"], readFileSync(join(FRAMEWORK_DIR, "dev", "devtools-client.js")));
+    }
 
     // hooks.js middleware — auth guards, redirects, locals (framework paths exempt)
     if (!urlPath.startsWith("/@niral/")) {
@@ -560,7 +584,8 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       if (Array.isArray(args) && args.length > 32) {
         return sendJson(res, 400, { ok: false, error: "too many arguments" });
       }
-      const out = await executeRpc(abs, fn, args, req.headers.cookie, sessionSecret, pool);
+      const name = serverInfoFor(abs)?.exports.includes(fn) ? fn : "(unavailable)";
+      const out = await devtools.rpc(abs, name, () => executeRpc(abs, fn, args, req.headers.cookie, sessionSecret, pool));
       if (out.stream) return streamRpc(res, out); // async generator → NDJSON chunks
       const headers = { "content-type": "application/json", "cache-control": "no-store" };
       if (out.setCookie) headers["set-cookie"] = out.setCookie;
@@ -621,7 +646,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       // nothing matched — custom 404 page if the project has one
       const nf = await specialPage("_404.niral", { path: urlPath });
       if (nf) return send404Page(res, nf);
-      return send(res, 404, MIME[".html"], errorPage({ status: 404, path: urlPath, dev: true }));
+      return send(res, 404, MIME[".html"], errorPage({ status: 404, path: urlPath, dev: true }).replace("</body>", HMR_TAG + "</body>"));
     }
 
     const ext = extname(file);

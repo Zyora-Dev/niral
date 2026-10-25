@@ -68,6 +68,32 @@ outside the managed installation should be updated with Git.
 See the [launcher release checklist](installer/README.md) and
 [package usage](installer/niral/README.md).
 
+## Local Devtools
+
+Run `niral dev` and open the app directly on `localhost`, `127.0.0.1`, or `::1`.
+The bottom-right Niral launcher opens a development-only inspector showing route
+patterns, layout/module paths, loader timings, RPC dispatch/total durations, HTTP
+statuses and failure categories. Filter requests, select details, pause updates,
+refresh manually or clear the visible list. Escape closes the focused panel.
+
+The server keeps the latest 100 completed traces in memory (up to 32 loader spans
+per trace), shared across local tabs. Clear only hides history in the current
+panel; pause stops polling, not collection. Automatic polling runs only while the
+panel is open, visible and unpaused. Request IDs are local to this server process.
+
+Only metadata is recorded: no raw URLs, dynamic parameter values, queries,
+headers, cookies, arguments, results, error messages or stacks. The read-only
+endpoint requires a loopback connection, matching local Host/port, same-origin
+request metadata and an inspector header; forwarded requests are rejected.
+Access through LAN addresses or reverse proxies is unsupported. Do not expose a
+development server publicly. Production builds do not load the inspector or
+provide its endpoints. Icons use the same pinned Lucide CDN as the dev overlays.
+
+This first version covers page/navigation loaders and RPCs, not browser-error
+causal tracing, reactive-state inspection or dedicated form-action spans.
+Run `node --test tests/devtools.js` for the collector and HTTP security tests;
+see [browser tests](tests/browser/README.md) for UI coverage.
+
 ## Developer Intelligence
 
 Niral DI runs through the existing CLI, with your exact provider and model:
