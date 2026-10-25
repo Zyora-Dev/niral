@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { syncBuiltinESMExports } from "node:module";
 import { build } from "../src/build/build.js";
 import { hashRelease } from "../src/server/integrity.js";
+import { activateRelease } from "../src/server/recover.js";
 
 function fixture(run) {
   const root = fs.mkdtempSync(join(tmpdir(), "niral-release-"));
@@ -16,6 +17,40 @@ function fixture(run) {
 }
 
 export function registerBuildReleaseTests(test) {
+  test("release: Windows activation restores the previous junction on promotion failure", () => fixture(root => {
+    const dist = join(root, "dist");
+    const current = join(dist, "current");
+    for (const name of ["first", "second"]) fs.mkdirSync(join(dist, "releases", name), { recursive: true });
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    const rename = fs.renameSync;
+    Object.defineProperty(process, "platform", { ...platform, value: "win32" });
+    try {
+      activateRelease(dist, "first");
+      fs.renameSync = (source, destination) => {
+        if (destination === current && !String(source).endsWith(".previous")) throw new Error("injected promotion failure");
+        return rename(source, destination);
+      };
+      syncBuiltinESMExports();
+      assert.throws(() => activateRelease(dist, "second"), /injected promotion failure/);
+      assert.equal(fs.realpathSync(current), fs.realpathSync(join(dist, "releases", "first")));
+      assert.deepEqual(fs.readdirSync(dist).sort(), ["current", "releases"]);
+      fs.renameSync = rename;
+      syncBuiltinESMExports();
+      activateRelease(dist, "second");
+      assert.equal(fs.realpathSync(current), fs.realpathSync(join(dist, "releases", "second")));
+      assert.ok(fs.existsSync(join(dist, "releases", "first")));
+      assert.deepEqual(fs.readdirSync(dist).sort(), ["current", "releases"]);
+      fs.mkdirSync(join(dist, ".current-lock"));
+      assert.throws(() => activateRelease(dist, "first"), { code: "EEXIST" });
+      assert.equal(fs.realpathSync(current), fs.realpathSync(join(dist, "releases", "second")));
+      assert.ok(fs.existsSync(join(dist, ".current-lock")));
+    } finally {
+      fs.renameSync = rename;
+      syncBuiltinESMExports();
+      Object.defineProperty(process, "platform", platform);
+    }
+  }));
+
   test("release: identical rebuild preserves published bytes and directory", () => fixture(root => {
     const first = build({ root });
     const before = hashRelease(first.release);

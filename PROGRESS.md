@@ -1,6 +1,21 @@
 # Niral Progress
 
-## 2026-10-25: Windows CI Coverage (Awaiting Runner Results)
+## 2026-10-25: Windows CI Coverage (Portability Fixes In Progress)
+- Initial run `40193731256`: Linux Node 22/24 passed; both Windows versions had
+  240 passing and 12 failing framework checks. Browser/package gates did not run.
+- Shared build/rollback activation now uses guarded junction replacement on
+  Windows, restoring the previous link if promotion fails. POSIX rename remains
+  atomic. Windows replacement has a brief missing-link window and is not
+  crash-atomic; interrupted activation may require recovering the retained
+  `.current.*.previous` link and removing `.current-lock` after checking no
+  activation process is running. Five focused release tests pass locally,
+  including simulated promotion failure, restoration and concurrent refusal.
+- Test fixes use file URL conversion, platform-appropriate permission assertions
+  and a Node-based Tailwind fixture (including an actual exit-3 failure check).
+  Local main harness: 253 passed, 0 failed. Full local release gate also passes:
+  focused tests, Chromium, forms, and both packed launchers' scaffold/build/test.
+  Windows CI verification remains pending. Exact POSIX mode checks do not
+  establish Windows ACL privacy.
 
 - Added a separate `windows-latest` Node 22/24 matrix using the existing release
   gate: framework tests, focused tests, Chromium, forms and packed npm launchers.
@@ -8,8 +23,8 @@
   those optional services are not configured for Windows.
 - The Windows release runner invokes npm's JavaScript entry through Node rather
   than spawning `npm.cmd` directly. No published launcher files were changed.
-- Workflow YAML/matrix assertions and release-runner syntax pass locally. Actual
-  Windows results are pending GitHub Actions; this is not a Windows support claim.
+- Workflow YAML/matrix and release-runner syntax pass locally. The initial
+  Windows failures are recorded above; this is not a Windows support claim.
 - No npm publication or production deployment. Unrelated local work preserved.
 
 ## 2026-10-25: Release Reliability And Launcher Update (Published And Verified)

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, symlinkSync, linkSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { runDi } from "../src/di/cli.js";
@@ -57,7 +57,7 @@ export function registerDiCliTests(test) {
       assert.equal(await runDi(["setup"], { env, output, question: async () => answers.shift() }), 0);
       const stored = readFileSync(file, "utf8");
       assert.deepEqual(JSON.parse(stored), { protocol: "responses", baseURL: "https://provider.example/v1", model: "exact-deployment", auth: "api-key", keyEnv: "DI_TEST_KEY", apiVersion: "chosen-version" });
-      assert.equal(statSync(file).mode & 0o777, 0o600);
+      if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
       assert.ok(!stored.includes(env.DI_TEST_KEY));
       await assert.rejects(runDi(["setup"], { env, output, question: async () => assert.fail("must not prompt") }), /already configured/);
       assert.equal(await runDi(["setup", "--replace"], { env, output, question: async () => { process.emit("SIGINT"); return "responses"; } }), 1);
@@ -93,7 +93,7 @@ export function registerDiCliTests(test) {
       assert.match(text(), /A value is required/);
       const file = join(env.NIRAL_HOME, "di.json");
       assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), expected);
-      assert.equal(statSync(file).mode & 0o777, 0o600);
+      if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
       assert.ok(!readFileSync(file, "utf8").includes(env.DI_TEST_KEY));
       let requests = 0;
       assert.equal(await runDi(["ask", "hello", "--no-tools"], { env, output,
@@ -137,10 +137,11 @@ export function registerDiCliTests(test) {
       assert.equal(read.validate({ path: "index.js", extra: true }), false);
       writeFileSync(join(root, "index.js"), "original");
       chmodSync(join(root, "index.js"), 0o664);
+      const originalMode = statSync(join(root, "index.js")).mode & 0o777;
       const original = read.execute({ path: "index.js" });
       assert.equal(write.validate({ path: "index.js", content: "no", expectedHash: [original.hash] }), false);
       const result = write.execute({ path: "index.js", content: "changed", expectedHash: original.hash });
-      assert.equal(statSync(join(root, "index.js")).mode & 0o777, 0o664);
+      assert.equal(statSync(join(root, "index.js")).mode & 0o777, originalMode);
       assert.equal(readFileSync(join(root, "index.js"), "utf8"), "changed");
       assert.equal(JSON.parse(readFileSync(result.backup, "utf8")).original, "original");
       assert.throws(() => write.execute({ path: "index.js", content: "stale", expectedHash: original.hash }), /changed/);
@@ -242,9 +243,9 @@ export function registerDiCliTests(test) {
       for (const entry of ["../bin/niral.js", "../installer/niral/bin/niral.js", "../installer/create-niral/bin/niral.js"]) {
         if (!existsSync(env.NIRAL_HOME)) {
           mkdirSync(env.NIRAL_HOME);
-          symlinkSync(new URL("../", import.meta.url), join(env.NIRAL_HOME, "framework"), "dir");
+          symlinkSync(fileURLToPath(new URL("../", import.meta.url)), join(env.NIRAL_HOME, "framework"), process.platform === "win32" ? "junction" : "dir");
         }
-        const result = spawnSync(process.execPath, [new URL(entry, import.meta.url).pathname, "di", "--help"], { cwd: root, env: { ...process.env, ...env }, encoding: "utf8" });
+        const result = spawnSync(process.execPath, [fileURLToPath(new URL(entry, import.meta.url)), "di", "--help"], { cwd: root, env: { ...process.env, ...env }, encoding: "utf8" });
         assert.equal(result.status, 0, result.stderr);
         assert.match(result.stdout, /Developer Intelligence/);
         assert.ok(!existsSync(join(env.NIRAL_HOME, "di.json")));

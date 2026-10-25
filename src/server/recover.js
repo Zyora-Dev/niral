@@ -19,7 +19,7 @@
  * for that, push snapshots off-box (roadmap: `niral snapshot --remote`).
  */
 
-import { existsSync, mkdirSync, readdirSync, statSync, rmSync, copyFileSync, readlinkSync, symlinkSync, renameSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, lstatSync, unlinkSync, rmSync, copyFileSync, readlinkSync, symlinkSync, renameSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
 import { randomBytes } from "node:crypto";
 
@@ -136,10 +136,36 @@ export function rollbackRelease(distDir, { toHash = null } = {}) {
     target = prev.n;
   }
   if (!existsSync(join(releasesDir, target))) throw new Error(`release ${target} not found`);
-  const tmp = join(dist, `.current.${process.pid}.${Date.now()}`);
-  symlinkSync(join("releases", target), tmp);
-  renameSync(tmp, join(dist, "current")); // atomic
+  activateRelease(dist, target);
   return { from: current, to: target };
+}
+
+export function activateRelease(dist, target) {
+  const windows = process.platform === "win32";
+  const current = join(dist, "current");
+  const temporary = join(dist, `.current.${process.pid}.${randomBytes(6).toString("hex")}`);
+  const previous = `${temporary}.previous`;
+  const lock = join(dist, ".current-lock");
+  if (windows) mkdirSync(lock);
+  try {
+    const existing = lstatSync(current, { throwIfNoEntry: false });
+    if (existing && !existing.isSymbolicLink()) throw new Error(`refusing to replace non-link ${current}`);
+    symlinkSync(windows ? resolve(dist, "releases", target) : join("releases", target), temporary, windows ? "junction" : "dir");
+    if (windows && existing) renameSync(current, previous);
+    try {
+      renameSync(temporary, current);
+    } catch (error) {
+      if (windows && existing) {
+        try { renameSync(previous, current); }
+        catch (restoreError) { throw new AggregateError([error, restoreError], `activation failed; previous release link retained at ${previous}`); }
+      }
+      throw error;
+    }
+    if (windows && existing) unlinkSync(previous);
+  } finally {
+    if (lstatSync(temporary, { throwIfNoEntry: false })) unlinkSync(temporary);
+    if (windows) rmSync(lock, { recursive: true });
+  }
 }
 
 /**

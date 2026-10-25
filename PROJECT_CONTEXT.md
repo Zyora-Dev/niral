@@ -26,7 +26,14 @@ are historical unless explicitly marked as verified with a date.
   existing release gate with isolated TypeScript and Chromium. Linux extended
   Postgres/image jobs are unchanged; Windows does not configure those optional
   gates. Windows npm packing/installing uses npm's JavaScript entry through Node.
-  Local YAML/matrix and syntax checks pass; actual Windows CI results are pending.
+  Initial run `40193731256` passed Linux but Windows had 240 passes/12 failures.
+  Portability fixes are in progress: shared build/rollback junction activation
+  (5 focused tests pass), portable file URLs, permission assertions and Tailwind
+  fixtures. POSIX activation remains atomic; Windows uses a guarded swap with
+  error restoration, not crash-atomic replacement. Interrupted Windows activation
+  retains the previous link and lock for manual recovery. Local main harness:
+  253 passed, 0 failed. Full local release gate passes, including Chromium/forms
+  and both packed launchers. Actual Windows CI verification remains pending.
   No npm republication or production deployment is part of this change.
 
 - Release reliability work approved 2026-10-25: user explicitly authorized npm

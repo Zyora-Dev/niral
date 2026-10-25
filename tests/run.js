@@ -4,7 +4,9 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { parse, NiralError, compileClient, rewriteScript, rewriteExpr, collectDeclarations } from "../src/index.js";
 import { signal, derived, effect, root, batch } from "../src/runtime/signals.js";
@@ -347,14 +349,14 @@ test("generated module is valid ESM (imports in Node)", async () => {
   const source = fixture("../../examples/counter/app.niral");
   const { code } = compileClient(source, {
     filename: "app.niral",
-    runtime: join(here, "..", "src", "runtime", "index.js"),
+    runtime: pathToFileURL(join(here, "..", "src", "runtime", "index.js")).href,
   });
   const { writeFileSync, mkdtempSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const dir = mkdtempSync(join(tmpdir(), "niral-"));
   const file = join(dir, "app.mjs");
   writeFileSync(file, code);
-  const mod = await import("file://" + file);
+  const mod = await import(pathToFileURL(file).href);
   eq(typeof mod.default, "function", "default export is the component factory");
 });
 
@@ -1577,6 +1579,20 @@ test("tailwind recipe: loadRecipe reads the manifest (null without one)", async 
   eq(loadRecipe(dir).output, "b.css");
 });
 
+function withTailwindFixture(dir, source, run) {
+  const binary = join(dir, ".niral", "bin", "tailwindcss");
+  _fs.writeFileSync(binary, "");
+  const script = `${binary}.cjs`;
+  _fs.writeFileSync(script, source);
+  const spawn = childProcess.spawnSync;
+  childProcess.spawnSync = (command, args, options) => command === binary
+    ? spawn(process.execPath, [script, ...args], options)
+    : spawn(command, args, options);
+  syncBuiltinESMExports();
+  try { return run(); }
+  finally { childProcess.spawnSync = spawn; syncBuiltinESMExports(); }
+}
+
 test("build: tailwind pass runs first and its CSS ships in the release", async () => {
   const { build } = await import("../src/build/build.js");
   const { mkdtempSync, writeFileSync, mkdirSync, chmodSync, existsSync, readFileSync } = _fs;
@@ -1587,18 +1603,12 @@ test("build: tailwind pass runs first and its CSS ships in the release", async (
   mkdirSync(join(dir, "styles"), { recursive: true });
   writeFileSync(join(dir, "routes", "index.niral"), `<p class="text-red-500">hi</p>`);
   writeFileSync(join(dir, "styles", "tailwind.css"), `@import "tailwindcss";`);
-  // fake standalone binary: writes css to the -o path (argv: -i in -o out [--minify])
-  writeFileSync(
-    join(dir, ".niral", "bin", "tailwindcss"),
-    `#!/bin/sh\nout=""\nminified="no"\nwhile [ $# -gt 0 ]; do\n  if [ "$1" = "-o" ]; then out="$2"; shift; fi\n  if [ "$1" = "--minify" ]; then minified="yes"; fi\n  shift\ndone\necho ".text-red-500{color:red}/*min:$minified*/" > "$out"\n`
-  );
-  chmodSync(join(dir, ".niral", "bin", "tailwindcss"), 0o755);
   writeFileSync(
     join(dir, ".niral", "tailwind.json"),
     JSON.stringify({ input: "styles/tailwind.css", output: "styles/tw.css", binary: ".niral/bin/tailwindcss" })
   );
 
-  const r = build({ root: dir });
+  const r = withTailwindFixture(dir, `const args = process.argv.slice(2); require("node:fs").writeFileSync(args[args.indexOf("-o") + 1], ".text-red-500{color:red}/*min:" + (args.includes("--minify") ? "yes" : "no") + "*/");`, () => build({ root: dir }));
   const out = join(dir, "dist", "releases", r.hash, "static", "styles", "tw.css");
   ok(existsSync(out), "compiled css copied into the release");
   const css = readFileSync(out, "utf8");
@@ -1615,18 +1625,16 @@ test("build: a failing tailwind pass fails the build before any flip", async () 
   mkdirSync(join(dir, "routes"), { recursive: true });
   mkdirSync(join(dir, ".niral", "bin"), { recursive: true });
   writeFileSync(join(dir, "routes", "index.niral"), `<p>hi</p>`);
-  writeFileSync(join(dir, ".niral", "bin", "tailwindcss"), `#!/bin/sh\nexit 3\n`);
-  chmodSync(join(dir, ".niral", "bin", "tailwindcss"), 0o755);
   writeFileSync(
     join(dir, ".niral", "tailwind.json"),
     JSON.stringify({ input: "styles/tailwind.css", output: "styles/tw.css", binary: ".niral/bin/tailwindcss" })
   );
   let threw = false;
   try {
-    build({ root: dir });
+    withTailwindFixture(dir, "process.exit(3);", () => build({ root: dir }));
   } catch (e) {
     threw = true;
-    ok(e.message.includes("tailwind compile failed"), "clear failure reason");
+    ok(e.message.includes("tailwind compile failed (exit 3)"), "clear failure reason");
   }
   ok(threw, "build threw");
   ok(!existsSync(join(dir, "dist", "current")), "nothing was activated");
@@ -5063,8 +5071,10 @@ test("niral deploy: generates the deployment kit (systemd + nginx + Dockerfile +
   for (const f of ["setup.sh", "deploy.sh", "niral-app.service", "niral-watchdog.service", "nginx.conf", "Dockerfile"]) {
     ok(existsSync(join(dir, "deploy", f)), `deploy/${f} written`);
   }
-  ok(statSync(join(dir, "deploy", "deploy.sh")).mode & 0o100, "deploy.sh is executable");
-  ok(statSync(join(dir, "deploy", "setup.sh")).mode & 0o100, "setup.sh is executable");
+  if (process.platform !== "win32") {
+    ok(statSync(join(dir, "deploy", "deploy.sh")).mode & 0o100, "deploy.sh is executable");
+    ok(statSync(join(dir, "deploy", "setup.sh")).mode & 0o100, "setup.sh is executable");
+  }
   const setup = readFileSync(join(dir, "deploy", "setup.sh"), "utf8");
   ok(setup.includes("openssl rand -hex 32"), "setup GENERATES the production secret");
   ok(setup.includes("systemctl enable") && setup.includes("nginx -t"), "setup wires systemd + nginx");

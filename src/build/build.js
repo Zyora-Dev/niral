@@ -1,5 +1,5 @@
 /**
- * Niral build — content-hashed releases with atomic activation.
+ * Niral build — content-hashed releases with guarded activation.
  *
  *   dist/
  *     releases/<hash>/        one immutable directory per build
@@ -9,15 +9,16 @@
  *       server/@niral/context.js  session context
  *       server/routes/**.server.js  <server> blocks
  *       static/**             copied public files
- *     current -> releases/<hash>   flipped ATOMICALLY after a successful build
+ *     current -> releases/<hash>   activated after a successful build
  *
- * A failed build throws before the flip — production keeps serving the last
- * good release. Rollback = point `current` at any previous release.
+ * Compilation completes before activation. POSIX activation is atomic; Windows
+ * uses a locked junction swap with error restoration, not crash-atomic replacement.
+ * Rollback = point `current` at any previous release.
  */
 
 import {
   readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync,
-  cpSync, symlinkSync, renameSync, rmSync, mkdtempSync,
+  cpSync, renameSync, rmSync, mkdtempSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve, dirname, relative, sep } from "node:path";
@@ -34,6 +35,7 @@ import { loadRecipe, runTailwindOnce } from "../add/tailwind.js";
 import { transcodeStatic } from "../add/imagetools.js";
 import { componentCss } from "../compiler/style.js";
 import { writeIntegrity, hashRelease, checkIntegrity } from "../server/integrity.js";
+import { activateRelease } from "../server/recover.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
@@ -136,7 +138,6 @@ export function build({ root = ".", out } = {}) {
   mkdirSync(distDir, { recursive: true });
   const stage = mkdtempSync(join(distDir, ".stage-"));
   let release = stage;
-  let tmpLink;
   try {
 
   /* ── write compiled modules + server blocks ── */
@@ -273,10 +274,7 @@ export function build({ root = ".", out } = {}) {
   }
   release = destination;
 
-  /* ── atomic flip: dist/current → releases/<hash> ── */
-  tmpLink = join(distDir, `.current.${process.pid}.${Date.now()}`);
-  symlinkSync(join("releases", hash), tmpLink);
-  renameSync(tmpLink, join(distDir, "current"));
+  activateRelease(distDir, hash);
 
   /* ── keep the last 5 releases for instant rollback ── */
   const releasesDir = join(distDir, "releases");
@@ -290,7 +288,6 @@ export function build({ root = ".", out } = {}) {
   return { hash, release, routes: manifestRoutes.length + endpoints.length };
   } finally {
     rmSync(stage, { recursive: true, force: true });
-    if (tmpLink) rmSync(tmpLink, { force: true });
   }
 }
 
