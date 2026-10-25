@@ -1,6 +1,6 @@
 # Niral Progress
 
-## 2026-10-25: Windows CI Coverage (Portability Fixes In Progress)
+## 2026-10-25: Windows CI Coverage (Verified)
 - Initial run `40193731256`: Linux Node 22/24 passed; both Windows versions had
   240 passing and 12 failing framework checks. Browser/package gates did not run.
 - Shared build/rollback activation now uses guarded junction replacement on
@@ -14,8 +14,7 @@
   and a Node-based Tailwind fixture (including an actual exit-3 failure check).
   Local main harness: 253 passed, 0 failed. Full local release gate also passes:
   focused tests, Chromium, forms, and both packed launchers' scaffold/build/test.
-  Windows CI verification remains pending. Exact POSIX mode checks do not
-  establish Windows ACL privacy.
+  Exact POSIX mode checks do not establish Windows ACL privacy.
 
 - Added a separate `windows-latest` Node 22/24 matrix using the existing release
   gate: framework tests, focused tests, Chromium, forms and packed npm launchers.
@@ -24,13 +23,19 @@
 - The Windows release runner invokes npm's JavaScript entry through Node rather
   than spawning `npm.cmd` directly. No published launcher files were changed.
 - Workflow YAML/matrix and release-runner syntax pass locally. The initial
-  Windows failures are recorded above; this is not a Windows support claim.
+  Windows failures are recorded above; final CI verification is below.
 - No npm publication or production deployment. Unrelated local work preserved.
 - Source fix `f01ae36` pushed; CI `40194727900` kept both Linux jobs green.
   Windows activation errors are resolved; three tests still compared relative
   link text against absolute junction targets. Their five link assertions now
   resolve destinations before comparison, retaining `readlinkSync` verification.
-  Follow-up local harness: 253 passed, 0 failed. Windows CI recheck pending.
+  Follow-up local harness: 253 passed, 0 failed.
+- Follow-up source `5d75a7393bd17e12104cf3fc73d2b2e7182425ed` is pushed.
+  [CI 40195078246](https://github.com/Zyora-Dev/niral/actions/runs/40195078246)
+  passed all four Windows/Linux Node 22/24 jobs, including main/focused tests,
+  Chromium, forms, and packed-launcher scaffold/build/test. Linux extended
+  Postgres/image gates also passed. Windows crash-atomicity and ACL caveats above
+  remain; npm packages stay at 0.1.4 with no republication or deployment.
 
 ## 2026-10-25: Release Reliability And Launcher Update (Published And Verified)
 

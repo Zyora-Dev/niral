@@ -5,7 +5,8 @@ They download `Zyora-Dev/niral` from `main` by default; `NIRAL_REF` selects a
 persisted full commit SHA or existing version tag. The website is independent.
 Both version 0.1.4 publications are registry-verified on 2026-10-25, with both
 latest tags at 0.1.4. Initial discovery found versions 0.1.0 through 0.1.3. The previous
-0.1.3 publication and deployment records are historical. Windows remains unverified.
+0.1.3 publication and deployment records are historical. Windows Node 22/24
+release gates are now verified against source `5d75a73`; npm remains at 0.1.4.
 Do not treat a local version bump or a website deployment as npm publication.
 
 Local 0.1.4 validation passed, including actual tarball installs and isolated
@@ -26,6 +27,13 @@ fixtures in the backup. Disposable homes were removed. No production deployment.
 [Source CI](https://github.com/Zyora-Dev/niral/actions/runs/40190853399) and
 [checkpoint CI](https://github.com/Zyora-Dev/niral/actions/runs/40191032126) passed.
 Node 22 and 24 Linux jobs passed the extended Postgres/image release gates.
+
+[Windows portability CI](https://github.com/Zyora-Dev/niral/actions/runs/40195078246)
+passed all four Windows/Linux Node 22/24 jobs: framework/focused tests, Chromium,
+forms and packed-launcher scaffold/build/test. Postgres/image checks run on Linux
+only. Windows release activation uses guarded junction replacement with error
+restoration, not crash-atomic replacement; interrupted activation may need manual
+link/lock recovery. POSIX mode tests do not verify Windows ACL privacy.
 
 ## Validate Locally
 
@@ -68,8 +76,8 @@ identical; tests enforce this until packaging is generated from a single source.
 
 ## Release Procedure
 
-1. Review the diff and run validation. Test Windows separately; local verification
-   is on macOS, and POSIX shell/symlink tests do not establish Windows support.
+1. Review the diff and run validation. Require green Windows and Linux Node 22/24
+   CI gates; local macOS tests alone do not establish Windows support.
 2. Commit/push the approved framework and launcher changes to `main` before npm
    publication. Confirm the remote commit includes the commands and installer
    modules: first-time downloads always fetch remote source, never local edits.

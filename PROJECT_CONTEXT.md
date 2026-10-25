@@ -27,16 +27,19 @@ are historical unless explicitly marked as verified with a date.
   Postgres/image jobs are unchanged; Windows does not configure those optional
   gates. Windows npm packing/installing uses npm's JavaScript entry through Node.
   Initial run `40193731256` passed Linux but Windows had 240 passes/12 failures.
-  Portability fixes are in progress: shared build/rollback junction activation
+  Portability fixes are verified: shared build/rollback junction activation
   (5 focused tests pass), portable file URLs, permission assertions and Tailwind
   fixtures. POSIX activation remains atomic; Windows uses a guarded swap with
   error restoration, not crash-atomic replacement. Interrupted Windows activation
   retains the previous link and lock for manual recovery. Local main harness:
   253 passed, 0 failed. Full local release gate passes, including Chromium/forms
-  and both packed launchers. Actual Windows CI verification remains pending.
+  and both packed launchers.
   Fix `f01ae36` / CI `40194727900`: Linux green; Windows activation errors gone,
   but three tests still expected relative symlink text. Follow-up normalizes all
-  five affected destination assertions; local harness 253/253, Windows recheck pending.
+  five affected destination assertions; local harness 253/253. Source `5d75a73`
+  passed all four Windows/Linux Node 22/24 jobs in CI `40195078246`, including
+  main/focused tests, Chromium, forms and packed-launcher scaffold/build/test.
+  Linux extended Postgres/image checks passed; Windows leaves them unconfigured.
   No npm republication or production deployment is part of this change.
 
 - Release reliability work approved 2026-10-25: user explicitly authorized npm
