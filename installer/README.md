@@ -3,8 +3,8 @@
 The two npm packages are self-contained launchers, not the framework runtime.
 They download `Zyora-Dev/niral` from `main` by default; `NIRAL_REF` selects a
 persisted full commit SHA or existing version tag. The website is independent.
-Both version 0.1.4 publications were accepted by npm on 2026-10-25. Registry discovery on
-2026-10-25 found versions 0.1.0 through 0.1.3 for both packages. The previous
+Both version 0.1.4 publications are registry-verified on 2026-10-25, with both
+latest tags at 0.1.4. Initial discovery found versions 0.1.0 through 0.1.3. The previous
 0.1.3 publication and deployment records are historical. Windows remains unverified.
 Do not treat a local version bump or a website deployment as npm publication.
 
@@ -12,11 +12,20 @@ Local 0.1.4 validation passed, including actual tarball installs and isolated
 scaffold/build/test against current source. User completed terminal login on
 2026-10-25; npm authentication verifies `zyoralabs`. Source commit
 `825256b57262da6e326fc6219950b54d60472100` is pushed to main and remote-verified.
-Both five-file published tarball checksums match local validation. Registry
-availability remains pending: the first exact-version check for niral@0.1.4
-returned E404 after npm warned processing may take minutes. No republish or
-polling. create-niral metadata, latest tags and fresh registry installs have not
-yet been verified. CI run40190853399 was still in progress at the last check.
+Both five-file published tarball checksums match local validation:
+- niral: `68beefcd85c902a7429c341f2f2c0c75ec8bdb20`
+- create-niral: `965bda2d83ca7e336c37d3e50db5af3aff982c0a`
+
+Fresh public registry installs of both packages passed allowlist/zero-dependency
+checks, help/version without downloading, remote scaffold/build/test, offline
+cache reuse, immutable rebuilds, main updates, exact source pins, persisted shim
+updates and explicit unpinning. An older-revision shim upgrade and actual
+`npx niral@latest update` of an older archive cache passed, preserving private-data
+fixtures in the backup. Disposable homes were removed. No production deployment.
+
+[Source CI](https://github.com/Zyora-Dev/niral/actions/runs/40190853399) and
+[checkpoint CI](https://github.com/Zyora-Dev/niral/actions/runs/40191032126) passed.
+Node 22 and 24 Linux jobs passed the extended Postgres/image release gates.
 
 ## Validate Locally
 

@@ -27,22 +27,25 @@ are historical unless explicitly marked as verified with a date.
   deployment. Immutable staged builds and framework/output-aware hashes pass four
   focused checks. Shell/npm safety parity and persisted `NIRAL_REF` pins pass 18
   offline launcher checks, including direct updates of older pinned CLIs. Combined
-  release gate passes locally; Node 22/24 CI added but not yet run. Postgres/image
-  gates were unconfigured locally. Root Node requirement is now >=22. Registry
+  release gate passes locally and on Node 22/24 Linux CI, including Postgres/image
+  gates in CI (unconfigured locally). Root Node requirement is now >=22. Registry
   discovery found both launchers at 0.1.3 before the 0.1.4 uploads recorded below.
 - Final 0.1.4 gate passes: 252 main checks, 15 focused Node tests, 10 Chromium
   scenarios, four form/navigation combinations, actual five-file package installs
   and isolated scaffold/build/test against current source. User completed npm
   login; `npm whoami` verifies `zyoralabs`. Source including Devtools tracing is
   committed/pushed as `825256b57262da6e326fc6219950b54d60472100`, remote verified.
-  npm accepted niral@0.1.4 and create-niral@0.1.4 with matching validated tarball
-  checksums. First exact-version npm check returned E404 for niral@0.1.4 while
-  npm processes publication. No retry/republish; create-niral metadata, latest tags
-  and fresh registry installs remain unverified. CI run40190853399 still running
-  at last check. No deployment.
+  niral@0.1.4 and create-niral@0.1.4 are registry-verified with matching validated
+  tarball checksums and both latest tags at 0.1.4. Fresh registry installs passed
+  five-file/zero-dependency checks, help/version without download, remote scaffold,
+  build/test, offline cache reuse, immutable rebuild, main update, exact source
+  pins, persisted shim updates and unpinning. Older-revision shim and older-archive
+  upgrades passed; private-data backup preserved. Temporary homes removed.
+  CI runs40190853399 and40191032126 succeeded, including Node22/24 extended gates.
+  Windows remains unverified. No deployment.
 
-- Full-stack error tracing verified locally (2026-10-25), not committed or
-  deployed: Errors tab records redacted browser/rejection/runtime/RPC failures,
+- Full-stack error tracing verified locally (2026-10-25), subsequently published
+  in source commit825256b, not deployed: Errors tab records redacted browser/rejection/runtime/RPC failures,
   grouped into 100 bounded groups with 20 recent occurrences each. Opaque local
   response IDs join exact server traces across concurrent and streamed calls.
   Event attribution covers synchronous handlers only. VS Code links cover unique

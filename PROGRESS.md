@@ -1,6 +1,6 @@
 # Niral Progress
 
-## 2026-10-25: Release Reliability And Launcher Update (Registry Verification Pending)
+## 2026-10-25: Release Reliability And Launcher Update (Published And Verified)
 
 - User authorized the three release-reliability fixes, npm publication, and a
   source commit/push including pending Devtools tracing. No website deployment.
@@ -16,9 +16,9 @@
   Node 22/24 CI with Postgres/image gates, and corrected the Node engine to >=22.
   Combined release validation passes, including docs browsers, Devtools, main
   Chromium and all four dev/prod form/navigation combinations. Local Postgres/image
-  gates were unconfigured; CI execution is not yet verified. Package allowlists
+  gates were unconfigured; both gates passed in Node 22/24 Linux CI. Package allowlists
   passed. A follow-up shell regression confirms updates bypass older pinned CLIs.
-- Registry discovery found both packages at 0.1.3; manifests now prepare 0.1.4.
+- Registry discovery found both packages at 0.1.3 before publishing 0.1.4.
   Documentation records pins, defaults, backups and the release gate. Source and
   npm uploads are now published as recorded below; no production changes.
 - Final 0.1.4 release gate passes: 252 main checks, 15 focused Node tests, 10
@@ -30,14 +30,22 @@
   Source commit `825256b57262da6e326fc6219950b54d60472100` is pushed and verified
   on remote main, including Devtools tracing. npm accepted both launcher 0.1.4
   publications; five-file checksums match the validated tarballs above. Registry
-  availability and fresh registry installs remain pending: the first
-  `npm view niral@0.1.4` returned E404 after npm warned uploads may take minutes
-  to become available. No republish or polling. The chained create-niral metadata
-  check did not run. Latest tags and fresh registry smoke are not yet verified.
-  GitHub Release Checks run `40190853399` was still in progress at the last check.
-  No production deployment.
+  propagation is complete: exact versions, SHA1/SHA512 metadata and both latest
+  tags verify 0.1.4. No republish was needed.
+- Fresh public registry installs of BOTH packages passed in disposable homes:
+  five-file allowlist, zero dependencies, help/version without framework download,
+  real remote scaffold/build/test, network-blocked cached builds, identical-release
+  inode preservation, main update, exact source pin, persisted shim update and
+  explicit unpin. Downloads matched remote checkpoint `0cc02d9`; source pins
+  matched `825256b`. An older `c0dbb6f` revision also upgraded through the shim.
+- Actual `npx niral@latest update` upgraded an older archive cache and retained
+  its complete private-data fixture in the backup. All temporary homes were removed.
+- GitHub Release Checks runs `40190853399` (source) and `40191032126` (checkpoint)
+  both succeeded. Source run jobs `validate (22)` and `validate (24)` passed every
+  step, including the extended Postgres/image release gate. Windows remains
+  unverified. No production deployment; unrelated local work preserved.
 
-## 2026-10-25: Full-Stack Error Tracing (Verified, Local Only)
+## 2026-10-25: Full-Stack Error Tracing (Verified, Source Published)
 
 - Added local-only opaque response IDs, per-call RPC correlation and browser
   error/rejection/runtime capture. Caught, concurrent and streamed failures retain
