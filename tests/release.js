@@ -40,18 +40,20 @@ try {
   const expected = ["README.md", "bin/create-niral.js", "bin/niral.js", "index.js", "package.json"].sort();
   const temporary = mkdtempSync(join(tmpdir(), "niral-release-pack-"));
   try {
-    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    const windows = process.platform === "win32";
+    if (windows) assert.ok(env.npm_execpath && existsSync(env.npm_execpath), "Run the Windows release gate through npm run test:release");
+    const npm = (args, overrides = {}) => run(windows ? process.execPath : "npm", windows ? [env.npm_execpath, ...args] : args, true, overrides);
     for (const name of ["niral", "create-niral"]) {
       const manifest = JSON.parse(readFileSync(join(root, "installer", name, "package.json"), "utf8"));
       assert.deepEqual(manifest.dependencies, {});
       assert.equal(manifest.engines.node, ">=22");
-      const packed = JSON.parse(run(npm, ["pack", `./installer/${name}`, "--pack-destination", temporary, "--ignore-scripts", "--json"], true));
+      const packed = JSON.parse(npm(["pack", `./installer/${name}`, "--pack-destination", temporary, "--ignore-scripts", "--json"]));
       assert.equal(packed.length, 1);
       assert.deepEqual(packed[0].files.map(file => file.path).sort(), expected);
       const home = join(temporary, name);
       const framework = join(home, ".niral", "framework");
       const overrides = { HOME: home, USERPROFILE: home, NIRAL_HOME: join(home, ".niral"), NIRAL_REF: "main", npm_config_cache: join(home, ".npm"), SHELL: "/bin/zsh" };
-      run(npm, ["install", "--prefix", home, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", join(temporary, packed[0].filename)], true, overrides);
+      npm(["install", "--prefix", home, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", join(temporary, packed[0].filename)], overrides);
       const entry = join(home, "node_modules", name, "bin", "niral.js");
       run(process.execPath, [entry, "--help"], true, overrides);
       run(process.execPath, [entry, "--version"], true, overrides);

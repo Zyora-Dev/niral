@@ -50,3 +50,26 @@ jobs:
           NIRAL_RELEASE_EXTENDED: "1"
           NIRAL_CWEBP: /usr/bin/cwebp
           NIRAL_TEST_PG_URL: postgres://niral_test:niral_test@127.0.0.1:5432/niral_test
+
+  validate-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install isolated test tools
+        shell: bash
+        run: |
+          npm install --prefix tests/browser --no-package-lock --ignore-scripts
+          npm exec --prefix tests/browser -- playwright install chromium
+          npm install --prefix "$RUNNER_TEMP/niral-tools" --no-package-lock --ignore-scripts typescript@5.7.3
+      - name: Validate release
+        run: npm run test:release
+        env:
+          NIRAL_TSC: ${{ runner.temp }}/niral-tools/node_modules/typescript/lib/typescript.js

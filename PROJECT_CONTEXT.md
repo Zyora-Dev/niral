@@ -22,6 +22,13 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Windows CI added 2026-10-25: separate `windows-latest` Node 22/24 jobs run the
+  existing release gate with isolated TypeScript and Chromium. Linux extended
+  Postgres/image jobs are unchanged; Windows does not configure those optional
+  gates. Windows npm packing/installing uses npm's JavaScript entry through Node.
+  Local YAML/matrix and syntax checks pass; actual Windows CI results are pending.
+  No npm republication or production deployment is part of this change.
+
 - Release reliability work approved 2026-10-25: user explicitly authorized npm
   publication plus source commit/push including Devtools tracing, not a website
   deployment. Immutable staged builds and framework/output-aware hashes pass four

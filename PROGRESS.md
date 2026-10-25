@@ -1,5 +1,17 @@
 # Niral Progress
 
+## 2026-10-25: Windows CI Coverage (Awaiting Runner Results)
+
+- Added a separate `windows-latest` Node 22/24 matrix using the existing release
+  gate: framework tests, focused tests, Chromium, forms and packed npm launchers.
+- Linux Node 22/24 jobs retain their extended Postgres/image checks unchanged;
+  those optional services are not configured for Windows.
+- The Windows release runner invokes npm's JavaScript entry through Node rather
+  than spawning `npm.cmd` directly. No published launcher files were changed.
+- Workflow YAML/matrix assertions and release-runner syntax pass locally. Actual
+  Windows results are pending GitHub Actions; this is not a Windows support claim.
+- No npm publication or production deployment. Unrelated local work preserved.
+
 ## 2026-10-25: Release Reliability And Launcher Update (Published And Verified)
 
 - User authorized the three release-reliability fixes, npm publication, and a
