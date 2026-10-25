@@ -413,6 +413,23 @@ are historical unless explicitly marked as verified with a date.
 
 ## Production Reference
 
+- Security deployment authorized 2026-10-25: source `f0ccd99` committed/pushed.
+  EC2 preflight confirms Node22.23.3, nginx/app/watchdog active, NRestarts0,
+  PID82783, healthy b6feb5b537db. CI40196641172 passes all Windows/Linux22/24 jobs.
+  Private checkpoint20261025-f0ccd99-security saves source/env/config/old release.
+  Stage `/home/ubuntu/niral-security-f0ccd99`: release85a914d39113, integrity58/58,
+  27 pages/assets/installer/security smoke pass; site7 pass/1 optional skip.
+  Main254 pass/1 failure: Ruby absent on host (not used by docs). Runtime remains
+  unchanged with its security patch outstanding. DEPLOYED: 12 reviewed src/ files,
+  live app rebuilt as niral into matching85a914d39113, integrity58/58. Initial
+  ubuntu-context integrity check could not read private0700 release; stopped
+  before restart, then owner-context check passed. No permission relaxation.
+  Restart13:18:44UTC, PID87220, nginx/app/watchdog active,NRestarts0. Origin/public
+  health and six key page/installer checks pass; public HTML uses new assets.
+  Live invalid path400, foreign RPC403, private env404. Environment byte-identical,
+  data/config/app-source/installers untouched, full rollback retained. No npm
+  publication, runtime installation or live form submissions.
+
 - Deployment authorized 2026-10-25 for source `551ba8e`. Healthy preflight on
   `b6feb5b537db`; private checkpoint `20261025-551ba8e` preserves source/env,
   full previous release and pointer. Isolated stage builds `757dc255fd9e`,

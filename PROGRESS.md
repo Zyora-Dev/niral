@@ -1,5 +1,34 @@
 # Niral Progress
 
+## 2026-10-25: Security Release Deployment (Verified)
+
+- User authorized commit, push and deployment. Security source `f0ccd99` pushed
+  to origin/main; unrelated agent/editor files excluded. CI `40196641172` passed
+  all four Windows/Linux Node22/24 release jobs for this exact commit.
+- EC2 preflight verified Node 22.23.3, nginx/app/watchdog active, NRestarts0,
+  PID82783 and healthy release b6feb5b537db. Runtime remains unchanged; its
+  security patch is outstanding. Checkpoint/staged validation precede activation.
+- Private checkpoint `/root/niral-upgrade-checkpoints/20261025-f0ccd99-security`
+  preserves framework/app source, environment, service/nginx configuration and
+  the complete previous release. Environment comparison passed; data untouched.
+- Isolated stage `/home/ubuntu/niral-security-f0ccd99` builds 85a914d39113,
+  integrity58/58. All 27 sitemap pages, referenced assets, installer bytes and
+  private/unsafe-path/origin checks pass. Website tests: 7 pass/1 optional skip.
+  Server main suite: 254 pass/1 failure solely because Ruby is not installed;
+  docs uses no Ruby. No packages installed. Dry run shows 12 framework files;
+  those src/ files were installed; app source and installer files were untouched.
+- Live build as `niral` matches staged 85a914d39113, integrity58/58. First
+  integrity guard ran as ubuntu and could not access the new private0700 release;
+  it stopped before restart. Owner-context validation passed without rebuilding
+  or relaxing permissions, then app/watchdog restarted at 13:18:44 UTC.
+- nginx/app/watchdog active, PID87220, NRestarts0. Origin and public health
+  confirm the new release/process; home/About/contact/DI/Getting Started/installer
+  return200 and public HTML references the new assets. Live unsafe path400,
+  foreign-origin RPC403 and private env404 verified. No live form data submitted.
+- Environment remains byte-identical to checkpoint; data and nginx configuration
+  untouched. Previous release and rollback source retained. Node22.23.3 unchanged;
+  runtime patch remains outstanding. No npm publication or local Node upgrade.
+
 ## 2026-10-25: Security Boundary Hardening (Local)
 
 - Reproduced private storage disclosure through a public dev symlink/junction:
