@@ -11,6 +11,42 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { lstatSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+
+const PRIVATE_SEGMENTS = new Set(["data", "migrations", "tests", "deploy", "dist", "node_modules"]);
+
+export function isPrivatePath(path) {
+  return path.split(/[/\\]/).some((part) => {
+    const name = part.toLowerCase();
+    return name.startsWith(".") || PRIVATE_SEGMENTS.has(name) || /^(hooks|jobs)\.js$|\.env$|\.server\.(js|mjs|ts)$/.test(name);
+  });
+}
+
+export function isSafeRequestPath(path) {
+  return !/[\\:\x00-\x1f\x7f]/.test(path) &&
+    !path.split("/").some((part) => part === "." || part === ".." || /[. ]$/.test(part));
+}
+
+export function isServableFile(base, target) {
+  const root = resolve(base);
+  const path = relative(root, resolve(target));
+  if (!path || isAbsolute(path) || path === ".." || path.startsWith(`..${sep}`)) return false;
+  let current = root;
+  try {
+    const parts = path.split(sep);
+    for (const [index, part] of parts.entries()) {
+      current = join(current, part);
+      const entry = lstatSync(current);
+      if (entry.isSymbolicLink()) return false;
+      if (index === parts.length - 1) return entry.isFile();
+      if (!entry.isDirectory()) return false;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 export function makeNonce() {
   return randomBytes(16).toString("base64");

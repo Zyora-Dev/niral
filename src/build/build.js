@@ -18,7 +18,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync,
-  cpSync, renameSync, rmSync, mkdtempSync,
+  cpSync, renameSync, rmSync, mkdtempSync, lstatSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve, dirname, relative, sep } from "node:path";
@@ -36,12 +36,12 @@ import { transcodeStatic } from "../add/imagetools.js";
 import { componentCss } from "../compiler/style.js";
 import { writeIntegrity, hashRelease, checkIntegrity } from "../server/integrity.js";
 import { activateRelease } from "../server/recover.js";
+import { isPrivatePath } from "../server/security.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
 const SKIP_STATIC = new Set(["routes", "dist", "node_modules", "data", "migrations", "tests", "deploy"]);
 // server-only project files — never shipped as public static assets
-const PRIVATE_FILES = /^(hooks|jobs)\.js$|\.env$|\.server\.(js|mjs|ts)$/;
 
 export function build({ root = ".", out } = {}) {
   const dir = resolve(root);
@@ -54,7 +54,7 @@ export function build({ root = ".", out } = {}) {
   // recipes first: a failing tailwind pass fails the build BEFORE anything flips
   const twRecipe = loadRecipe(dir);
   if (twRecipe) runTailwindOnce(dir, twRecipe, { minify: true });
-  const publicFiles = staticFiles(dir).filter((file) => !endpointFiles.has(file));
+  const publicFiles = staticFiles(dir).filter((file) => !endpointFiles.has(file) && !/\.(niral|jsx|tsx)$/i.test(file));
 
   const shellFile = join(dir, "routes", "_shell.html");
   const shell = existsSync(shellFile) ? readFileSync(shellFile, "utf8") : DEFAULT_SHELL;
@@ -297,12 +297,13 @@ function staticFiles(dir) {
   walk(dir, "");
   function walk(abs, prefix) {
     for (const name of readdirSync(abs)) {
-      if (name.startsWith(".") || SKIP_STATIC.has(name)) continue;
-      if (PRIVATE_FILES.test(name)) continue; // hooks.js / jobs.js / *.env — server-only
+      if (SKIP_STATIC.has(name.toLowerCase()) || isPrivatePath(name)) continue;
       const child = join(abs, name);
       const rel = prefix ? `${prefix}/${name}` : name;
-      if (statSync(child).isDirectory()) walk(child, rel);
-      else out.push(rel);
+      const entry = lstatSync(child);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) walk(child, rel);
+      else if (entry.isFile()) out.push(rel);
     }
   }
   return out.sort();

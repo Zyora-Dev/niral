@@ -37,6 +37,7 @@ import { createLimiter } from "../server/ratelimit.js";
 import { loadRecipe, spawnTailwindWatch } from "../add/tailwind.js";
 import { componentCss } from "../compiler/style.js";
 import { createDevtools, localDevtoolsRequest, clientSourceLocations } from "./devtools.js";
+import { isServableFile, isPrivatePath, isSafeRequestPath } from "../server/security.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PATH = "/@niral/runtime/index.js";
@@ -454,6 +455,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     let urlPath;
     try { urlPath = decodeURIComponent(reqUrl.pathname); }
     catch { return send(res, 400, "text/plain", "invalid URL encoding"); }
+    if (!isSafeRequestPath(urlPath)) return send(res, 400, "text/plain", "invalid URL path");
 
     if (urlPath === "/@niral/devtools") {
       if (!localDevtoolsRequest(req) || req.headers["x-niral-devtools"] !== "1") return sendJson(res, 403, { error: "local same-origin access required" });
@@ -566,6 +568,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       if (req.headers["x-niral-rpc"] !== "1") {
         return sendJson(res, 403, { ok: false, error: "missing x-niral-rpc header" });
       }
+      if (!allowFormOrigin(req)) return sendJson(res, 403, { ok: false, error: "cross-origin request rejected" });
       if (!rpcLimiter.check(req.socket.remoteAddress ?? "?")) {
         return sendJson(res, 429, { ok: false, error: "too many requests — slow down" });
       }
@@ -580,7 +583,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
         return sendJson(res, 400, { ok: false, error: "bad rpc envelope" });
       }
       const abs = join(dir, modPath);
-      if (!inside(dir, abs) || !existsSync(abs)) {
+      if (!isSafeRequestPath(modPath) || isPrivatePath(modPath) || !isServableFile(dir, abs)) {
         return sendJson(res, 404, { ok: false, error: "unknown module" });
       }
       if (Array.isArray(args) && args.length > 32) {
@@ -604,7 +607,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     }
     if (urlPath.startsWith("/@niral/runtime/")) {
       const file = join(FRAMEWORK_DIR, "runtime", urlPath.slice("/@niral/runtime/".length));
-      if (!inside(join(FRAMEWORK_DIR, "runtime"), file) || !existsSync(file)) return send(res, 404, "text/plain", "not found");
+      if (!isServableFile(join(FRAMEWORK_DIR, "runtime"), file)) return send(res, 404, "text/plain", "not found");
       return send(res, 200, "text/javascript; charset=utf-8", readFileSync(file));
     }
 
@@ -613,14 +616,9 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     // private by convention: server-side storage, migrations, tests, deploy kit,
     // hooks.js/jobs.js and env files never serve — nor do dotfiles
     const segs = urlPath.split("/").filter(Boolean);
-    const PRIVATE_DIRS = new Set(["data", "migrations", "tests", "deploy"]);
     if (
-      PRIVATE_DIRS.has(segs[0]) ||
-      endpointFiles.has(segs.join("/")) ||
-      /\.server\.(js|mjs|ts)$/.test(urlPath) ||
-      segs[0] === "dist" ||
-      segs.some((s) => s.startsWith(".")) ||
-      /^(hooks|jobs)\.js$|\.env$/.test(segs[segs.length - 1] ?? "")
+      isPrivatePath(urlPath) ||
+      [...endpointFiles.keys()].some((path) => path.toLowerCase() === segs.join("/").toLowerCase())
     ) {
       return send(res, 404, "text/plain", "not found");
     }
@@ -654,7 +652,9 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       return send(res, 404, MIME[".html"], errorPage({ status: 404, path: urlPath, dev: true }).replace("</body>", HMR_TAG + "</body>"));
     }
 
+    if (!isServableFile(dir, file)) return send(res, 404, "text/plain", "not found");
     const ext = extname(file);
+    if (ext !== ext.toLowerCase() && /\.(niral|jsx|tsx|ts)$/i.test(ext)) return send(res, 404, "text/plain", "not found");
 
     if (ext === ".niral" || ext === ".jsx" || ext === ".tsx") {
       const source = readFileSync(file, "utf8");

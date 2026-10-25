@@ -1,5 +1,31 @@
 # Niral Progress
 
+## 2026-10-25: Security Boundary Hardening (Local)
+
+- Reproduced private storage disclosure through a public dev symlink/junction:
+  regression returned HTTP 200 before the fix. Shared file-serving guard now
+  rejects links below the serving root and non-regular files. Framework 254/254
+  passed after that fix.
+- Build walker now skips symlinks/junctions and non-regular files. Shared private
+  exclusions are case-insensitive; decoded ambiguous paths are rejected. Dev RPC
+  targets must be non-private regular files. RPC uses form-origin validation;
+  absolute request URLs cannot override the trusted origin, and configured
+  NIRAL_ORIGIN requires exact origin matching.
+- Reproduced uppercase component-extension bypass (HTTP 200 instead of 404),
+  fixed dev dispatch and excluded all raw component sources from static builds.
+  Expanded dev/build/prod tests cover aliases, private casing, component source,
+  encoded paths, origin denial and allowed file/route/component/RPC controls.
+  Main harness 255/255 passes; editor diagnostics and whitespace checks clean.
+  Full local release gate passed: real TypeScript/main harness, focused checks,
+  10 Chromium scenarios, four form/navigation combinations, and both packed
+  launchers' isolated scaffold/build/test. Postgres/image tooling was not
+  configured locally. Current security changes not Windows-CI tested.
+- Local Node is 25.6.1. Official October 21 advisory lists patched 22.23.4,
+  24.22.1 and 26.12.1; use a patched supported runtime. No runtime installation,
+  production inspection, commit, push, publication or deployment performed.
+  README documents rebuild requirement, stricter path/link policy, proxy origin
+  configuration, local filesystem trust and runtime/DoS limits.
+
 ## 2026-10-25: Windows CI Coverage (Verified)
 - Initial run `40193731256`: Linux Node 22/24 passed; both Windows versions had
   240 passing and 12 failing framework checks. Browser/package gates did not run.

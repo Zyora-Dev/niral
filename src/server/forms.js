@@ -43,8 +43,11 @@ export function actionRedirect(result) {
 export function allowFormOrigin(req) {
   if (!req.headers.origin) return req.headers["sec-fetch-site"] !== "cross-site";
   try {
-    const target = new URL(req.url, process.env.NIRAL_ORIGIN ?? `${req.socket.encrypted ? "https" : "http"}://${req.headers.host}`);
-    return new URL(req.headers.origin).host === target.host;
+    const target = new URL(process.env.NIRAL_ORIGIN ?? `${req.socket.encrypted ? "https" : "http"}://${req.headers.host}`);
+    const source = new URL(req.headers.origin);
+    if (!["http:", "https:"].includes(source.protocol) || source.username || source.password) return false;
+    if (process.env.NIRAL_ORIGIN || req.socket.encrypted) return source.origin === target.origin;
+    return source.host === target.host;
   } catch { return false; }
 }
 

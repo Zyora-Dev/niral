@@ -30,7 +30,7 @@ import { createJobRunner } from "./jobs.js";
 import { attachLive } from "./live.js";
 import { clusterEnabled, createPgBackplane } from "./backplane.js";
 import { loadHooks, applyHooks, checkRequiredEnv } from "./hooks.js";
-import { makeNonce, baseSecurityHeaders, htmlSecurityHeaders, MAX_RPC_ARGS } from "./security.js";
+import { makeNonce, baseSecurityHeaders, htmlSecurityHeaders, MAX_RPC_ARGS, isServableFile, isSafeRequestPath } from "./security.js";
 import { setSecureCookies } from "./session.js";
 import { logRequest, logError, healthPayload, makeLog } from "./observe.js";
 import { createShield } from "./shield.js";
@@ -271,6 +271,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
     let urlPath;
     try { urlPath = decodeURIComponent(reqUrl.pathname); }
     catch { return send(res, 400, "text/plain", "invalid URL encoding"); }
+    if (!isSafeRequestPath(urlPath)) return send(res, 400, "text/plain", "invalid URL path");
 
     // Shield: inspect BEFORE routing — bans, probe/injection blocks, lockdown.
     const verdict = shield.inspect(req);
@@ -380,6 +381,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
       if (req.headers["x-niral-rpc"] !== "1") {
         return sendJson(res, 403, { ok: false, error: "missing x-niral-rpc header" });
       }
+      if (!allowFormOrigin(req)) return sendJson(res, 403, { ok: false, error: "cross-origin request rejected" });
       if (!rpcLimiter.check(req.socket.remoteAddress ?? "?")) {
         return sendJson(res, 429, { ok: false, error: "too many requests — slow down" });
       }
@@ -415,7 +417,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
       const versioned = urlPath.match(/^\/assets\/([0-9a-f]{12})\/(.+)$/);
       if (versioned && versioned[1] === manifest.hash) {
         const file = join(releaseDir, "assets", versioned[2]);
-        if (!inside(join(releaseDir, "assets"), file) || !existsSync(file)) return send(res, 404, "text/plain", "not found");
+        if (!isServableFile(join(releaseDir, "assets"), file)) return send(res, 404, "text/plain", "not found");
         return writeBody(
           res,
           200,
@@ -435,13 +437,13 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
       }
       if (req.headers["if-none-match"] === etag) return res.writeHead(304, { etag }).end();
       const file = join(releaseDir, urlPath);
-      if (!inside(join(releaseDir, "assets"), file) || !existsSync(file)) return send(res, 404, "text/plain", "not found");
+      if (!isServableFile(join(releaseDir, "assets"), file)) return send(res, 404, "text/plain", "not found");
       return writeBody(res, 200, { "content-type": MIME[extname(file)] ?? "application/octet-stream", "cache-control": "no-cache", etag, ...baseSecurityHeaders() }, readFileSync(file));
     }
 
     /* ── copied static files ── */
     const staticFile = join(releaseDir, "static", urlPath);
-    if (inside(join(releaseDir, "static"), staticFile) && existsSync(staticFile) && !urlPath.endsWith("/")) {
+    if (isServableFile(join(releaseDir, "static"), staticFile) && !urlPath.endsWith("/")) {
       try {
         const body = readFileSync(staticFile);
         return writeBody(res, 200, { "content-type": MIME[extname(staticFile)] ?? "application/octet-stream", "cache-control": "no-cache", etag, ...baseSecurityHeaders() }, body);

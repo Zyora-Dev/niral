@@ -241,6 +241,36 @@ slow value; `total` stays ~300 ms, but the page paints in single-digit ms:
 4. Scaffolded `.gitignore` keeps them out of git
 5. The deploy script never syncs them — production secrets live only on the server
 
+### Security Boundaries
+
+Use a currently supported, security-patched Node.js release. The
+[October 21, 2026 Node advisory](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)
+lists fixes in 22.23.4, 24.22.1 and 26.12.1; use those or a newer patched release
+in a supported line. Framework checks cannot patch Node's DNS, TLS, HTTP or
+decompression internals. PHP is not a Niral runtime.
+
+- Private directory/file exclusions are case-insensitive, including nested
+  `data/`, dotfiles, environment files and server modules. Public symlinks and
+  Windows junctions are not served or traversed by the static build walker.
+  Use regular copies for intentionally public assets.
+- Raw `.niral`, `.jsx` and `.tsx` component sources are never copied into static
+  build output. Dev requests with noncanonical component-extension case are
+  rejected instead of returning uncompiled source.
+- Decoded paths containing backslashes, colons, control characters, dot segments,
+  or segments ending in a dot or space return 400, including dynamic route paths.
+- RPC still requires `x-niral-rpc: 1` and now shares form-origin validation.
+  Configure `NIRAL_ORIGIN` to the exact public origin (scheme, hostname and port)
+  for strict origin matching behind a TLS-terminating proxy. Without that setting,
+  unencrypted connections retain host-and-port matching for proxy compatibility.
+  Requests without Origin remain allowed unless Fetch Metadata says cross-site;
+  this is not authentication or authorization for an application's functions.
+
+Rebuild applications after upgrading: previously generated static files may
+already contain copied private data or raw components. Keep development servers
+private, enforce application authorization, and protect release directories from
+untrusted writes. These checks do not sandbox server code or protect against
+malicious local filesystem races/hard links, runtime CVEs or volumetric DDoS.
+
 ## Repository layout
 
 ```

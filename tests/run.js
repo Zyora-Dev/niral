@@ -3182,6 +3182,117 @@ test("head: {prop} interpolation from load() data (escaped)", async () => {
   }
 });
 
+test("security: dev, build and prod reject private aliases and unsafe request paths", async () => {
+  const { createDevServer } = await import("../src/dev/server.js");
+  const { createProdServer } = await import("../src/server/prod.js");
+  const { build } = await import("../src/build/build.js");
+  const dir = _fs.mkdtempSync(join(_os.tmpdir(), "niral-private-alias-"));
+  const savedEnv = Object.fromEntries(["NIRAL_SHIELD", "NIRAL_INTEGRITY", "NIRAL_ORIGIN"].map((name) => [name, process.env[name]]));
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  let dev, prod;
+  try {
+    process.env.NIRAL_SHIELD = "off";
+    process.env.NIRAL_INTEGRITY = "off";
+    delete process.env.NIRAL_ORIGIN;
+    for (const folder of ["data", "routes", "assets/DATA", "lib"]) _fs.mkdirSync(join(dir, folder), { recursive: true });
+    for (const file of ["data/secret.txt", "assets/DATA/secret.txt", "lib/secret.SERVER.JS", "notes.ENV"]) {
+      _fs.writeFileSync(join(dir, file), "private-storage-marker");
+    }
+    _fs.writeFileSync(join(dir, "public.txt"), "public-marker");
+    for (const file of ["lib/Hidden.NIRAL", "lib/private-component.niral"]) {
+      _fs.writeFileSync(join(dir, file), `<server>export function hidden() { return "private-component-marker" }</server><p>component</p>`);
+    }
+    _fs.writeFileSync(join(dir, "routes/index.niral"), `<server>export function ping() { return "allowed" }</server><p>public page</p>`);
+    _fs.writeFileSync(join(dir, "data/private.niral"), `<server>export function ping() { throw new Error("private RPC executed") }</server>`);
+    _fs.symlinkSync(join(dir, "data"), join(dir, "public-alias"), linkType);
+    dev = createDevServer({ root: dir, port: 0, watch: false });
+    const devPort = await new Promise((ready) => dev.listen(ready));
+    const upperComponent = await fetch(`http://localhost:${devPort}/lib/Hidden.NIRAL`);
+    eq(upperComponent.status, 404, "noncanonical component extensions cannot bypass compilation");
+    const compiledComponent = await fetch(`http://localhost:${devPort}/lib/private-component.niral`);
+    eq(compiledComponent.status, 200, "normal component compilation still works");
+    ok(!(await compiledComponent.text()).includes("private-component-marker"), "compiled component excludes server code");
+    build({ root: dir });
+    const release = _fs.realpathSync(join(dir, "dist/current"));
+    for (const file of ["public-alias", "data", "assets/DATA", "lib/secret.SERVER.JS", "notes.ENV", "lib/Hidden.NIRAL", "lib/private-component.niral"]) {
+      ok(!_fs.existsSync(join(release, "static", file)), `${file} excluded from build`);
+    }
+    eq(_fs.readFileSync(join(release, "static/public.txt"), "utf8"), "public-marker");
+    prod = createProdServer({ dist: join(dir, "dist"), port: 0 });
+    const prodPort = await new Promise((ready) => prod.listen(ready));
+    _fs.symlinkSync(join(dir, "data"), join(release, "static/public-alias"), linkType);
+    _fs.symlinkSync(join(dir, "data"), join(release, "assets/public-alias"), linkType);
+    const { hash } = JSON.parse(_fs.readFileSync(join(release, "manifest.json"), "utf8"));
+    for (const [mode, port] of [["dev", devPort], ["prod", prodPort]]) {
+      const base = `http://localhost:${port}`;
+      eq(await (await fetch(base + "/public.txt")).text(), "public-marker", `${mode} public file`);
+      eq((await fetch(base + "/")).status, 200, `${mode} normal route`);
+      for (const path of ["public-alias/secret.txt", "data/secret.txt", "DATA/secret.txt", "assets/DATA/secret.txt", "lib/secret.SERVER.JS", "notes.ENV"]) {
+        const response = await fetch(`${base}/${path}`);
+        eq(response.status, 404, `${mode} ${path}`);
+        ok(!(await response.text()).includes("private-storage-marker"), `${mode} private bytes stay private`);
+      }
+      for (const path of ["DATA%5csecret.txt", "public.txt%00", "public.txt%3aextra", "public.txt.", "public.txt%20", "data%2f..%2fpublic.txt"]) {
+        eq((await fetch(`${base}/${path}`)).status, 400, `${mode} invalid path ${path}`);
+      }
+      const rpc = (headers = {}, module = "/routes/index.niral") => fetch(base + "/@niral/rpc", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-niral-rpc": "1", ...headers },
+        body: JSON.stringify({ module, fn: "ping", args: [] }),
+      });
+      for (const headers of [{}, { origin: base }]) {
+        const response = await rpc(headers);
+        eq(response.status, 200, `${mode} allowed RPC`);
+        eq((await response.json()).result, "allowed");
+      }
+      for (const headers of [{ origin: "https://foreign.invalid" }, { origin: "null" }, { "sec-fetch-site": "cross-site" }]) {
+        eq((await rpc(headers)).status, 403, `${mode} hostile RPC origin`);
+      }
+      for (const module of ["/data/private.niral", "/public-alias/private.niral", "/DATA\\private.niral", "/routes/../data/private.niral"]) {
+        eq((await rpc({}, module)).status, 404, `${mode} private RPC ${module}`);
+      }
+    }
+    for (const prefix of ["/assets/", `/assets/${hash}/`]) {
+      const response = await fetch(`http://localhost:${prodPort}${prefix}public-alias/secret.txt`);
+      eq(response.status, 404, "production asset alias rejected");
+      ok(!(await response.text()).includes("private-storage-marker"));
+      eq((await fetch(`http://localhost:${prodPort}${prefix}@niral/runtime/index.js`)).status, 200, "normal production asset");
+    }
+  } finally {
+    dev?.close();
+    prod?.close();
+    _fs.rmSync(dir, { recursive: true, force: true });
+    for (const [name, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("security: form and RPC origin policy cannot trust an absolute request URL", async () => {
+  const { allowFormOrigin } = await import("../src/server/forms.js");
+  const previous = process.env.NIRAL_ORIGIN;
+  try {
+    delete process.env.NIRAL_ORIGIN;
+    const req = { url: "https://foreign.invalid/@niral/rpc", headers: { host: "app.example", origin: "https://foreign.invalid" }, socket: {} };
+    eq(allowFormOrigin(req), false, "absolute target cannot override Host");
+    req.headers.origin = "https://app.example";
+    eq(allowFormOrigin(req), true, "TLS-terminating proxy without canonical origin keeps host policy");
+    req.headers.origin = "ftp://app.example";
+    eq(allowFormOrigin(req), false);
+    process.env.NIRAL_ORIGIN = "https://canonical.example";
+    req.headers.origin = "https://canonical.example";
+    eq(allowFormOrigin(req), true, "configured external origin behind proxy");
+    req.headers.origin = "http://canonical.example";
+    eq(allowFormOrigin(req), false, "configured origin requires matching scheme");
+    req.headers.origin = "https://foreign.invalid";
+    eq(allowFormOrigin(req), false, "absolute target cannot override configured origin");
+  } finally {
+    if (previous === undefined) delete process.env.NIRAL_ORIGIN;
+    else process.env.NIRAL_ORIGIN = previous;
+  }
+});
+
 test("security: prod ships CSP nonce, security headers, gzip, Secure cookies", async () => {
   const { build } = await import("../src/build/build.js");
   const { createProdServer } = await import("../src/server/prod.js");

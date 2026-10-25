@@ -22,6 +22,21 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Security hardening 2026-10-25 (local only): reproduced dev private symlink/junction
+  disclosure and uppercase component compilation bypass. Shared descendant-file
+  guard rejects links/non-regular files; static builds skip links, private names
+  case-insensitively and raw component sources. Unsafe decoded paths and private
+  dev RPC targets are rejected. RPC shares form-origin validation; absolute request
+  targets cannot redefine the origin; NIRAL_ORIGIN enables exact proxy-facing origin
+  matching. Main harness 255/255 passes with dev/build/prod regression coverage.
+  Full local release gate passed, including TypeScript, focused checks, Chromium,
+  forms/navigation and both packed launchers. Postgres/image tools unconfigured;
+  no new Windows CI, commits, pushes, publication or deployment.
+  Rebuild apps to remove previously copied private/source files.
+  Local Node25.6.1 has not been upgraded; official October21 security releases are
+  22.23.4/24.22.1/26.12.1. Middleware is not a substitute for a patched runtime.
+  Filesystem root/release contents remain trusted; no local race/hard-link sandbox.
+
 - Windows CI added 2026-10-25: separate `windows-latest` Node 22/24 jobs run the
   existing release gate with isolated TypeScript and Chromium. Linux extended
   Postgres/image jobs are unchanged; Windows does not configure those optional
