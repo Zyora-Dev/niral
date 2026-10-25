@@ -1,6 +1,6 @@
 # Niral Progress
 
-## 2026-10-25: Devtools (Verified, Local Only)
+## 2026-10-25: Devtools (Verified, Not Deployed)
 
 - Added request-scoped route/layout/loader and RPC metadata tracing, capped at
   100 completed requests and 32 loader spans each. No raw URLs, dynamic values,
@@ -20,7 +20,10 @@
   disabling its focused button by moving focus to search.
 - Local disposable preview: http://localhost:51644. README documents access,
   privacy and limits. No browser-error causal tracing or dedicated form-action
-  spans in this version. No runtime dependencies, commit, push or deployment.
+  spans in this version. No runtime dependencies or production deployment.
+- Source commit: `f89e484` (`feat: add local development inspector`), with user
+  authorization to publish to `Zyora-Dev/niral` on `main`. Local agent/editor
+  settings and private files excluded; existing deployment records preserved.
 
 ## 2026-10-25: Production Deployment (Verified)
 

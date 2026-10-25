@@ -30,7 +30,9 @@ are historical unless explicitly marked as verified with a date.
   failures; framework245/browser9 pass with existing environment gates. Desktop
   and mobile captures reviewed; production launcher/endpoints absent. Preview:
   http://localhost:51644. No dedicated form-action spans or browser-error causal
-  tracing yet. README updated; not committed, pushed or deployed.
+  tracing yet. Source committed as `f89e484`; user authorized GitHub publication
+  to `Zyora-Dev/niral` on `main`. Local agent/editor settings excluded. README
+  updated; no production deployment or npm publication for Devtools.
 
 - Source release checkpoint (2026-10-25): user authorized commit/push of pending
   framework and website changes; code commit `f6cd621` contains 43 files. Private
