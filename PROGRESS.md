@@ -1,6 +1,6 @@
 # Niral Progress
 
-## 2026-10-25: Release Reliability And Launcher Update (In Progress)
+## 2026-10-25: Release Reliability And Launcher Update (Registry Verification Pending)
 
 - User authorized the three release-reliability fixes, npm publication, and a
   source commit/push including pending Devtools tracing. No website deployment.
@@ -19,15 +19,23 @@
   gates were unconfigured; CI execution is not yet verified. Package allowlists
   passed. A follow-up shell regression confirms updates bypass older pinned CLIs.
 - Registry discovery found both packages at 0.1.3; manifests now prepare 0.1.4.
-  Documentation records pins, defaults, backups and the release gate. Publication
-  and source push remain pending; no production changes.
+  Documentation records pins, defaults, backups and the release gate. Source and
+  npm uploads are now published as recorded below; no production changes.
 - Final 0.1.4 release gate passes: 252 main checks, 15 focused Node tests, 10
   Chromium scenarios, and all four form/navigation combinations. Actual five-file
   tarballs install offline into disposable homes and scaffold/build/test against
   the current source. SHA1: niral `68beefcd85c902a7429c341f2f2c0c75ec8bdb20`;
   create-niral `965bda2d83ca7e336c37d3e50db5af3aff982c0a`.
 - User completed terminal login; `npm whoami` now verifies `zyoralabs`.
-  Source commit/push and both npm publications are pending. No production deployment.
+  Source commit `825256b57262da6e326fc6219950b54d60472100` is pushed and verified
+  on remote main, including Devtools tracing. npm accepted both launcher 0.1.4
+  publications; five-file checksums match the validated tarballs above. Registry
+  availability and fresh registry installs remain pending: the first
+  `npm view niral@0.1.4` returned E404 after npm warned uploads may take minutes
+  to become available. No republish or polling. The chained create-niral metadata
+  check did not run. Latest tags and fresh registry smoke are not yet verified.
+  GitHub Release Checks run `40190853399` was still in progress at the last check.
+  No production deployment.
 
 ## 2026-10-25: Full-Stack Error Tracing (Verified, Local Only)
 

@@ -3,14 +3,20 @@
 The two npm packages are self-contained launchers, not the framework runtime.
 They download `Zyora-Dev/niral` from `main` by default; `NIRAL_REF` selects a
 persisted full commit SHA or existing version tag. The website is independent.
-Version 0.1.4 is prepared locally, not yet published. Registry discovery on
+Both version 0.1.4 publications were accepted by npm on 2026-10-25. Registry discovery on
 2026-10-25 found versions 0.1.0 through 0.1.3 for both packages. The previous
 0.1.3 publication and deployment records are historical. Windows remains unverified.
 Do not treat a local version bump or a website deployment as npm publication.
 
 Local 0.1.4 validation passed, including actual tarball installs and isolated
 scaffold/build/test against current source. User completed terminal login on
-2026-10-25; npm authentication verifies `zyoralabs`. Source commit/push remains pending.
+2026-10-25; npm authentication verifies `zyoralabs`. Source commit
+`825256b57262da6e326fc6219950b54d60472100` is pushed to main and remote-verified.
+Both five-file published tarball checksums match local validation. Registry
+availability remains pending: the first exact-version check for niral@0.1.4
+returned E404 after npm warned processing may take minutes. No republish or
+polling. create-niral metadata, latest tags and fresh registry installs have not
+yet been verified. CI run40190853399 was still in progress at the last check.
 
 ## Validate Locally
 
