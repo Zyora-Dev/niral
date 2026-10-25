@@ -1,5 +1,24 @@
 # Niral Progress
 
+## 2026-10-25: Source Release Checkpoint
+
+- User authorized committing and pushing all pending framework and website work,
+  excluding private data and local editor/agent settings. Code checkpoint:
+  `f6cd621` (`feat: refresh website, starter and diagnostic experience`), 43 files.
+  Local AGENTS.md changes, CLAUDE.md, .kiro/ and .vscode/ were left untouched.
+- Full framework suite: 245 passed, 0 failed; optional TypeScript/cwebp/live
+  database checks remain environment-gated. Browser suite: 8 passed. Docs/contact
+  suite: 7 passed, 1 optional browser test skipped. Staged whitespace, private-path
+  and common credential-pattern checks passed.
+- Distribution uses GitHub main: the shell installer and npm launchers download
+  the framework; existing managed installations refresh with `niral update`.
+  New starter templates apply to newly created apps, not existing route files.
+  No npm version bump is required for these framework changes; launcher package
+  code and versions are unchanged. npm README changes require a later package
+  publication to appear on npm, independently of framework distribution.
+- Running apps require a separate deployment to adopt framework changes. No
+  production deployment or npm publication was performed for this checkpoint.
+
 ## 2026-10-25: Error Screens Saffron Theme and Icons (Local Only)
 
 - Matched shared default 404/500 pages and compile/runtime overlays to the

@@ -22,6 +22,16 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Source release checkpoint (2026-10-25): user authorized commit/push of pending
+  framework and website changes; code commit `f6cd621` contains 43 files. Private
+  data and local editor/agent settings excluded. Framework245/browser8 passed;
+  docs/contact7 passed with one optional browser skip; environment-gated framework
+  checks remain optional. Shell/npm launchers fetch framework from GitHub main;
+  existing managed installs use `niral update`. No npm version bump is needed for
+  framework changes, and existing app routes are not rewritten. npm README updates
+  need a separate package publication; running apps need a separate deployment.
+  No production deployment or npm publication performed for this checkpoint.
+
 - Error screens matched to the starter theme (2026-10-25): shared default 404/500
   pages and compile/runtime overlays now use charcoal/white/saffron gold and pinned
   Lucide CDN icons. Text labels, diagnostic escaping/redaction, production privacy,
