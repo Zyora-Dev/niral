@@ -63,6 +63,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify Python worker interpreter
+        run: python3 -c "import sys; print(sys.executable); print(sys.version)"
       - name: Install isolated test tools
         shell: bash
         run: |

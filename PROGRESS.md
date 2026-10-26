@@ -13,8 +13,20 @@
   docs checks, Chromium, forms and both offline installer scaffold/build/test
   flows. Editor diagnostics and whitespace checks are clean.
 - User approved committing/pushing this fix and progress records to the existing
-  temporary CI branch, then running Windows Node 22/24 checks. Actual Windows CI
-  of the fix remains pending. Main, production and npm remain unchanged.
+  temporary CI branch. Fix committed/pushed as `88e3bce`; Release Checks run
+  `40281476186` dispatched for Windows/Linux Node 22/24 on that snapshot.
+  Run completed with failure: Linux jobs passed; Windows Node 22 passed all 258
+  framework tests, then failed the NiralScript module test because a URL pathname
+  was converted back into a file URL, duplicating its Windows drive prefix.
+  Windows Node 24 reported Python-worker timeouts in the main suite.
+- Subsequent local fix uses the runtime URL's href directly in the module test;
+  that focused test passes. Windows CI now explicitly selects Python 3.12 and
+  logs the python3 interpreter, testing whether host interpreter selection caused
+  the worker timeouts. Workflow/test editor diagnostics are clean; worker runtime
+  code is unchanged. Actual Windows validation of both follow-ups remains pending.
+  The full standard local release gate also passes after these follow-ups,
+  including browser/forms and both offline installer smoke tests.
+  Main, production and npm remain unchanged.
 
 ## 2026-10-26: Windows NiralScript Validation (Retest Failed)
 

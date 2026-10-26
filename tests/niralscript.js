@@ -137,7 +137,7 @@ test("NiralScript links isolated modules with transitive semantic checks", async
   assert.equal(JSON.stringify(parsed), snapshot);
   assert.doesNotThrow(() => analyzeNiralScript(linked));
   const compiled = compileNiralScript(source, "entry.nrs", { resolveModule });
-  const runtime = pathToFileURL(new URL("../src/runtime/index.js", import.meta.url).pathname).href;
+  const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
   const executable = `import * as __n from ${JSON.stringify(runtime)};\n${compiled.code}\nexport function values() { return [result.get(), record.run(1), run(2), base] }`;
   const result = await import("data:text/javascript;base64," + Buffer.from(executable).toString("base64"));
   assert.deepEqual(result.values(), [14, 12, 14, 2]);

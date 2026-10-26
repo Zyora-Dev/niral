@@ -28,9 +28,17 @@ are historical unless explicitly marked as verified with a date.
   Both focused LSP tests pass, including delayed diagnostics and responsiveness.
   Full standard local release gate passes (258 framework tests, language/editor/
   docs, Chromium/forms and both offline installer smoke tests); diagnostics and
-  whitespace clean. User approved commit/push to existing temporary CI branch
-  and actual Windows rerun; CI of this fix remains pending. Main/production/npm
-  unchanged.
+  whitespace clean. Approved fix committed/pushed as `88e3bce` to existing
+  temporary CI branch; Windows/Linux Node 22/24 run `40281476186` dispatched,
+  completed with failure: Linux jobs passed, Windows22 main 258/0 then a language
+  fixture failed on a duplicated drive prefix; Windows24 hit Python-worker
+  timeouts. The follow-up module fixture now uses URL.href directly and its
+  focused local test passes. Windows CI explicitly selects Python 3.12 and logs
+  python3's executable/version to test the interpreter-selection hypothesis;
+  runtime unchanged, workflow/test diagnostics clean. Actual Windows results of
+  the follow-up remain pending. Full standard local release gate passes after the
+  follow-up, including browser/forms and both installer smoke tests.
+  Main/production/npm unchanged.
 
 - Windows verification (2026-10-26, retest failed): user authorized snapshot `cc202fc`
   on temporary branch `ci/windows-niralscript-20261026`, without changing main or
