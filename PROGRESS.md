@@ -1,5 +1,40 @@
 # Niral Progress
 
+## 2026-10-26: NiralScript Website Detail Update
+
+- Updated the existing language page with all six implemented milestones,
+  typed-array checks, standalone compilation/source maps, the eight hosted
+  JS/TS/NRS measurements and explicit experimental/type-system limitations.
+  Historical hosted results are distinguished from the newer local array checks.
+- `NIRAL_SEO_BROWSER=1 node --test tests/docs-seo.js` passes all three tests.
+  Displayed examples are compiled; the standalone counter executes correctly;
+  the invalid typed push rejects and its corrected version compiles. SEO and
+  browser navigation pass; 390/1024/1440px layouts have no document overflow.
+  Desktop/mobile screenshots reviewed, existing design retained.
+- User authorized scoped commit/push and website deployment. EC2 read-only
+  preflight confirms Node22.23.3, release ba264ec1f6f4, active app/watchdog/nginx
+  and zero app restarts. Deployment remains pending; production framework,
+  environment and private data have not been changed.
+
+## 2026-10-26: Typed Array Mutation Checks
+
+- Added argument checking for statically named `push`, `unshift`, `splice` and
+  `fill` on known typed arrays: variadic elements, numeric positions, required
+  arguments and the three-argument limit for `fill`. Simple aliases, record
+  fields, annotated parameters/returns and array unions retain their contracts.
+- Three focused regression tests pass, covering invalid and valid calls,
+  original imported diagnostic locations, both compiler targets and standalone
+  runtime behavior. Unknown host values and unannotated arrays remain permissive;
+  existing readonly/effect checks are unchanged. Dynamic/detached methods and
+  general callback/escaping-alias inference remain outside these guarantees.
+- `node bench/niralscript.js types` passes all nine probes with TypeScript5.7.3:
+  the formerly accepted wrong-type `push` now rejects in NRS and strict TS.
+  Editor diagnostics are clean. Full standard local release gate passes:
+  258 framework tests, 60 combined language/editor/docs tests (45 language),
+  13 browser tests, four form variants and both offline installer checks.
+  Windows CI and optional Postgres/image gates were not rerun for this change.
+- Local changes only; no commit, push, new CI run, merge or deployment.
+
 ## 2026-10-26: GitHub Direct Language Comparison Passed
 
 - Real GitHub Actions run: https://github.com/Zyora-Dev/niral/actions/runs/40311729249

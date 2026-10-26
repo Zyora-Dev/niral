@@ -229,6 +229,24 @@ export function checkTypes(program, analysis) {
     if (contracted(node.left)) check(expected, actual, node.right);
   }
   for (const node of calls) {
+    let target = node.callee;
+    while (target.type === "ParenthesizedExpression") target = target.expression;
+    if (target.type === "MemberExpression" && contracted(target.object)) {
+      const method = target.computed ? target.property.type === "Literal" ? target.property.value : null : target.property.name;
+      const receiver = infer(target.object);
+      const members = receiver.kind === "union" ? receiver.members : [receiver];
+      for (const member of members) {
+        if (member.kind !== "array" || !["push", "unshift", "splice", "fill"].includes(method)) continue;
+        if (["splice", "fill"].includes(method) && !node.arguments.length) fail(`Array ${method} requires at least one argument`, node);
+        if (method === "fill" && node.arguments.length > 3) fail("Array fill accepts at most three arguments", node);
+        node.arguments.forEach((argument, index) => {
+          let expected = member.element;
+          if (method === "splice" && index === 0) expected = { kind: "number" };
+          if (method === "splice" && index === 1 || method === "fill" && index > 0) expected = merge([{ kind: "number" }, UNDEFINED]);
+          check(expected, infer(argument), argument);
+        });
+      }
+    }
     const callee = infer(node.callee);
     if (callee.kind !== "function") continue;
     callee.node.params.forEach((param, index) => {

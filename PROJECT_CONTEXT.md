@@ -22,6 +22,25 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- NiralScript website detail update verified locally (2026-10-26): six milestones,
+  typed collections, standalone output/maps, full hosted JS/TS/NRS table and
+  honest limitations. All three SEO tests pass with browser mode, including
+  actual displayed-code compilation/execution and 390/1024/1440px layouts.
+  User authorized scoped commit/push and website-only deployment. Read-only EC2
+  preflight: Node22.23.3, release ba264ec1f6f4, app/watchdog/nginx active,
+  NRestarts0. Checkpoint/staging/deployment still pending; no framework upgrade.
+
+- Typed array mutation checking added locally (2026-10-26): static `push`,
+  `unshift`, `splice`, `fill` check element types, positions and arity through
+  simple aliases, fields and annotated parameters/returns. Three focused tests
+  and all nine JS/TS/NRS diagnostic probes pass; wrong-type typed `push` now
+  rejects like strict TS. Unknown/unannotated values remain gradual; dynamic
+  method selection, detached methods and general alias/callback inference are
+  not made sound. Full standard local release PASS: 258 framework, 60 combined
+  language/editor/docs (45 language), 13 browser, four forms and both offline
+  installers. Windows/optional Postgres/image gates not rerun for this change;
+  no commit/push/CI/deploy.
+
 - Real GitHub language comparisons PASS (2026-10-26), run40311729249 at
   59d721b861a8a72ba7a8c913ce690de5f68646fb on existing CI branch. Both Node22/24
   jobs complete with three repeats, all correctness and TS strict checks pass.

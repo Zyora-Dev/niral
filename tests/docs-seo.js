@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { PAGES, GROUPS } from "../apps/docs/lib/content.js";
 import { handle } from "../apps/docs/hooks.js";
 import { createDevServer } from "../src/dev/server.js";
+import { compileClient } from "../src/compiler/codegen.js";
+import { compileNiralScript } from "../niralscript/compile.js";
 
 const source = new URL("../apps/docs/", import.meta.url);
 const decode = value => value.replace(/&(amp|quot|#39|lt|gt);/g, (entity, name) => ({ amp: "&", quot: '"', "#39": "'", lt: "<", gt: ">" })[name]);
@@ -90,10 +92,14 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
       }
       if (path === "/niralscript") {
         assert.match(html, /An independent frontend language/);
-        assert.match(html, /Experimental prototype/);
-        assert.match(html, /state count = 0/);
-        assert.match(html, /derive doubled = count \* 2/);
-        assert.match(html, /not a published language release/);
+        assert.match(html, /Experimental language/);
+        assert.match(html, /state count: number = 0/);
+        assert.match(html, /derive doubled: number = count \* 2/);
+        assert.match(html, /do not establish a stable language release/);
+        assert.match(html, /Statically named/);
+        assert.match(html, /Microseconds per complete function call/);
+        assert.match(html, /actions\/runs\/40311729249/);
+        assert.match(html, /Hosted results predate the typed-array follow-up/);
         assert.match(html, /aria-current="page"[^>]*>NiralScript/);
       }
       if (path.startsWith("/docs/")) {
@@ -137,6 +143,15 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
         await page.screenshot({ path: `/tmp/niral-seo-docs-${width}.png`, fullPage: false, animations: "disabled" });
       }
       await page.goto(base + "/niralscript");
+      const embeddedExample = await page.getByLabel("NiralScript counter example", { exact: true }).innerText();
+      assert.doesNotThrow(() => compileClient(embeddedExample));
+      const mutationExample = await page.getByLabel("Typed array mutation example", { exact: true }).innerText();
+      assert.throws(() => compileNiralScript(mutationExample), { code: "NRS080" });
+      assert.doesNotThrow(() => compileNiralScript(mutationExample.replace('items.push("bad")', "items.push(5)")));
+      const standaloneExample = await page.getByLabel("Standalone NiralScript source", { exact: true }).innerText();
+      const generated = compileNiralScript(standaloneExample);
+      const { createInstance } = await import("data:text/javascript;base64," + Buffer.from(generated.code).toString("base64"));
+      assert.equal(createInstance({ initial: 2 }).values.increment(), 6);
       for (const width of [390, 1024, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

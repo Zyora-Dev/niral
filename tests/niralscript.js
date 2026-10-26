@@ -83,6 +83,55 @@ test("NiralScript types check values, signatures, records and async results", ()
   assert.throws(() => checkNiralScript('import { take } from "./typed.nrs"\nconst result = take(1)', "entry.nrs", { resolveModule: () => ({ filename: "typed.nrs", source: 'export function take(value: number): string {\nreturn value\n}' }) }), error => error.code === "NRS080" && error.filename === "typed.nrs" && error.line === 2);
 });
 
+test("NiralScript typed array mutators validate inserted values and positions", () => {
+  for (const call of ['push("wrong")', 'push(1, "wrong")', 'unshift("wrong")', 'unshift(1, "wrong")', 'splice(0, 1, "wrong")', 'splice(0, 1, 2, "wrong")', 'splice("wrong", 1)', 'splice(0, "wrong")', 'fill("wrong")', 'fill(1, "wrong")', 'fill(1, 0, "wrong")', 'fill(1, 0, 1, 2)', 'fill()', 'splice()']) {
+    const source = `state items: number[] = []\nitems.${call}`;
+    assert.throws(() => checkNiralScript(source, "mutators.nrs"), error => error.code === "NRS080" && error.filename === "mutators.nrs" && error.line === 2, call);
+    assert.throws(() => compileNiralScript(source), { code: "NIRAL080" }, call);
+  }
+  for (const call of ['push()', 'push(1, 2)', 'unshift()', 'unshift(1, 2)', 'splice(0)', 'splice(0, 1)', 'splice(0, options.position, 1)', 'splice(0, 0, 1, 2)', 'fill(1)', 'fill(1, options.position, options.position)']) {
+    assert.doesNotThrow(() => checkNiralScript(`const options: { position?: number } = {}\nstate items: number[] = []\nitems.${call}`), call);
+  }
+  assert.doesNotThrow(() => checkNiralScript('const typed: number = 1\nstate items = [1]\nitems.push("allowed")'));
+});
+
+test("NiralScript typed array mutators retain receiver contracts", () => {
+  for (const source of [
+    'state items: number[] = []\nconst alias = items\nalias.push("wrong")',
+    'state items: number[] = []\nitems["push"]("wrong")',
+    'state items: number[] = []\n(items.push)("wrong")',
+    'state items: number[] = []\n(items).push("wrong")',
+    'const record: { items: number[] } = { items: [] }\nrecord.items.unshift("wrong")',
+    'state items: { value: number }[] = []\nitems.push({ value: "wrong" })',
+    'state items: number[][] = []\nitems.push(["wrong"])',
+    'state items: (number | string)[] = []\nitems.push(true)',
+    'state items: number[] | string[] = [1]\nitems.push(1)',
+    'function change(items: number[]) { items.fill("wrong") }',
+    'function values(): number[] { return [] }\nvalues().push("wrong")',
+  ]) {
+    assert.throws(() => checkNiralScript(source), { code: "NRS080" }, source);
+    assert.throws(() => compileStandalone(source), { code: "NRS080" }, source);
+  }
+  for (const source of [
+    'state items: (number | string)[] = []\nitems.push(1, "two")',
+    'state items: { value: number }[] = []\nitems.push({ value: 1 })',
+    'state items: number[][] = []\nitems.push([1, 2], [])',
+    'state items: number[] = []\nconst alias = items\nalias["push"](1)',
+    'state items: number[] = []\nitems.push(host())',
+    'const object: { push: unknown } = { push: host }\nobject.push("allowed")',
+  ]) assert.doesNotThrow(() => checkNiralScript(source, "mutators.nrs", { globals: ["host"] }), source);
+  assert.throws(() => checkNiralScript('import { change } from "./mutators.nrs"', "entry.nrs", { resolveModule: () => ({ filename: "mutators.nrs", source: 'export function change(items: number[]) {\nitems.push("wrong")\n}' }) }), error => error.code === "NRS080" && error.filename === "mutators.nrs" && error.line === 2);
+});
+
+test("NiralScript typed array mutators preserve JavaScript runtime behavior", async () => {
+  const source = 'state items: number[] = [1, 2]\nfunction change() { const length = items.push(3, 4); items.unshift(0); const removed = items.splice(1, 2, 8, 9); items.fill(7, 3); return { values: [...items], removed, length } }';
+  const output = compileStandalone(source);
+  const { createInstance } = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.deepEqual(createInstance().values.change(), { values: [0, 8, 9, 7, 7], removed: [1, 2], length: 4 });
+  assert.doesNotThrow(() => compileNiralScript(source));
+  assert.doesNotThrow(() => lowerNiralScript(source));
+});
+
 test("NiralScript annotated syntax and optional expressions emit on both targets", async () => {
   const source = 'input data: { label: string } | null\nstate count: number = 2\nconst twice = (value: number): number => value * 2\nfunction increment(value: number): number { count += value; return count }\nconst label: string = data?.label ?? "none"\nconst kind: string = typeof count';
   const output = compileStandalone(source);

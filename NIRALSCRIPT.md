@@ -459,12 +459,21 @@ projects field/element types; imports preserve annotated signatures. Invalid
 contracts report NRS080 (NIRAL080 in components) at original source locations.
 Missing returns are checked conservatively across branches and try/finally.
 
+Statically named `push`, `unshift`, `splice` and `fill` calls on known typed
+array receivers check every inserted value against the element contract.
+`splice` and `fill` also check numeric positions and required arguments; optional
+positions accept `undefined`, and `fill` accepts at most three arguments. Simple
+aliases, record fields, annotated parameters/returns and literal bracket method
+names retain these checks. Array unions must satisfy every array member's
+contract. Unannotated arrays remain dynamic even beside other typed declarations.
+
 This is gradual checking, not a sound replacement for TypeScript or validation
 of incoming data. `unknown` is deliberately permissive, including unannotated
 host globals, server results and complex method calls. Input annotations do not
 validate supplied values. No control-flow narrowing, type aliases, interfaces,
 user generics, function-type syntax, casts, exhaustive callback signatures or
-general collection-mutator checks are implemented. Inferred unannotated values
+general collection-method checks are implemented. Dynamic method selection and
+detached methods are not covered by the array checks. Inferred unannotated values
 can change dynamically; escaping aliases and unknown host calls remain outside
 static guarantees. Type annotations do not grant derived-method approval or
 weaken readonly/effect/initialization checks. There is no runtime type coercion.

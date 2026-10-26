@@ -300,8 +300,8 @@ compilation.
   skipLibCheck, including standard library reads/parsing. No incremental reuse or
   process startup. Also asserts nine diagnostic probes covering annotated values,
   records, arguments, async returns, optional/nullish access, names and effects.
-  It explicitly tests a remaining NiralScript gap: wrong-type array-mutator
-  arguments accepted by gradual checking but rejected by strict TypeScript.
+  Wrong-type insertion into an annotated array is rejected by both NiralScript
+  and strict TypeScript; unannotated NiralScript values remain dynamic.
 - `node bench/niralscript.js language`: direct JavaScript vs TypeScript vs
   NiralScript with identical function bodies for numeric aggregation, record
   processing, strings and async/await. No components or reactive operations.

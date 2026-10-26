@@ -3,13 +3,15 @@
   import SiteFooter from "../components/SiteFooter.niral"
   import Seo from "../components/Seo.niral"
   const seoTitle = "NiralScript | Independent Frontend Language by ZyoraLabs"
-  const description = "Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration."
-  const example = '<script lang="niralscript">\n  state count = 0\n  derive doubled = count * 2\n</script>\n\n<button on:click={() => count += 1}>Increase</button>\n<p>{count} doubled is {doubled}</p>'
+  const description = "Explore NiralScript: an independent frontend language with reactive state, gradual types, async functions, standalone JavaScript compilation and verified JS/TS benchmarks."
+  const example = '<script lang="niralscript">\n  state count: number = 0\n  derive doubled: number = count * 2\n</script>\n\n<button on:click={() => count += 1}>Increase</button>\n<p>{count} doubled is {doubled}</p>'
+  const typedExample = 'state items: number[] = []\n\nitems.push(1, 2)\nitems.unshift(0)\nitems.splice(1, 1, 3)\nitems.fill(4, 1)\n\nitems.push("bad")\n// Compile error: Expected number, received string'
+  const standaloneExample = 'input initial: number\nstate count: number = initial\nderive doubled: number = count * 2\n\nexport function increment(): number {\n  count += 1\n  return doubled\n}'
 </script>
 
 <head>
   <title>NiralScript | Independent Frontend Language by ZyoraLabs</title>
-  <meta name="description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta name="description" content="Explore NiralScript: an independent frontend language with reactive state, gradual types, async functions, standalone JavaScript compilation and verified JS/TS benchmarks." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/niralscript" />
@@ -17,13 +19,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Niral" />
   <meta property="og:title" content="NiralScript | Independent Frontend Language by ZyoraLabs" />
-  <meta property="og:description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta property="og:description" content="Explore NiralScript: an independent frontend language with reactive state, gradual types, async functions, standalone JavaScript compilation and verified JS/TS benchmarks." />
   <meta property="og:url" content="https://niral.site/niralscript" />
   <meta property="og:image" content="https://niral.site/n.png" />
   <meta property="og:image:alt" content="Niral web framework logo" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="NiralScript | Independent Frontend Language by ZyoraLabs" />
-  <meta name="twitter:description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta name="twitter:description" content="Explore NiralScript: an independent frontend language with reactive state, gradual types, async functions, standalone JavaScript compilation and verified JS/TS benchmarks." />
   <meta name="twitter:image" content="https://niral.site/n.png" />
   <meta name="twitter:image:alt" content="Niral web framework logo" />
 </head>
@@ -37,11 +39,11 @@
       <p class="eyebrow">ZYORALABS / LANGUAGE DEVELOPMENT</p>
       <h1>NiralScript<span>.</span></h1>
       <p class="lead">An independent frontend language.<br />Niral is the first integration.</p>
-      <p class="opening">Express more with less code. Make the browser do only the necessary work. NiralScript is a compiler-first language being built around explicit reactive state and targeted updates.</p>
+      <p class="opening">Explicit reactive state, gradual types and ordinary JavaScript output. NiralScript has its own parser, semantic checker and standalone compiler, with zero runtime dependencies.</p>
       <dl class="identity">
         <div><dt>Language extension</dt><dd>.nrs</dd></div>
         <div><dt>First framework</dt><dd>Niral</dd></div>
-        <div><dt>Current stage</dt><dd>Experimental prototype</dd></div>
+        <div><dt>Current stage</dt><dd>Experimental language</dd></div>
       </dl>
     </header>
 
@@ -50,35 +52,102 @@
       <div class="section-content">
         <h2 id="language-title">Its own language.<br />Not another component extension.</h2>
         <p><code>.nrs</code> belongs to NiralScript. <code>.niral</code> remains Niral's component format, bringing together templates, styles and server code. They have different responsibilities.</p>
-        <p>The language core has its own directory, parser, scanner and diagnostics, with zero runtime dependencies and no imports from the Niral framework. A separate Niral adapter turns its declarations into Niral's existing reactive code.</p>
+        <p>The language core has its own directory, parser, scanner, type checker and diagnostics, with no imports from the Niral framework. Its standalone compiler emits JavaScript ES modules. A separate Niral adapter connects the language to Niral's fine-grained runtime.</p>
         <p>Niral comes first. Other framework targets, including React for Next.js, are planned. They are not available integrations today.</p>
       </div>
     </section>
 
     <section class="editorial" aria-labelledby="example-title">
-      <p class="section-label"><span>02</span> THE FIRST PROTOTYPE</p>
+      <p class="section-label"><span>02</span> REACTIVE BY DESIGN</p>
       <div class="section-content">
         <h2 id="example-title">State, then what follows.</h2>
-        <p><code>state</code> declares a reactive value. <code>derive</code> declares a value computed from it. In the current Niral prototype, updating the count also updates its doubled value through the existing fine-grained runtime.</p>
+        <p><code>state</code> declares a reactive value. <code>derive</code> declares a value computed from it. Updating the count updates its doubled value through Niral's fine-grained runtime. Optional annotations check the values before JavaScript is emitted.</p>
         <figure class="code-example">
-          <figcaption><span>counter.niral</span><span>Embedded prototype</span></figcaption>
+          <figcaption><span>counter.niral</span><span>Typed reactive state</span></figcaption>
           <pre tabindex="0" aria-label="NiralScript counter example"><code>{example}</code></pre>
         </figure>
-        <p class="example-note">This example describes the local compiler prototype, not a published language release. Scripts can live inside a <code>.niral</code> component or a separate <code>.nrs</code> file, with named imports from other <code>.nrs</code> modules.</p>
+        <p class="example-note">Scripts can live inside a <code>.niral</code> component or a separate <code>.nrs</code> file, with named imports from other <code>.nrs</code> modules. NiralScript remains experimental; these results do not establish a stable language release.</p>
         <a class="text-link" href="/docs/reactivity">Explore Niral reactivity <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/arrow-up-right.svg" alt="" width="18" height="18" /></a>
       </div>
     </section>
 
-    <section class="editorial closing" aria-labelledby="status-title">
-      <p class="section-label"><span>03</span> DEVELOPMENT STATUS</p>
+    <section class="editorial" aria-labelledby="status-title">
+      <p class="section-label"><span>03</span> IMPLEMENTED & TESTED</p>
       <div class="section-content">
-        <h2 id="status-title">A working foundation.<br />A language taking shape.</h2>
+        <h2 id="status-title">Six milestones.<br />One independent language.</h2>
         <div class="milestones">
-          <div><h3>Implemented locally</h3><p>Independent expression and statement parsing, lexical scopes, functions, reactive declarations and semantic diagnostics. Named module imports and constant/function exports retain isolated scopes.</p></div>
-          <div><h3>Niral integration</h3><p>Inline and external scripts work in dev, builds and SSR. Transitive imports participate in reloads, release hashes and client-source privacy checks.</p></div>
-          <div><h3>Tooling</h3><p>A standalone check-only CLI and shared checking API are implemented locally. Dedicated editor support and additional framework targets remain deferred.</p></div>
+          <div><h3>01 / Semantic safeguards</h3><p>Lexical scopes, unresolved-name diagnostics, initialization checks, readonly inputs and derived-effect safeguards. Named modules retain isolated scopes and original error locations.</p></div>
+          <div><h3>02 / Inputs & server data</h3><p>Typed inputs connect route and loader data to components. SSR and hydration preserve instance state; server code remains on the server.</p></div>
+          <div><h3>03 / Collections & callbacks</h3><p>Arrow functions, array and object patterns, spread expressions, braced for-of loops and supported collection callbacks work with the shared semantic pipeline.</p></div>
+          <div><h3>04 / Async & errors</h3><p>Async functions and arrows, await, throw and try/catch/finally preserve return, rejection and cleanup behavior. Async RPC flows are tested in dev and production builds.</p></div>
+          <div><h3>05 / Standalone compilation</h3><p>A checking API and check/compile CLI emit independent ES modules, bundle named module graphs and produce source maps with original sources and imported error locations.</p></div>
+          <div><h3>06 / Gradual types</h3><p>Primitives, unions, arrays, structural records and Promise types check annotated values, arguments and returns. Optional chaining, nullish coalescing and typeof are supported.</p></div>
         </div>
         <p>Existing JavaScript, TypeScript and JSX/TSX support in Niral stays intact. NiralScript is an additional language direction, not a replacement for those workflows.</p>
+      </div>
+    </section>
+
+    <section class="editorial" aria-labelledby="types-title">
+      <p class="section-label"><span>04</span> TYPED COLLECTIONS</p>
+      <div class="section-content">
+        <h2 id="types-title">Catch the wrong value.<br />Before it reaches the array.</h2>
+        <p>Statically named <code>push</code>, <code>unshift</code>, <code>splice</code> and <code>fill</code> calls now check every inserted value against a known array element type. Position arguments and required argument counts are checked too.</p>
+        <figure class="code-example">
+          <figcaption><span>collections.nrs</span><span>Gradual type checking</span></figcaption>
+          <pre tabindex="0" aria-label="Typed array mutation example"><code>{typedExample}</code></pre>
+        </figure>
+        <p>Simple aliases, typed record fields, annotated parameters and returns, and literal bracket method names retain these checks. Unannotated arrays remain dynamic. Unknown host values remain permissive.</p>
+        <p class="example-note">Verified locally on 26 October 2026: 45 language tests, all nine JS/TS/NRS diagnostic probes and the full standard release suite pass. This array-checking change is newer than the hosted benchmark run below.</p>
+      </div>
+    </section>
+
+    <section class="editorial" aria-labelledby="standalone-title">
+      <p class="section-label"><span>05</span> BEYOND COMPONENTS</p>
+      <div class="section-content">
+        <h2 id="standalone-title">A .nrs file.<br />An ordinary JavaScript module.</h2>
+        <p>The standalone compiler does not need a Niral application. Its generated ES module exposes <code>createInstance</code>, with isolated inputs and state, value accessors and input updates. A small included reactive runtime caches derived values; hosts can supply their own compatible runtime.</p>
+        <figure class="code-example">
+          <figcaption><span>counter.nrs</span><span>Standalone source</span></figcaption>
+          <pre tabindex="0" aria-label="Standalone NiralScript source"><code>{standaloneExample}</code></pre>
+        </figure>
+        <p>Type annotations are erased. Version 3 source maps retain original module sources. The CLI checks import boundaries and refuses to overwrite existing output files.</p>
+      </div>
+    </section>
+
+    <section class="editorial" aria-labelledby="comparison-title">
+      <p class="section-label"><span>06</span> JS / TS / NRS</p>
+      <div class="section-content">
+        <h2 id="comparison-title">Comparable execution.<br />Measured, not assumed.</h2>
+        <p>GitHub Actions ran identical function bodies in JavaScript, TypeScript and NiralScript across four workloads. All correctness checks passed. These are direct language tests, without components or reactive operations.</p>
+        <div class="results-scroll" role="region" aria-label="Language benchmark results" tabindex="0">
+          <table>
+            <caption>Microseconds per complete function call. Median of three process medians.</caption>
+            <thead><tr><th scope="col">Runner / workload</th><th scope="col">JS</th><th scope="col">TS</th><th scope="col">NRS</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Node 22 / 10,000 numbers</th><td>9.436</td><td>9.442</td><td>9.430</td></tr>
+              <tr><th scope="row">Node 22 / 1,000 records</th><td>1.310</td><td>1.303</td><td>1.313</td></tr>
+              <tr><th scope="row">Node 22 / 1,000 strings</th><td>37.066</td><td>37.346</td><td>37.632</td></tr>
+              <tr><th scope="row">Node 22 / 100 awaits</th><td>7.186</td><td>6.708</td><td>6.646</td></tr>
+              <tr><th scope="row">Node 24 / 10,000 numbers</th><td>7.476</td><td>7.469</td><td>7.420</td></tr>
+              <tr><th scope="row">Node 24 / 1,000 records</th><td>1.165</td><td>1.235</td><td>1.154</td></tr>
+              <tr><th scope="row">Node 24 / 1,000 strings</th><td>35.306</td><td>35.336</td><td>35.523</td></tr>
+              <tr><th scope="row">Node 24 / 100 awaits</th><td>5.716</td><td>5.779</td><td>5.768</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="example-note">Ubuntu 24.04 x64, TypeScript 5.7.3, 30 warmups and 12 rotated rounds per process. Compilation, module loading and instance setup are excluded from execution timings. NiralScript and TypeScript both emit JavaScript running on the same V8 engine.</p>
+        <p class="example-note">The Node 22 runner used AMD EPYC 7763; Node 24 used AMD EPYC 9V74. Compare languages within each runner, not Node versions. These four workloads establish neither a universal speed winner nor complete TypeScript type-system or tooling parity.</p>
+        <a class="text-link" href="https://github.com/Zyora-Dev/niral/actions/runs/40311729249">View the verified GitHub Actions run</a>
+        <p class="example-note">Tested commit: <code>59d721b</code>. All six hosted jobs passed: Node 22/24 language comparisons and Linux/Windows release checks. Hosted results predate the typed-array follow-up.</p>
+      </div>
+    </section>
+
+    <section class="editorial closing" aria-labelledby="limits-title">
+      <p class="section-label"><span>07</span> CURRENT BOUNDARIES</p>
+      <div class="section-content">
+        <h2 id="limits-title">The limits are explicit.</h2>
+        <p>Gradual types are not runtime validation. There is no control-flow narrowing, type aliases, interfaces, user generics, function-type syntax or casts. Dynamic or detached array methods, exhaustive callback signatures and escaping aliases remain outside the current checking guarantees.</p>
+        <p>A dedicated NiralScript editor extension, compile watch mode and additional framework adapters remain future work. The language is experimental, and the measured runtime results are not a claim of complete JavaScript or TypeScript compatibility.</p>
         <div class="links"><a class="text-link" href="/about">About ZyoraLabs</a><a class="text-link" href="/contact">Talk to us about NiralScript</a></div>
       </div>
     </section>
@@ -94,7 +163,7 @@
   h1, h2, h3, p, dl, figure { margin: 0; }
   a { color: inherit; text-decoration: none; }
   a:hover { color: var(--gold); }
-  a:focus-visible, pre:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+  a:focus-visible, pre:focus-visible, .results-scroll:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
   .skip-link { position: absolute; top: -60px; left: 16px; z-index: 50; background: var(--gold); color: #090909; padding: 10px 16px; }
   .skip-link:focus { top: 12px; }
   .introduction { padding-top: 56px; }
@@ -126,6 +195,13 @@
   .milestones > div { border-top: 2px solid var(--gold); padding-top: 20px; }
   h3 { font-size: 16px; font-weight: 550; margin-bottom: 12px; }
   .milestones p { font-size: 14px; }
+  .results-scroll { max-width: 100%; overflow-x: auto; margin-block: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; font-size: 14px; padding-bottom: 16px; }
+  th, td { padding: 14px 10px; border-bottom: 1px solid #414144; text-align: right; }
+  thead th { color: var(--gold); font-weight: 500; }
+  th:first-child { text-align: left; }
+  tbody th { font-weight: 400; }
   .links { display: flex; flex-wrap: wrap; gap: 24px; }
   .closing { padding-bottom: 80px; }
   @media (max-width: 1000px) { .editorial { grid-template-columns: 160px minmax(0, 1fr); gap: 32px; } .milestones { grid-template-columns: 1fr; } }
