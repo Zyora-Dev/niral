@@ -39,6 +39,7 @@ import { activateRelease } from "../server/recover.js";
 import { isPrivatePath } from "../server/security.js";
 
 const FRAMEWORK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const NIRALSCRIPT_DIR = resolve(FRAMEWORK_DIR, "..", "niralscript");
 // data/ = server-side private storage (sqlite files etc.) — NEVER shipped or served
 const SKIP_STATIC = new Set(["routes", "dist", "node_modules", "data", "migrations", "tests", "deploy"]);
 // server-only project files — never shipped as public static assets
@@ -69,6 +70,7 @@ export function build({ root = ".", out } = {}) {
   }
 
   const modules = new Map(); // srcRel → { source, code, ast, deps: [childSrcRel] }
+  const languageSources = new Map();
   const SPECIALS = ["_404.niral", "_error.niral"].filter((f) => existsSync(join(dir, "routes", f)));
   const queue = [
     ...routes.map((r) => "routes/" + r.rel),
@@ -93,6 +95,8 @@ export function build({ root = ".", out } = {}) {
       const depth = srcRel.split("/").length - 1;
       ({ code } = compileClient(source, {
         filename: srcRel,
+        root: dir,
+        onSource: input => languageSources.set(relative(dir, input.filename).split(sep).join("/"), input.source),
         runtime: "../".repeat(depth) + "@niral/runtime/index.js",
         moduleId: "/" + srcRel,
       }));
@@ -129,9 +133,11 @@ export function build({ root = ".", out } = {}) {
   /* ── content hash over every input ── */
   const hasher = createHash("sha256");
   for (const rel of [...modules.keys()].sort()) hasher.update(rel).update("\0").update(modules.get(rel).source);
+  for (const [rel, source] of [...languageSources].sort(([left], [right]) => left.localeCompare(right))) hasher.update(rel).update("\0").update(source);
   for (const f of publicFiles) hasher.update(f).update("\0").update(readFileSync(join(dir, f)));
   for (const [rel, source] of [...endpointFiles].sort(([left], [right]) => left.localeCompare(right))) hasher.update(rel).update("\0").update(source);
   for (const file of staticFiles(FRAMEWORK_DIR)) hasher.update(`framework/${file}`).update("\0").update(readFileSync(join(FRAMEWORK_DIR, file)));
+  for (const file of staticFiles(NIRALSCRIPT_DIR)) hasher.update(`niralscript/${file}`).update("\0").update(readFileSync(join(NIRALSCRIPT_DIR, file)));
   hasher.update(shell);
   let hash = hasher.digest("hex").slice(0, 12);
 

@@ -348,6 +348,7 @@ export function registerCliTests(test) {
     withInstallation(({ framework, execute }) => {
       writeFramework(framework, readFileSync(cli, "utf8"));
       cpSync(new URL("../src/", import.meta.url), join(framework, "src"), { recursive: true });
+      cpSync(new URL("../niralscript/", import.meta.url), join(framework, "niralscript"), { recursive: true });
       cpSync(new URL("../installer/create-niral/", import.meta.url), join(framework, "installer", "create-niral"), { recursive: true });
       mkdirSync(join(framework, ".git"));
       const result = execute(join(framework, "bin", "niral.js"), ["update"]);

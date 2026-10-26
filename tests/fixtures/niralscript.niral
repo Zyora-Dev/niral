@@ -1,0 +1,47 @@
+<server>
+  export async function ping() { return "pong"; }
+</server>
+
+<script lang="niralscript">
+  state count = 0
+  derive doubled = count * 2
+  state draft = ""
+  state items = []
+  derive total = items.length
+  state reply = ""
+
+  function next(count) {
+    return count + 1
+  }
+  function increment() {
+    const value = next(count)
+    count = value
+    return count
+  }
+  function reset() {
+    count = 0
+  }
+  function addItem() {
+    const text = draft.trim()
+    if (!text) { return }
+    items = items.concat([{ id: items.length, text }])
+    draft = ""
+  }
+  function requestPing() {
+    return ping()
+  }
+</script>
+
+<h1>NiralScript</h1>
+<button on:click={increment}>Increase</button>
+<button on:click={reset}>Reset</button>
+<output id="count">{count}</output>
+<output id="doubled">{doubled}</output>
+
+<label>Draft <input bind:value={draft} /></label>
+<button disabled={!draft.trim()} on:click={addItem}>Add item</button>
+<output id="total">{total}</output>
+<ul>{#for item of items key item.id}<li>{item.text}</li>{/for}</ul>
+
+<button on:click={async () => reply = await requestPing()}>Ping server</button>
+<output id="reply">{reply}</output>

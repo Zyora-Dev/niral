@@ -16,10 +16,10 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const PRIVATE_SEGMENTS = new Set(["data", "migrations", "tests", "deploy", "dist", "node_modules"]);
 
-export function isPrivatePath(path) {
+export function isPrivatePath(path, { allowNiralScript = false } = {}) {
   return path.split(/[/\\]/).some((part) => {
     const name = part.toLowerCase();
-    return name.startsWith(".") || PRIVATE_SEGMENTS.has(name) || /^(hooks|jobs)\.js$|\.env$|\.server\.(js|mjs|ts)$/.test(name);
+    return name.startsWith(".") || PRIVATE_SEGMENTS.has(name) || /^(hooks|jobs)\.js$|\.env$|\.server\.(js|mjs|ts|nrs)$/.test(name) || (!allowNiralScript && name.endsWith(".nrs"));
   });
 }
 

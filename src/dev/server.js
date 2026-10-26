@@ -69,9 +69,11 @@ export function errorPayload(e) {
 }
 
 /** Compile a .niral file for the dev server, wrapping the export for HMR. */
-export function compileForDev(source, urlPath, editor = null) {
+export function compileForDev(source, urlPath, editor = null, root) {
   const { code, ast } = compileClient(source, {
     filename: urlPath,
+    root,
+    sourceFile: root ? join(root, urlPath) : undefined,
     runtime: RUNTIME_PATH,
   });
   // Wrap the default export so every live instance registers with the HMR client.
@@ -160,7 +162,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
     const { route, params } = match;
     let entry;
     try {
-      entry = await loadComponent(route.file);
+      entry = await loadComponent(route.file, [], dir);
     } catch {
       return false; // compile errors take the normal (overlay) path
     }
@@ -175,13 +177,13 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
     const layouts = layoutChain(routesDir, route.rel);
     devtools.route(route, layouts);
     const layoutEntries = [];
-    for (const l of layouts) layoutEntries.push(await loadComponent(l.abs));
+    for (const l of layouts) layoutEntries.push(await loadComponent(l.abs, [], dir));
     const styleParts = [];
     for (const l of layouts) {
-      const css = await collectCss(l.abs);
+      const css = await collectCss(l.abs, dir);
       if (css) styleParts.push(css);
     }
-    const pageCss = await collectCss(route.file);
+    const pageCss = await collectCss(route.file, dir);
     if (pageCss) styleParts.push(pageCss);
     const heads = [...layoutEntries, entry].map((x) => x.ast?.head?.raw).filter(Boolean).join("\n");
 
@@ -198,7 +200,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
       let props = await loadAllProps(route, layouts, params, store, locals);
       const i18nBoot = i18nFor(cookieHeader, accept);
       if (i18nBoot) props = { locale: i18nBoot.locale, ...props };
-      const { fn, ast } = await preparePage(route.file, layouts.map((l) => l.abs), i18nBoot);
+      const { fn, ast } = await preparePage(route.file, layouts.map((l) => l.abs), i18nBoot, dir);
       const hydrate =
         (ast.script?.attrs?.mode ?? "client") === "client"
           ? hydrationScript("/routes/" + route.rel, props, {
@@ -303,7 +305,7 @@ export function createDevServer({ root = ".", port = 5199, watch: watchFiles = t
       if (extraProps) props = { ...props, ...extraProps };
       if (i18nBoot) props = { locale: i18nBoot.locale, ...props };
       if (store.dirty) setCookie = sessionCookie(store, sessionSecret);
-      ({ html, ast, layoutAsts } = await renderPage(route.file, props, layouts.map((l) => l.abs), i18nBoot));
+      ({ html, ast, layoutAsts } = await renderPage(route.file, props, layouts.map((l) => l.abs), i18nBoot, dir));
     } catch (e) {
       if (e instanceof AuthRequiredError) {
         // <server auth> — send the visitor to log in, remembering where they were
@@ -334,10 +336,10 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     const mode = ast.script?.attrs?.mode ?? "client";
     const styleParts = [];
     for (const l of layouts) {
-      const css = await collectCss(l.abs);
+      const css = await collectCss(l.abs, dir);
       if (css) styleParts.push(css);
     }
-    const pageCss = await collectCss(route.file);
+    const pageCss = await collectCss(route.file, dir);
     if (pageCss) styleParts.push(pageCss);
     const styles = styleParts.join("\n");
     const heads = renderHead(
@@ -379,8 +381,8 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     const file = join(routesDir, name);
     if (!existsSync(file)) return null;
     try {
-      const { html, ast } = await renderFile(file, props);
-      const css = await collectCss(file);
+      const { html, ast } = await renderFile(file, props, dir);
+      const css = await collectCss(file, dir);
       const head =
         (ast.head?.raw ? ast.head.raw + "\n" : "") +
         (css ? `<style data-niral-style>\n${css}\n</style>` : "");
@@ -410,17 +412,17 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       const i18nBoot = i18nFor(cookieHeader, accept);
       if (i18nBoot) props = { locale: i18nBoot.locale, ...props };
       const setCookie = store.dirty ? sessionCookie(store, sessionSecret) : null;
-      const page = await loadComponent(route.file);
+      const page = await loadComponent(route.file, [], dir);
       const styleParts = [];
       for (const l of layouts) {
-        const css = await collectCss(l.abs);
+        const css = await collectCss(l.abs, dir);
         if (css) styleParts.push(css);
       }
-      const pageCss = await collectCss(route.file);
+      const pageCss = await collectCss(route.file, dir);
       if (pageCss) styleParts.push(pageCss);
       const layoutHeads = [];
       for (const l of layouts) {
-        const lc = await loadComponent(l.abs);
+        const lc = await loadComponent(l.abs, [], dir);
         if (lc.ast.head?.raw) layoutHeads.push(lc.ast.head.raw);
       }
       if (page.ast.head?.raw) layoutHeads.push(page.ast.head.raw);
@@ -660,7 +662,7 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
       const source = readFileSync(file, "utf8");
       try {
         const editor = localDevtoolsRequest(req) ? `vscode://file${pathToFileURL(file).pathname}` : null;
-        return send(res, 200, "text/javascript; charset=utf-8", compileForDev(source, urlPath, editor));
+        return send(res, 200, "text/javascript; charset=utf-8", compileForDev(source, urlPath, editor, dir));
       } catch (e) {
         if (e instanceof NiralError) return send(res, 200, "text/javascript; charset=utf-8", errorModule(errorPayload(e)));
         throw e;
@@ -714,10 +716,11 @@ window.__NIRAL_HMR__.error(${jsonInScript(errorPayload(e))});
     let reload = false;
     for (const rel of changed) {
       const abs = join(dir, rel);
+      if (/\.nrs$/i.test(rel)) { reload = true; continue; }
       if (!existsSync(abs) || statSync(abs).isDirectory()) continue;
       if (/\.(niral|jsx|tsx)$/.test(rel)) {
         try {
-          const { ast } = compileClient(readFileSync(abs, "utf8"), { filename: rel, runtime: RUNTIME_PATH });
+          const { ast } = compileClient(readFileSync(abs, "utf8"), { filename: rel, root: dir, runtime: RUNTIME_PATH });
           if (ast.style) {
             // the page's hoisted <style> can't hot-swap — styled components reload
             reload = true;

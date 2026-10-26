@@ -43,8 +43,8 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
   function publishDiagnostics(uri) {
     const text = docs.get(uri);
     if (text == null) return;
-    const filename = uri.split("/").pop() ?? "file.niral";
-    notify("textDocument/publishDiagnostics", { uri, diagnostics: validate(text, filename) });
+    const filename = uri.startsWith("file:") ? fileURLToPath(uri) : uri.split("/").pop() ?? "file.niral";
+    notify("textDocument/publishDiagnostics", { uri, diagnostics: validate(text, filename, { root: projectRoot(filename) }) });
   }
 
   function scheduleTypes() {
@@ -72,7 +72,7 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
       for (const [uri, text] of docs) {
         if (!uri.startsWith("file:")) continue;
         const filename = fileURLToPath(uri);
-        const diagnostics = validate(text, filename);
+        const diagnostics = validate(text, filename, { root: projectRoot(filename) });
         if (!diagnostics.length) {
           for (const error of projects.get(projectRoot(filename)) ?? []) {
             if (error.file !== filename) continue;

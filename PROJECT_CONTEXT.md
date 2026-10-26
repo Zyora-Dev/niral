@@ -22,6 +22,179 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- NiralScript modules (2026-10-26, local): independent graph linker, named imports
+  and aliases, const/function exports, isolated scopes and cross-module semantic
+  checks implemented. Guarded filesystem imports feed existing SSR/build source
+  tracking; private/server .nrs files cannot be client dependencies. 26 language,
+  6 release and 2 focused Chromium tests pass, including multi-file dev/production
+  components and transitive browser reload. Isolated-core module loading, import
+  terminators and eager-read/RPC isolation checks pass. Full standard local release
+  gate passes, including browser/forms and both offline installer flows. Compiler
+  diagnostics and whitespace checks clean; Windows/extended gates not run here.
+  See latest PROGRESS.md checkpoint for limits; no production changes.
+
+- Post-optimization comparison rerun (2026-10-26, local): all three unchanged
+  bench/niralscript.js modes pass. Fresh JS/TS/NRS compile medians ms:
+  counter .0222/.0316/.0433, 100 pairs .5930/6.4454/.8371,
+  1,000 rows 1.4071/5.4329/2.8518. TS means Niral stripping, not tsc.
+  JS fastest; NRS faster than this TS pipeline on larger fixtures, with all NRS
+  checks retained. SSR/browser behavior parity passes; no consistent runtime
+  winner. TS5.7.3 fresh strict-check medians 87.40/90.83/157.70 ms include library
+  reads/parsing, not comparable to NRS checking. Three diagnostic probes confirm
+  distinct name/effect versus type guarantees. Full tables/caveats in PROGRESS.md.
+  No compiler/runtime changes; full release gate passed in preceding checkpoint.
+
+- NiralScript tokenizer optimization (2026-10-26, local): profile-led first-character
+  dispatch skips irrelevant regex/comment probes while retaining Unicode trivia,
+  token spans and all semantic passes. Unchanged benchmark NRS medians before/after
+  ms: counter .0376/.0401, 100 pairs .8569/.8417, 1,000 rows 3.8726/2.8851.
+  Data-heavy compilation takes about 25.5% less time; no clear small-fixture gain
+  or runtime-speed claim. Output sizes/SSR/backend parity unchanged. 23 language
+  tests, build/release integration tests and the full standard local release gate
+  pass (including browser/forms and packaged installer smoke tests). Diagnostics
+  and whitespace checks clean. No caching, runtime, dependency or production
+  changes. Details and caveats in PROGRESS.md.
+
+- Three-language benchmark (2026-10-26, local): bench/niralscript.js now compares
+  NiralScript/JS/annotated TS using balanced 12-round batches; browser and types
+  modes reuse existing Playwright and TypeScript installations. Final JS/TS/NRS
+  compile medians ms: counter .0211/.0313/.0401, 100 pairs .5882/6.4463/.8701,
+  1,000 rows 1.4717/5.5424/3.7612. TS here is Niral's stripping pipeline, not tsc.
+  Chromium hydration/update and SSR parity pass; no consistent runtime winner.
+  Separate fresh TS5.7.3 strict/noEmit program medians81.77/89.70/137.85 ms include
+  standard library reads/parsing, not incremental/editor timing. Diagnostic probes
+  distinguish NRS name/effect checks from TS type checks. All modes and 22 language
+  tests pass; no compiler/runtime/dependency/production changes. Full gate was
+  earlier for direct backend, not rerun for benchmark-only work. README commands
+  and PROGRESS full tables document scope and limitations.
+
+- NiralScript direct runtime backend (2026-10-26, local): compileClient now feeds
+  the independent parsed/analyzed NRS AST into runtime emission, skipping rune
+  discovery/import hoisting/script rewriting. Metadata comes from resolved bindings;
+  source-span edits preserve syntax and scope. Lowering APIs remain rune-compatible;
+  returned component AST retains original NRS script text. JS/TS/JSX/TSX/template
+  pipelines unchanged. 22 tests and benchmark parity pass, diagnostics clean.
+  Same-process paired script backends direct/via-JS ms: .0174/.0248, .3718/.5085,
+  2.9064/3.6869 (counter/100 pairs/1,000 rows), 21-30% less script compilation time.
+  Full NRS component compile .0405/.8540/3.6526 ms, still 1.40-2.53x handwritten
+  Niral JS in this run. No runtime-speed claim. Six build/release tests and full
+  release gate pass, including browser/forms and both offline installer smoke
+  checks. Windows CI not run; no production/dependency changes.
+  Details and limitations in PROGRESS.md.
+
+- NiralScript compiler optimization (2026-10-25, local): CPU profile identified
+  reflective AST traversal as the largest hotspot. Explicit node dispatch replaces
+  repeated entries/filter/flatMap and values enumeration without removing semantic
+  passes or mutating the AST. 21 language tests pass, including new nested traversal
+  regressions. Unchanged benchmark compile medians: 0.0471/1.0133/4.4005 ms for
+  counter/100 state-derive pairs/1,000 rows, versus earlier 0.0596/1.5263/7.7152 ms.
+  Separate-run comparison only; output parity and raw/gzip sizes preserved. Six
+  build/release tests and full npm run test:release PASS, including browser/forms
+  and both offline installer checks. Windows CI not run. No dependencies or
+  production changes. See PROGRESS.md for timing methodology and limitations.
+
+- NiralScript benchmark (2026-10-25, local): `node bench/niralscript.js` compares
+  warm compilation/string SSR and generated raw/gzip sizes against handwritten
+  Niral JS, with parity assertions and 11 alternating batches. Apple M1/Node25.6.1:
+  compile medians NRS/JS counter 0.0596/0.0221 ms, 100 state/derive pairs
+  1.5263/0.6076 ms, 1,000 inline-data rows 7.7152/1.4984 ms. SSR essentially equal
+  in this run (ratios 0.98-1.05); no cross-framework/runtime-speed claim. All 26
+  language/release tests and both Chromium scenarios freshly pass. See PROGRESS.md
+  for methodology, sizes and limitations. No compiler/dependency/production changes.
+
+- NiralScript integration (2026-10-25, LOCAL VERIFIED; supersedes pending items in
+  earlier milestones below): bounded derived effects/cycles, readonly-alias and
+  eager captured-read checks implemented. Intrinsic policies live in the adapter;
+  arbitrary host purity and function-return aliases are not proven. External .nrs
+  instance scripts work through guarded relative src loading in dev/build/SSR,
+  source-byte cache/hash invalidation and full reload on external changes. Raw
+  .nrs files are private; external diagnostics preserve file/range and component
+  LSP links them. Process aliases/computed access are rejected. 20 language tests,
+  6 release/build tests and two focused Chromium scenarios pass. Full local
+  npm run test:release PASS including all browser/forms and installer smoke tests.
+  Windows CI not run; no deployment/publication/deps/commit/push. Module imports,
+  exports, standalone tooling and React/Next.js remain pending. See NIRALSCRIPT.md
+  for supported rules and explicit semantic limitations.
+
+- NiralScript statements/scopes (2026-10-25, local): functions/nested closures,
+  parameters, let/const, blocks, if/else, assignments, calls and return implemented.
+  Independent analysis.js resolves explicit globals and lexical bindings; Niral
+  passes RPC names and renames nested bindings before reactive rewriting.
+  Duplicate/unresolved names, direct eager use-before-initialization and immutable
+  writes have source-spanned diagnostics. Sixteen language checks pass including
+  executed SSR; editor diagnostics clean. Five release checks and main255/255
+  pass; focused Chromium dev/production passes with named handlers, shadowing,
+  hydration, state, bindings, keyed lists and RPC. Full release/Windows CI not
+  rerun. Derived purity/cycles, indirect mutation and
+  interprocedural initialization remain incomplete; external .nrs and other
+  targets remain pending. Supersedes older statements/scopes-pending notes.
+  No production changes, dependencies, publication, commit or push.
+
+- NiralScript expression parser (2026-10-25, local): independent expressions.js
+  builds precedence-aware ASTs for validated initializers, retaining raw/trivia
+  for compatible Niral emission. Covers literals, collections, calls/members,
+  conditionals and nested templates; rejects unsupported syntax with NRS071 /
+  mapped NIRAL071 and original spans. Verified: 13 language tests, 5 release
+  tests, main255/255 and focused Chromium dev/production scenario all pass.
+  Full release/Windows CI not rerun. Supersedes older RawExpression-only notes.
+  Functions, statement/scope/semantic analysis and external .nrs remain pending.
+  No production changes, publication, dependencies, commit or push.
+
+- NiralScript website page (2026-10-25, deployed and verified): `/niralscript`
+  describes the independent language, embedded prototype and planned integrations.
+  Shared header/footer and sitemap updated. All three docs SEO tests pass with
+  Chromium, including 390/1024/1440 layouts and mobile menu; screenshots reviewed.
+  Published at https://niral.site/niralscript with four website files only;
+  local language/compiler changes are not deployed. Node22.23.3 unchanged.
+  No package publication, commit or push.
+  Staging now passes on the existing production runtime: releaseba264ec1f6f4,
+  28 sitemap pages, 10 assets, privacy checks and integrity59/59. Private rollback
+  checkpoint is `/root/niral-upgrade-checkpoints/20261025-niralscript`. Live
+  build matches stage, activated16:12:27UTC (PID88688,NRestarts0). App/watchdog/
+  nginx active; origin/public health, pages, navigation, sitemap and language
+  asset200. Public390/1440 browser checks pass for title/canonical, fonts/images
+  and overflow. Logs healthy; environment byte-identical and old85a914d39113
+  retained. Data/config/framework untouched. Staging copy retained privately.
+
+- NiralScript directory separation (2026-10-25, local): independent core is now
+  root-level `niralscript/` (parser.js, scanner.js, errors.js, private ESM package).
+  It has zero dependencies and no framework imports. src/compiler/niralscript.js
+  retains the Niral emitter and compatibility diagnostic adapter (NRS -> NIRAL).
+  Build identity includes the new directory; copied installer fixtures include
+  it too. Verified: 9 language + 5 release tests, 18 CLI checks, main 255/255.
+  Initial main failure was the incomplete fixture, repaired and rerun green.
+  Standalone .nrs loading and new syntax remain pending. No browser/full-release/
+  Windows rerun, publication, deployment, commit or push.
+
+- NiralScript declaration AST (2026-10-25, local): parseNiralScript returns
+  target-neutral source-spanned declarations; emitNiralScript selects Niral
+  runes. Existing lowerNiralScript composes both. Initializers remain explicit
+  RawExpression nodes. Eight focused tests and main suite255/255 pass, including
+  exact emission, span/trivia preservation, diagnostics and DOM/string SSR.
+  This is implementation step1 of NIRALSCRIPT.md, not standalone .nrs support
+  or a full expression parser. No browser/full-release/Windows rerun, dependency
+  installation, deployment, commit or push. README/draft/progress updated.
+
+- NiralScript direction (2026-10-25): user confirmed independent language with
+  `.nrs` extension; `.niral` remains the framework component format. Niral first,
+  other framework integrations later. NIRALSCRIPT.md is the proposed v0.1 design,
+  not implemented support: portable semantics, instance/utility scope, external
+  script integration, secure resolution, compiler stages and acceptance gates.
+  Current executable support remains the embedded experiment described below.
+
+- NiralScript experiment (2026-10-25, local): opt-in script lang="niralscript"
+  lowers top-level state/derive declarations into existing reactive codegen.
+  Six focused compiler/SSR tests pass, including original-component diagnostics.
+  Chromium dev + built-production test passes: hydration without warnings,
+  state/derived updates, input binding, retained keyed nodes and local RPC.
+  Main regression 255/255 passed; focused tests added to release gate. Full
+  release/Windows CI not rerun. README and tests/fixtures/niralscript.niral show
+  usage. Prototype keeps HTML/CSS/events, not the illustrated view syntax.
+  Function/import declarations, standalone extension and dedicated type-checker/
+  editor integration are not implemented; expressions inherit existing rewriter
+  limitations, not a full JS grammar. No production changes, commits, dependencies,
+  default language replacement or all-language compatibility promise.
+
 - Security hardening 2026-10-25 (local only): reproduced dev private symlink/junction
   disclosure and uppercase component compilation bypass. Shared descendant-file
   guard rejects links/non-regular files; static builds skip links, private names

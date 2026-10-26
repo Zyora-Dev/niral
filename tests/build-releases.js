@@ -17,6 +17,24 @@ function fixture(run) {
 }
 
 export function registerBuildReleaseTests(test) {
+  test("release: external NiralScript changes identity without publishing raw sources", () => fixture(root => {
+    fs.writeFileSync(join(root, "routes", "index.niral"), '<script lang="niralscript" src="../counter.nrs"></script><p>{count}</p>');
+    fs.writeFileSync(join(root, "counter.nrs"), 'import { initial } from "./math.nrs"\nstate count = initial');
+    fs.writeFileSync(join(root, "math.nrs"), 'import { base } from "./base.nrs"\nexport const initial = base');
+    fs.writeFileSync(join(root, "base.nrs"), "export const base = 1");
+    fs.writeFileSync(join(root, "private.NRS"), "NEVER_PUBLIC");
+    const first = build({ root });
+    const files = fs.readdirSync(first.release, { recursive: true });
+    assert.ok(files.every(file => !/\.nrs$/i.test(file)));
+    fs.writeFileSync(join(root, "base.nrs"), "export const base = 2");
+    const second = build({ root });
+    assert.notEqual(first.hash, second.hash);
+    assert.ok(fs.existsSync(first.release));
+    fs.writeFileSync(join(root, "base.nrs"), "export const base = missing");
+    assert.throws(() => build({ root }), { code: "NIRAL073" });
+    assert.equal(fs.realpathSync(join(root, "dist", "current")), fs.realpathSync(second.release));
+  }));
+
   test("release: Windows activation restores the previous junction on promotion failure", () => fixture(root => {
     const dist = join(root, "dist");
     const current = join(dist, "current");
@@ -78,20 +96,26 @@ export function registerBuildReleaseTests(test) {
   test("release: changed framework input changes asset identity", () => fixture(root => {
     const first = build({ root });
     const originalRead = fs.readFileSync;
-    const runtime = fileURLToPath(new URL("../src/runtime/rpc.js", import.meta.url));
-    fs.readFileSync = (file, options) => {
-      const value = originalRead(file, options);
-      if (String(file) !== runtime) return value;
-      return typeof value === "string" ? value + "\n" : Buffer.concat([value, Buffer.from("\n")]);
-    };
-    syncBuiltinESMExports();
-    try {
-      const second = build({ root });
-      assert.notEqual(second.hash, first.hash);
-      const manifest = JSON.parse(originalRead(join(second.release, "manifest.json"), "utf8"));
-      assert.ok(manifest.routes[0].client.startsWith(`/assets/${second.hash}/`));
-      assert.ok(fs.existsSync(first.release));
-    } finally { fs.readFileSync = originalRead; syncBuiltinESMExports(); }
+    const hashes = new Set([first.hash]);
+    let previous = first;
+    for (const path of ["../src/runtime/rpc.js", "../niralscript/parser.js", "../niralscript/scanner.js", "../niralscript/errors.js", "../niralscript/expressions.js", "../niralscript/analysis.js", "../niralscript/modules.js"]) {
+      const input = fileURLToPath(new URL(path, import.meta.url));
+      fs.readFileSync = (file, options) => {
+        const value = originalRead(file, options);
+        if (String(file) !== input) return value;
+        return typeof value === "string" ? value + "\n" : Buffer.concat([value, Buffer.from("\n")]);
+      };
+      syncBuiltinESMExports();
+      try {
+        const second = build({ root });
+        assert.ok(!hashes.has(second.hash), path);
+        hashes.add(second.hash);
+        const manifest = JSON.parse(originalRead(join(second.release, "manifest.json"), "utf8"));
+        assert.ok(manifest.routes[0].client.startsWith(`/assets/${second.hash}/`));
+        assert.ok(fs.existsSync(previous.release));
+        previous = second;
+      } finally { fs.readFileSync = originalRead; syncBuiltinESMExports(); }
+    }
   }));
 
   test("release: tampered existing release is not silently overwritten", () => fixture(root => {

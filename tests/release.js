@@ -34,7 +34,7 @@ try {
   }
   console.log(`Release gates: Postgres ${env.NIRAL_TEST_PG_URL ? "enabled" : "not configured"}; image pipeline ${env.NIRAL_CWEBP ? "enabled" : "not configured"}`);
   run(process.execPath, ["tests/run.js"]);
-  run(process.execPath, ["--test", "--test-concurrency=1", "tests/devtools.js", "tests/docs-contact.js", "tests/docs-seo.js"]);
+  run(process.execPath, ["--test", "--test-concurrency=1", "tests/niralscript.js", "tests/devtools.js", "tests/docs-contact.js", "tests/docs-seo.js"]);
   run(process.execPath, ["tests/browser/run.js"]);
   run(process.execPath, ["tests/browser/forms.js"]);
   const expected = ["README.md", "bin/create-niral.js", "bin/niral.js", "index.js", "package.json"].sort();
@@ -59,7 +59,7 @@ try {
       run(process.execPath, [entry, "--version"], true, overrides);
       assert.equal(existsSync(framework), false, "help/version must not download a framework");
       mkdirSync(framework, { recursive: true });
-      for (const file of ["src", "bin", "assets", "installer", "package.json"]) cpSync(join(root, file), join(framework, file), { recursive: true });
+      for (const file of ["src", "niralscript", "bin", "assets", "installer", "package.json"]) cpSync(join(root, file), join(framework, file), { recursive: true });
       const app = join(home, "app");
       run(process.execPath, [join(home, "node_modules", name, "bin", "create-niral.js"), app], true, overrides);
       run(process.execPath, [entry, "build", app], true, overrides);

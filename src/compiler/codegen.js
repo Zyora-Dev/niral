@@ -18,6 +18,7 @@
 import { parse } from "./parser.js";
 import { parseJsx } from "./jsx.js";
 import { stripTypes } from "./typescript.js";
+import { compileNiralScript, loadNiralScriptSource } from "./niralscript.js";
 import { NiralError } from "./errors.js";
 import { collectDeclarations, rewriteScript, rewriteExpr } from "./rewrite.js";
 import { componentScope } from "./style.js";
@@ -83,33 +84,53 @@ export function compileClient(source, options = {}) {
 
   // multi-syntax front-ends — same AST, same codegen, same runtime
   const ast = parseComponent(source, filename);
+  let niralScript = null;
 
   // <script lang="ts"> — strip types before the reactive rewrite
   if (ast.script && ast.script.attrs?.lang === "ts") {
     ast.script = { ...ast.script, code: stripTypes(ast.script.code) };
   }
+  if (ast.script?.attrs?.lang === "niralscript") {
+    const external = loadNiralScriptSource(ast.script, source, options);
+    if (external) ast.script = { ...ast.script, external };
+    try {
+      const rpcNames = ast.server ? collectServerExports(ast.server.code, ast.server.attrs?.lang ?? "js").filter(name => name !== "load") : [];
+      niralScript = compileNiralScript(external?.source ?? ast.script.code, external?.filename ?? filename, { ...options, sourceFile: external?.filename ?? options.sourceFile, globals: rpcNames, reserved: rpcNames });
+    } catch (error) {
+      if (!(error instanceof NiralError)) throw error;
+      if (external || error.filename !== filename) throw error;
+      throw new NiralError(error.code, error.message, {
+        source, filename, hint: error.hint,
+        start: ast.script.start + error.start,
+        end: ast.script.start + error.end,
+      });
+    }
+  }
 
-  const { signals, props, writable } = ast.script
+  const { signals, props, writable } = niralScript ?? (ast.script
     ? collectDeclarations(ast.script.code)
-    : { signals: new Set(), props: new Set(), writable: new Set() };
+    : { signals: new Set(), props: new Set(), writable: new Set() });
   // props compile to reactive prop() bindings — reads rewrite like signals
   const tracked = new Set([...signals, ...props]);
 
   const ctx = { signals: tracked, writable: new Set([...writable, ...props]), locals: new Set(), counter: 0, lines: [], scope: componentScope(ast) };
   const roots = genNodes(ast.template, ctx);
 
-  const { imports, rest: scriptRest } = ast.script
+  const { imports, rest: scriptRest } = niralScript
+    ? { imports: [], rest: niralScript.code }
+    : ast.script
     ? hoistImports(ast.script.code)
     : { imports: [], rest: "" };
-  const scriptCode = scriptRest ? rewriteScript(scriptRest, tracked).trim() : "";
+  const scriptCode = niralScript ? scriptRest.trim() : scriptRest ? rewriteScript(scriptRest, tracked).trim() : "";
 
   // secrets can NEVER ship: client code has no business reading process.env
   if (/\bprocess\.env\b/.test(scriptCode)) {
+    const input = ast.script?.external ?? { source, filename };
     throw new NiralError("NIRAL044", "process.env in client code — this would ship your secrets to every browser", {
-      source,
-      filename,
-      start: source.indexOf("process.env"),
-      end: source.indexOf("process.env") + "process.env".length,
+      source: input.source,
+      filename: input.filename,
+      start: input.source.indexOf("process.env"),
+      end: input.source.indexOf("process.env") + "process.env".length,
       hint: "Read env in a <server> block (ambient env(\"KEY\")) and pass values via load().",
     });
   }

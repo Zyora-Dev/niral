@@ -18,11 +18,12 @@
 
 import { chromium } from "playwright";
 import { spawnSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDevServer } from "../../src/dev/server.js";
+import { parseComponent } from "../../src/compiler/codegen.js";
 import { errorPage } from "../../src/server/page.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,17 @@ function eq(a, b, m = "not equal") { if (a !== b) throw new Error(`${m} (got ${J
 // ── boot a real scaffolded niral app in production mode ──
 const app = mkdtempSync(join(tmpdir(), "niral-browser-"));
 spawnSync("node", [NIRAL, "create", app], { stdio: "ignore" });
+writeFileSync(join(app, "routes", "niralscript.niral"), readFileSync(join(here, "..", "fixtures", "niralscript.niral"), "utf8"));
+const nrsFixture = readFileSync(join(here, "..", "fixtures", "niralscript.niral"), "utf8");
+const nrsSource = parseComponent(nrsFixture).script.code;
+writeFileSync(join(app, "routes", "counter.nrs"), nrsSource);
+writeFileSync(join(app, "routes", "niralscript-external.niral"), nrsFixture.replace('<script lang="niralscript">', '<script lang="niralscript" src="./counter.nrs">').replace(nrsSource, ""));
+const moduleSource = 'import { initial, twice } from "../math.nrs"\n' + nrsSource.replace("state count = 0", "state count = initial").replace("derive doubled = count * 2", "derive doubled = twice(count)");
+writeFileSync(join(app, "base.nrs"), "export const initial = 0\nexport const factor = 2");
+writeFileSync(join(app, "math.nrs"), 'import { initial as start, factor } from "./base.nrs"\nexport const initial = start\nexport function twice(value) { return value * factor }');
+writeFileSync(join(app, "routes", "module.nrs"), moduleSource);
+writeFileSync(join(app, "routes", "niralscript-modules.niral"), nrsFixture.replace('<script lang="niralscript">', '<script lang="niralscript" src="./module.nrs">').replace(nrsSource, "") + '<output id="imported">{twice(initial)}</output>');
+writeFileSync(join(app, "source.NRS"), "RAW_NRS_MUST_STAY_PRIVATE");
 spawnSync("node", [NIRAL, "build", app], { stdio: "ignore" });
 const PORT = 4788;
 const server = spawn("node", [NIRAL, "start", app, "-p", String(PORT)], {
@@ -62,6 +74,81 @@ let browser;
 try {
   await waitUp(base + "/@niral/health");
   browser = await chromium.launch();
+
+  await test("NiralScript: dev and production SSR, hydration, state, bindings, keyed lists and RPC", async () => {
+    const dev = createDevServer({ root: app, port: 0, watch: false });
+    try {
+      const port = await new Promise(ready => dev.listen(ready));
+      for (const origin of [base, `http://localhost:${port}`]) {
+        for (const path of ["/routes/counter.nrs", "/source.NRS", "/math.nrs", "/base.nrs"]) eq((await fetch(origin + path)).status, 404, "raw NiralScript is private");
+        for (const route of ["niralscript", "niralscript-external", "niralscript-modules"]) {
+        const page = await browser.newPage();
+        const errors = [];
+        page.on("pageerror", error => errors.push(error.message));
+        page.on("console", message => {
+          if (message.type() === "warning" || message.type() === "error") errors.push(message.text());
+        });
+        try {
+          const response = await page.goto(origin + "/" + route, { waitUntil: "networkidle" });
+          eq(response.status(), 200, "NiralScript route loads");
+          ok((await response.text()).includes('<output id="doubled">0</output>'), "derived value server rendered");
+          eq(await page.locator("#count").textContent(), "0");
+          if (route === "niralscript-modules") eq(await page.locator("#imported").textContent(), "0", "imported aliases remain visible to templates");
+          for (let click = 0; click < 3; click++) await page.getByRole("button", { name: "Increase", exact: true }).click();
+          eq(await page.locator("#count").textContent(), "3");
+          eq(await page.locator("#doubled").textContent(), "6");
+          await page.getByRole("button", { name: "Reset", exact: true }).click();
+          eq(await page.locator("#doubled").textContent(), "0");
+          ok(await page.getByRole("button", { name: "Add item", exact: true }).isDisabled());
+          await page.getByLabel("Draft").fill("First item");
+          await page.getByRole("button", { name: "Add item", exact: true }).click();
+          eq(await page.locator("li").first().textContent(), "First item");
+          eq(await page.getByLabel("Draft").inputValue(), "");
+          await page.locator("li").first().evaluate(element => { element.dataset.retained = "yes"; });
+          await page.getByLabel("Draft").fill("Second item");
+          await page.getByRole("button", { name: "Add item", exact: true }).click();
+          eq(await page.locator("li").count(), 2);
+          eq(await page.locator("#total").textContent(), "2");
+          eq(await page.locator("li").first().getAttribute("data-retained"), "yes", "keyed node retained");
+          await page.getByRole("button", { name: "Ping server", exact: true }).click();
+          await page.waitForFunction(() => document.querySelector("#reply").textContent === "pong");
+          eq(errors.length, 0, "no hydration warnings or browser errors: " + errors.join(" | "));
+        } finally {
+          await page.close();
+        }
+        }
+      }
+    } finally {
+      dev.close();
+    }
+  });
+
+  await test("NiralScript: external and transitive source edits reload the browser and refresh SSR", async () => {
+    for (const [route, file, original, changed] of [
+      ["niralscript-external", "routes/counter.nrs", nrsSource, nrsSource.replace("state count = 0", "state count = 7")],
+      ["niralscript-modules", "base.nrs", "export const initial = 0\nexport const factor = 2", "export const initial = 7\nexport const factor = 2"],
+    ]) {
+      const dev = createDevServer({ root: app, port: 0 });
+      const page = await browser.newPage();
+      try {
+        const port = await new Promise(ready => dev.listen(ready));
+        const origin = `http://localhost:${port}`;
+        await page.goto(origin + "/" + route, { waitUntil: "networkidle" });
+        eq(await page.locator("#count").textContent(), "0");
+        const reloaded = page.waitForEvent("load");
+        writeFileSync(join(app, file), changed);
+        await reloaded;
+        eq(await page.locator("#count").textContent(), "7");
+        await page.getByRole("button", { name: "Increase", exact: true }).click();
+        eq(await page.locator("#doubled").textContent(), "16");
+        ok((await (await fetch(origin + "/" + route)).text()).includes('<output id="count">7</output>'), "SSR source cache refreshed");
+      } finally {
+        await page.close();
+        dev.close();
+        writeFileSync(join(app, file), original);
+      }
+    }
+  });
 
   await test("page server-renders and hydrates with NO console warnings", async () => {
     const page = await browser.newPage();

@@ -10,7 +10,7 @@
         <p>The zero-dependency<br />full-stack framework.<br />Built in India.<br />Made for everyone.</p>
       </div>
       <nav class="footer-links" aria-label="Footer navigation">
-        <div><h3>Learn</h3><a href="/docs/getting-started">Getting started</a><a href="/docs/components">Components</a><a href="/docs/cli">CLI reference</a></div>
+        <div><h3>Learn</h3><a href="/docs/getting-started">Getting started</a><a href="/niralscript">NiralScript</a><a href="/docs/components">Components</a><a href="/docs/cli">CLI reference</a></div>
         <div><h3>Build</h3><a href="/di">Developer Intelligence</a><a href="/docs/server">Server functions</a><a href="/docs/auth">Authentication</a><a href="/docs/realtime">Realtime</a></div>
         <div><h3>Resources</h3><a href="/docs/ai">AI & RAG</a><a href="/docs/deployment">Deployment</a><a href="/docs/benchmarks">Benchmarks</a></div>
         <div><h3>Company</h3><a href="/about">About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a><a href="/changelog">Changelog</a><a href="/contact">Contact us</a><a href="https://console.zyoralabs.com">zHost console</a></div>

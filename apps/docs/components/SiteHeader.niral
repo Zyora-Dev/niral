@@ -6,9 +6,9 @@
 <header class="site-header">
   <nav class="navigation" aria-label="Main navigation">
     <a class="wordmark" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="102" height="34" /></a>
-    <div class="desktop-links"><a href="/#features">Framework</a><a href="/docs/getting-started">Documentation</a><a href="/#performance">Performance</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About</a><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a></div>
+    <div class="desktop-links"><a href="/#features">Framework</a><a href="/docs/getting-started">Documentation</a><a href="/#performance">Performance</a><a href="/niralscript" aria-current={current === "niralscript" ? "page" : null}>NiralScript</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About</a><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a></div>
     <div class="nav-actions"><a class="icon-button github-link" href="https://github.com/Zyora-Dev/niral" aria-label="Niral on GitHub" title="Niral on GitHub"><img src={icons + "github.svg"} alt="" width="20" height="20" /></a><a class="button button-small" href="/docs/getting-started">Get started <img src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div>
-    <details class="mobile-menu"><summary aria-label="Navigation menu"><img src={icons + "menu.svg"} alt="" width="22" height="22" /></summary><div><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a><a href="/docs/getting-started">Documentation</a><a href="/docs/benchmarks">Benchmarks</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a></div></details>
+    <details class="mobile-menu"><summary aria-label="Navigation menu"><img src={icons + "menu.svg"} alt="" width="22" height="22" /></summary><div><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a><a href="/docs/getting-started">Documentation</a><a href="/niralscript" aria-current={current === "niralscript" ? "page" : null}>NiralScript</a><a href="/docs/benchmarks">Benchmarks</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a></div></details>
   </nav>
 </header>
 
@@ -43,7 +43,7 @@
     .desktop-links { gap: 18px; }
     .desktop-links a:nth-child(3) { display: none; }
   }
-  @media (max-width: 800px) {
+  @media (max-width: 1100px) {
     .site-header { height: 64px; }
     .navigation { width: calc(100% - 40px); gap: 20px; }
     .desktop-links, .github-link { display: none; }

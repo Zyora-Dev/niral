@@ -27,8 +27,8 @@ export async function renderSource(source, props = {}, { ext = "niral" } = {}) {
 }
 
 /** Render a component FILE → { html, ast, contains(text) }. */
-export async function renderRoute(file, props = {}) {
-  const { html, ast } = await renderFile(file, props);
+export async function renderRoute(file, props = {}, { root } = {}) {
+  const { html, ast } = await renderFile(file, props, root);
   return {
     html,
     ast,

@@ -49,7 +49,7 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
     const base = `http://localhost:${port}`;
     const sitemap = await (await fetch(base + "/sitemap.xml")).text();
     const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
-    assert.deepEqual(new Set(urls), new Set(["/", "/di", "/contact", "/about", "/changelog", ...Object.keys(PAGES).map(slug => "/docs/" + slug)].map(path => "https://niral.site" + path)));
+    assert.deepEqual(new Set(urls), new Set(["/", "/di", "/contact", "/about", "/niralscript", "/changelog", ...Object.keys(PAGES).map(slug => "/docs/" + slug)].map(path => "https://niral.site" + path)));
     assert.equal(urls.length, new Set(urls).size);
     assert.match(await (await fetch(base + "/robots.txt")).text(), /Sitemap: https:\/\/niral.site\/sitemap.xml/);
     const titles = new Set();
@@ -87,6 +87,14 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
         assert.equal(webpage["@type"], "AboutPage");
         assert.match(html, /flagship web framework developed at/);
         assert.match(html, /zHost is ZyoraLabs/);
+      }
+      if (path === "/niralscript") {
+        assert.match(html, /An independent frontend language/);
+        assert.match(html, /Experimental prototype/);
+        assert.match(html, /state count = 0/);
+        assert.match(html, /derive doubled = count \* 2/);
+        assert.match(html, /not a published language release/);
+        assert.match(html, /aria-current="page"[^>]*>NiralScript/);
       }
       if (path.startsWith("/docs/")) {
         const guide = PAGES[path.slice(6)];
@@ -128,6 +136,16 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         await page.screenshot({ path: `/tmp/niral-seo-docs-${width}.png`, fullPage: false, animations: "disabled" });
       }
+      await page.goto(base + "/niralscript");
+      for (const width of [390, 1024, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        assert.equal(await page.locator("h1").innerText(), "NiralScript.");
+        await page.screenshot({ path: `/tmp/niral-language-${width}.png`, fullPage: true, animations: "disabled" });
+      }
+      await page.setViewportSize({ width: 390, height: 900 });
+      await page.getByLabel("Navigation menu", { exact: true }).click();
+      assert.equal(await page.locator('.mobile-menu a[href="/niralscript"]').isVisible(), true);
       assert.deepEqual(errors, []);
     }
   } finally {

@@ -1,0 +1,147 @@
+<script>
+  import SiteHeader from "../components/SiteHeader.niral"
+  import SiteFooter from "../components/SiteFooter.niral"
+  import Seo from "../components/Seo.niral"
+  const seoTitle = "NiralScript | Independent Frontend Language by ZyoraLabs"
+  const description = "Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration."
+  const example = '<script lang="niralscript">\n  state count = 0\n  derive doubled = count * 2\n</script>\n\n<button on:click={() => count += 1}>Increase</button>\n<p>{count} doubled is {doubled}</p>'
+</script>
+
+<head>
+  <title>NiralScript | Independent Frontend Language by ZyoraLabs</title>
+  <meta name="description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#090909" />
+  <link rel="canonical" href="https://niral.site/niralscript" />
+  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Niral" />
+  <meta property="og:title" content="NiralScript | Independent Frontend Language by ZyoraLabs" />
+  <meta property="og:description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta property="og:url" content="https://niral.site/niralscript" />
+  <meta property="og:image" content="https://niral.site/n.png" />
+  <meta property="og:image:alt" content="Niral web framework logo" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="NiralScript | Independent Frontend Language by ZyoraLabs" />
+  <meta name="twitter:description" content="Meet NiralScript, an independent compiler-first frontend language from ZyoraLabs. Explore its reactive prototype, .nrs identity and Niral-first integration." />
+  <meta name="twitter:image" content="https://niral.site/n.png" />
+  <meta name="twitter:image:alt" content="Niral web framework logo" />
+</head>
+<Seo title={seoTitle} description={description} path="/niralscript" />
+
+<div class="language-page">
+  <a class="skip-link" href="#language-main">Skip to content</a>
+  <SiteHeader current="niralscript" />
+  <main id="language-main" class="frame">
+    <header class="introduction">
+      <p class="eyebrow">ZYORALABS / LANGUAGE DEVELOPMENT</p>
+      <h1>NiralScript<span>.</span></h1>
+      <p class="lead">An independent frontend language.<br />Niral is the first integration.</p>
+      <p class="opening">Express more with less code. Make the browser do only the necessary work. NiralScript is a compiler-first language being built around explicit reactive state and targeted updates.</p>
+      <dl class="identity">
+        <div><dt>Language extension</dt><dd>.nrs</dd></div>
+        <div><dt>First framework</dt><dd>Niral</dd></div>
+        <div><dt>Current stage</dt><dd>Experimental prototype</dd></div>
+      </dl>
+    </header>
+
+    <section class="editorial" aria-labelledby="language-title">
+      <p class="section-label"><span>01</span> LANGUAGE & FRAMEWORK</p>
+      <div class="section-content">
+        <h2 id="language-title">Its own language.<br />Not another component extension.</h2>
+        <p><code>.nrs</code> belongs to NiralScript. <code>.niral</code> remains Niral's component format, bringing together templates, styles and server code. They have different responsibilities.</p>
+        <p>The language core has its own directory, parser, scanner and diagnostics, with zero runtime dependencies and no imports from the Niral framework. A separate Niral adapter turns its declarations into Niral's existing reactive code.</p>
+        <p>Niral comes first. Other framework targets, including React for Next.js, are planned. They are not available integrations today.</p>
+      </div>
+    </section>
+
+    <section class="editorial" aria-labelledby="example-title">
+      <p class="section-label"><span>02</span> THE FIRST PROTOTYPE</p>
+      <div class="section-content">
+        <h2 id="example-title">State, then what follows.</h2>
+        <p><code>state</code> declares a reactive value. <code>derive</code> declares a value computed from it. In the current Niral prototype, updating the count also updates its doubled value through the existing fine-grained runtime.</p>
+        <figure class="code-example">
+          <figcaption><span>counter.niral</span><span>Embedded prototype</span></figcaption>
+          <pre tabindex="0" aria-label="NiralScript counter example"><code>{example}</code></pre>
+        </figure>
+        <p class="example-note">This example describes the local compiler prototype, not a published language release. Scripts can live inside a <code>.niral</code> component or a separate <code>.nrs</code> file, with named imports from other <code>.nrs</code> modules.</p>
+        <a class="text-link" href="/docs/reactivity">Explore Niral reactivity <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/arrow-up-right.svg" alt="" width="18" height="18" /></a>
+      </div>
+    </section>
+
+    <section class="editorial closing" aria-labelledby="status-title">
+      <p class="section-label"><span>03</span> DEVELOPMENT STATUS</p>
+      <div class="section-content">
+        <h2 id="status-title">A working foundation.<br />A language taking shape.</h2>
+        <div class="milestones">
+          <div><h3>Implemented locally</h3><p>Independent expression and statement parsing, lexical scopes, functions, reactive declarations and semantic diagnostics. Named module imports and constant/function exports retain isolated scopes.</p></div>
+          <div><h3>Niral integration</h3><p>Inline and external scripts work in dev, builds and SSR. Transitive imports participate in reloads, release hashes and client-source privacy checks.</p></div>
+          <div><h3>Future work</h3><p>Dedicated language tooling and additional framework targets remain deferred. Default imports, re-exports and cyclic module graphs are not supported.</p></div>
+        </div>
+        <p>Existing JavaScript, TypeScript and JSX/TSX support in Niral stays intact. NiralScript is an additional language direction, not a replacement for those workflows.</p>
+        <div class="links"><a class="text-link" href="/about">About ZyoraLabs</a><a class="text-link" href="/contact">Talk to us about NiralScript</a></div>
+      </div>
+    </section>
+  </main>
+  <SiteFooter />
+</div>
+
+<style>
+  :global(body) { margin: 0; background: #090909; color: #fafafa; }
+  *, *::before, *::after { box-sizing: border-box; }
+  .language-page { --gold: #f2b544; font: 15px/1.8 "Geist", sans-serif; letter-spacing: 0; background: linear-gradient(120deg, #202023, #0d0d0f 65%, #090909); }
+  .frame { width: min(1160px, calc(100% - 80px)); margin-inline: auto; }
+  h1, h2, h3, p, dl, figure { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--gold); }
+  a:focus-visible, pre:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+  .skip-link { position: absolute; top: -60px; left: 16px; z-index: 50; background: var(--gold); color: #090909; padding: 10px 16px; }
+  .skip-link:focus { top: 12px; }
+  .introduction { padding-top: 56px; }
+  .eyebrow, .section-label, dt, figcaption { font: 12px/1.6 "Geist Mono", monospace; }
+  .eyebrow { color: var(--gold); margin-bottom: 20px; }
+  h1 { font-size: 64px; line-height: 1.1; font-weight: 550; margin-bottom: 24px; overflow-wrap: anywhere; }
+  h1 span { color: var(--gold); }
+  .lead { font-size: 26px; line-height: 1.5; }
+  .opening { max-width: 750px; margin-top: 20px; font-size: 16px; }
+  .identity { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-block: 28px; border-top: 1px solid #414144; margin-top: 36px; }
+  dt { margin-bottom: 8px; }
+  dd { margin: 0; font-size: 18px; }
+  .editorial { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 60px; border-top: 1px solid #414144; padding-block: 56px; }
+  .section-label { display: flex; gap: 20px; padding-top: 8px; }
+  .section-label > span { color: var(--gold); }
+  .section-content { min-width: 0; }
+  h2 { font-size: 34px; line-height: 1.3; font-weight: 500; margin-bottom: 24px; }
+  .section-content > p + p { margin-top: 20px; }
+  code { font: 13px/1.8 "Geist Mono", monospace; color: var(--gold); }
+  .code-example { margin-block: 28px; border: 1px solid #555558; border-radius: 6px; overflow: hidden; background: #111113; }
+  figcaption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #414144; }
+  figcaption span:last-child { color: #a7e8c1; }
+  pre { margin: 0; padding: 24px; overflow: auto; tab-size: 2; }
+  pre code { color: #fafafa; }
+  .example-note { font-size: 14px; }
+  .text-link { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; margin-top: 20px; text-decoration: underline; text-underline-offset: 6px; }
+  .text-link img { filter: invert(1); flex-shrink: 0; }
+  .milestones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-bottom: 28px; }
+  .milestones > div { border-top: 2px solid var(--gold); padding-top: 20px; }
+  h3 { font-size: 16px; font-weight: 550; margin-bottom: 12px; }
+  .milestones p { font-size: 14px; }
+  .links { display: flex; flex-wrap: wrap; gap: 24px; }
+  .closing { padding-bottom: 80px; }
+  @media (max-width: 1000px) { .editorial { grid-template-columns: 160px minmax(0, 1fr); gap: 32px; } .milestones { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    .frame { width: calc(100% - 40px); }
+    .introduction { padding-top: 36px; }
+    h1 { font-size: 42px; }
+    .lead { font-size: 21px; }
+    .opening { font-size: 15px; }
+    .identity { gap: 16px; margin-top: 28px; }
+    dd { font-size: 15px; }
+    .editorial { grid-template-columns: 1fr; gap: 24px; padding-block: 36px; }
+    .section-label { padding: 0; }
+    h2 { font-size: 28px; }
+    pre { padding: 18px; }
+    .closing { padding-bottom: 56px; }
+  }
+  @media (max-width: 420px) { .identity { grid-template-columns: 1fr 1fr; } .identity > div:last-child { grid-column: 1 / -1; } dt { margin-bottom: 2px; } }
+</style>

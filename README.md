@@ -134,6 +134,112 @@ Reactive-state inspection and dedicated form-action spans are not included.
 Run `node --test tests/devtools.js` for collector, mapping and HTTP security tests;
 see [browser tests](tests/browser/README.md) for UI coverage.
 
+## NiralScript Experiment
+
+NiralScript is an opt-in, local compiler prototype, not a stable language release.
+Its independent language extension is `.nrs`; `.niral` remains Niral's component
+format. Niral is the first target, with other integrations planned. The
+[v0.1 design draft](NIRALSCRIPT.md) distinguishes implemented and proposed features.
+Use it inside an existing `.niral` component:
+
+```html
+<script lang="niralscript">
+  state count = 0
+  derive doubled = count * 2
+  function increment() {
+    count += 1
+  }
+</script>
+
+<button on:click={increment}>Increase</button>
+<p>{count} doubled is {doubled}</p>
+```
+
+`state` lowers to the existing `$state` declaration and `derive` to `$derived`.
+Separate declarations with a newline or semicolon; group multiline expressions
+with parentheses, brackets or braces. Existing HTML, CSS, events and bindings
+stay unchanged. Both declarations use Niral's existing DOM and SSR codegen.
+JavaScript, TypeScript and JSX/TSX support is unchanged.
+
+The compiler separates a source-spanned statement AST and lexical analysis from Niral emission.
+Initializers are parsed into expression trees with explicit operator precedence,
+collections, calls, members, conditionals and template interpolation. Validated
+source is retained for compatible emission; unsupported syntax is rejected.
+
+The independent core lives in the root-level `niralscript/` directory:
+[parser](niralscript/parser.js), [expressions](niralscript/expressions.js),
+[scope analysis](niralscript/analysis.js), [module linker](niralscript/modules.js), [scanner](niralscript/scanner.js) and
+[diagnostics](niralscript/errors.js). It is a private, zero-dependency ES module
+package with no imports from the framework. The
+[Niral adapter](src/compiler/niralscript.js) emits runtime signal calls directly
+from analyzed bindings and translates
+language diagnostics into existing Niral errors. Tests remain in the repository's
+existing test harness. Niral also loads external `.nrs` instance scripts:
+
+```html
+<script lang="niralscript" src="./counter.nrs"></script>
+```
+
+Paths must be explicit relative `.nrs` files inside the project, without private
+paths or symlinks. Do not mix inline code with `src`. Dev reloads external edits;
+SSR caches and production hashes include their contents. Raw sources stay private.
+
+Named imports and aliases (`import { twice as scale } from "./math.nrs"`) can use
+library `export const` and `export function` declarations. Modules keep separate
+scopes and initialize once per component execution, not as process singletons.
+Transitive dependencies participate in semantic checks, SSR invalidation, dev
+reloads and build hashes. Libraries cannot declare top-level state/derive/let;
+default/namespace imports, re-exports and cycles are not supported. Private paths,
+including `.server.nrs`, are rejected throughout the graph.
+
+The script supports top-level `state`/`derive`, ordinary `let`/`const`, named
+functions, lexical blocks, braced `if`/`else`, calls, assignments and `return`.
+Scope checks reject duplicates, unresolved names, direct use before initialization
+and immutable-binding writes. Resolved bindings drive signal reads/writes and
+nested renames without intermediate rune discovery or script token rewriting.
+The rune-emitting lowering API remains available for compatibility; template
+expressions still use the existing compiler. Static checks reject detected derived effects,
+cycles, readonly-alias writes and eager captured reads. Approved intrinsics are
+target-specific; this is not a general purity proof for arbitrary host values.
+External errors retain file/range links in component diagnostics. Type
+annotations, the proposed `view` syntax, standalone tooling and
+dedicated `.nrs` editor/type-checker integration are not implemented. Template
+handlers remain ordinary Niral/JavaScript. The subset is not a full
+JavaScript grammar (regex literals and assignment expressions are rejected). It does
+not establish support for arbitrary frontend languages or frameworks.
+
+Run `node --test tests/niralscript.js` for compiler/SSR checks and
+`NIRAL_BROWSER_FILTER=NiralScript node tests/browser/run.js` for dev/production
+Chromium checks using the existing browser tooling. The reusable
+[fixture](tests/fixtures/niralscript.niral) exercises named handlers, shadowing,
+state, derived values, input binding, keyed lists and RPC. These checks are
+included in the release gate.
+
+Run `node bench/niralscript.js` for warm compiler/string-SSR timings and generated
+raw/gzip sizes for equivalent NiralScript, JavaScript and annotated TypeScript
+components, all using Niral. It asserts language and DOM/string SSR parity, warms
+each variant and rotates three-way batches evenly across 12 rounds. TypeScript
+compilation here means Niral's type stripping, not `tsc` or type checking.
+A separate paired script-backend
+measurement compares direct AST emission with lowering through the JavaScript
+rewriter, including parsing and analysis in both, excluding component/template
+compilation.
+
+- `node bench/niralscript.js browser`: uses the existing Playwright installation
+  under tests/browser to measure warm hydration and synchronous click-to-DOM
+  updates in headless Chromium. Asserts SSR element reuse, output and cleanup.
+  Creates a loopback server on an assigned free port and closes it afterwards;
+  no app files or existing preview servers are changed. Module loading, HTML
+  parsing, paint and automation transport are outside the timed regions.
+- `node bench/niralscript.js types`: uses the existing TypeScript compiler resolved
+  by `niral check`, separately measuring fresh strict/noEmit programs with
+  skipLibCheck, including standard library reads/parsing. No incremental reuse or
+  process startup. Also asserts three diagnostic probes illustrating different
+  guarantees; NiralScript is not a TypeScript-style type checker.
+
+These are local microbenchmarks, not cross-framework or end-user latency rankings.
+Recorded results, versions and limitations are in [PROGRESS.md](PROGRESS.md).
+
 ## Developer Intelligence
 
 Niral DI runs through the existing CLI, with your exact provider and model:

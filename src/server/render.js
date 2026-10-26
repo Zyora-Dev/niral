@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileClient } from "../compiler/codegen.js";
+import { isServableFile } from "./security.js";
 import { componentCss } from "../compiler/style.js";
 import { createDocument, serializeChildren } from "./dom-shim.js";
 import * as ssrHelpers from "../runtime/ssr.js";
@@ -54,22 +55,25 @@ const moduleCache = new Map(); // absPath → { mtimeMs, mod, ast, url, deps }
  * inlined as data: URLs — data: modules cannot resolve relative specifiers.
  * Returns { mod, ast } — ast carries block attrs (e.g. script mode).
  */
-export async function loadComponent(absPath, _stack = []) {
+export async function loadComponent(absPath, _stack = [], root) {
   const abs = resolve(absPath);
+  const cacheKey = `${root ?? ""}\0${abs}`;
   if (_stack.includes(abs)) {
     throw new Error(`circular component import: ${[..._stack, abs].join(" → ")}`);
   }
   const mtimeMs = statSync(abs).mtimeMs;
-  const hit = moduleCache.get(abs);
+  const hit = moduleCache.get(cacheKey);
   if (
     hit &&
     hit.mtimeMs === mtimeMs &&
-    hit.deps.every((d) => existsSync(d.abs) && statSync(d.abs).mtimeMs === d.mtimeMs)
+    hit.deps.every((d) => existsSync(d.abs) && statSync(d.abs).mtimeMs === d.mtimeMs) &&
+    hit.sources.every(input => isServableFile(root, input.filename) && readFileSync(input.filename, "utf8") === input.source)
   ) {
     return hit;
   }
 
   const source = readFileSync(abs, "utf8");
+  const sources = [];
   let code, ast;
   if (abs.endsWith(".ts")) {
     // plain TS module — type-strip, no component pipeline
@@ -77,27 +81,28 @@ export async function loadComponent(absPath, _stack = []) {
     code = stripTypes(source);
     ast = null;
   } else {
-    ({ code, ast } = compileClient(source, { filename: abs, runtime: RUNTIME_FILE_URL }));
+    ({ code, ast } = compileClient(source, { filename: abs, root, runtime: RUNTIME_FILE_URL, onSource: input => sources.push(input) }));
   }
 
   const deps = [];
   for (const m of [...code.matchAll(/from\s+("(\.\.?\/[^"]+\.(?:niral|jsx|tsx|ts))")/g)]) {
     const childAbs = resolve(dirname(abs), m[2]);
-    const childEntry = await loadComponent(childAbs, [..._stack, abs]);
+    const childEntry = await loadComponent(childAbs, [..._stack, abs], root);
     code = code.replace(m[1], JSON.stringify(childEntry.url));
     deps.push({ abs: childAbs, mtimeMs: childEntry.mtimeMs }, ...childEntry.deps);
+    sources.push(...childEntry.sources);
   }
 
   const url = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
   const mod = await import(url);
-  const entry = { mtimeMs, mod, ast, url, deps };
-  moduleCache.set(abs, entry);
+  const entry = { mtimeMs, mod, ast, url, deps, sources };
+  moduleCache.set(cacheKey, entry);
   return entry;
 }
 
 /** Render a .niral file straight to HTML. */
-export async function renderFile(absPath, props = {}) {
-  const { mod, ast } = await loadComponent(absPath);
+export async function renderFile(absPath, props = {}, root) {
+  const { mod, ast } = await loadComponent(absPath, [], root);
   return { html: renderComponent(mod.default, props), ast };
 }
 
@@ -135,10 +140,10 @@ export function composeComponent(runtime, layouts, Page) {
  * (inside a streaming store) so {#await} boundaries are collected per request.
  * layoutAbsList = outermost first.
  */
-export async function preparePage(absPath, layoutAbsList = [], i18n = null) {
-  const page = await loadComponent(absPath);
+export async function preparePage(absPath, layoutAbsList = [], i18n = null, root) {
+  const page = await loadComponent(absPath, [], root);
   const layouts = [];
-  for (const labs of layoutAbsList) layouts.push(await loadComponent(labs));
+  for (const labs of layoutAbsList) layouts.push(await loadComponent(labs, [], root));
   const runtime = await import(RUNTIME_FILE_URL);
   if (i18n) runtime._setI18n(i18n.messages, i18n.locale); // catalog for t() during SSR
   const fn = composeComponent(runtime, layouts.map((l) => l.mod.default), page.mod.default);
@@ -146,8 +151,8 @@ export async function preparePage(absPath, layoutAbsList = [], i18n = null) {
 }
 
 /** Render a route wrapped in its layouts. layoutAbsList = outermost first. */
-export async function renderPage(absPath, props = {}, layoutAbsList = [], i18n = null) {
-  const { fn, ast, layoutAsts } = await preparePage(absPath, layoutAbsList, i18n);
+export async function renderPage(absPath, props = {}, layoutAbsList = [], i18n = null, root) {
+  const { fn, ast, layoutAsts } = await preparePage(absPath, layoutAbsList, i18n, root);
   return { html: renderComponent(fn, props), ast, layoutAsts };
 }
 
@@ -155,14 +160,14 @@ export async function renderPage(absPath, props = {}, layoutAbsList = [], i18n =
  * All CSS a component contributes: its own scoped styles PLUS those of every
  * component it (transitively) imports — deps first, own styles last.
  */
-export async function collectCss(absPath) {
-  const entry = await loadComponent(absPath);
+export async function collectCss(absPath, root) {
+  const entry = await loadComponent(absPath, [], root);
   const parts = [];
   const seen = new Set();
   for (const d of entry.deps) {
     if (seen.has(d.abs)) continue;
     seen.add(d.abs);
-    const dep = await loadComponent(d.abs);
+    const dep = await loadComponent(d.abs, [], root);
     const css = componentCss(dep.ast);
     if (css) parts.push(css);
   }

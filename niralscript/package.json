@@ -1,0 +1,8 @@
+{
+  "name": "niralscript",
+  "private": true,
+  "type": "module",
+  "exports": "./parser.js",
+  "engines": { "node": ">=22" },
+  "dependencies": {}
+}

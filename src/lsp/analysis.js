@@ -11,6 +11,7 @@
 
 import { compileClient } from "../compiler/codegen.js";
 import { NiralError } from "../compiler/errors.js";
+import { pathToFileURL } from "node:url";
 
 /* ── positions ── */
 
@@ -38,9 +39,9 @@ export function positionToOffset(text, { line, character }) {
 
 /* ── diagnostics ── */
 
-export function validate(text, filename = "file.niral") {
+export function validate(text, filename = "file.niral", { root } = {}) {
   try {
-    compileClient(text, { filename, runtime: "niral/runtime" });
+    compileClient(text, { filename, root, runtime: "niral/runtime" });
     return [];
   } catch (e) {
     if (!(e instanceof NiralError)) {
@@ -53,8 +54,10 @@ export function validate(text, filename = "file.niral") {
         },
       ];
     }
-    const start = offsetToPosition(text, e.start ?? 0);
-    const end = offsetToPosition(text, Math.max((e.start ?? 0) + 1, e.end ?? 0));
+    const external = e.filename && e.filename !== filename;
+    const offset = external ? Math.max(0, text.indexOf("src=")) : e.start ?? 0;
+    const start = offsetToPosition(text, offset);
+    const end = offsetToPosition(text, external ? offset + 3 : Math.max(offset + 1, e.end ?? 0));
     return [
       {
         range: { start, end },
@@ -62,6 +65,11 @@ export function validate(text, filename = "file.niral") {
         source: "niral",
         code: e.code,
         message: e.hint ? `${e.message}\n\nhint: ${e.hint}` : e.message,
+        ...(external ? { relatedInformation: [{
+          location: { uri: pathToFileURL(e.filename).href, range: {
+            start: offsetToPosition(e.source, e.start), end: offsetToPosition(e.source, e.end),
+          } }, message: e.message,
+        }] } : {}),
       },
     ];
   }
