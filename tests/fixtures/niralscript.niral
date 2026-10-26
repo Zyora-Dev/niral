@@ -1,19 +1,35 @@
 <server>
-  export async function ping() { return "pong"; }
+  export function load() { return { heading: "Loaded on server", record: { name: "Input record" } }; }
+  export async function ping(fail) {
+    if (fail) throw new Error("Ping failed");
+    return "pong";
+  }
 </server>
 
 <script lang="niralscript">
+  input heading: string
+  input record: { name: string }
+  input missing
+  state headingDraft: string = heading
+  derive loadedLabel: string = heading + ": " + (record?.name ?? "Missing")
+  derive fallback: string = missing?.name ?? "No value"
   state count = 0
+  derive countKind: string = typeof count
   derive doubled = count * 2
-  state draft = ""
-  state items = []
+  state draft: string = ""
+  state items: { id: number, text: string }[] = []
   derive total = items.length
+  derive summary = items.filter(({ text }) => text.length > 0).map(({ text }) => text).join(", ")
+  state letters = 0
   state reply = ""
+  state pending = false
+  state failure = ""
+  state attempts = 0
 
-  function next(count) {
+  function next(count: number): number {
     return count + 1
   }
-  function increment() {
+  function increment(): number {
     const value = next(count)
     count = value
     return count
@@ -21,18 +37,41 @@
   function reset() {
     count = 0
   }
-  function addItem() {
+  const addItem = (): void => {
     const text = draft.trim()
     if (!text) { return }
-    items = items.concat([{ id: items.length, text }])
+    const { length: id } = items
+    items = [...items, { ...{ id }, text }]
     draft = ""
   }
-  function requestPing() {
-    return ping()
+  const countLetters = () => {
+    let count = 0
+    for (const { text } of items) { count += text.length }
+    letters = count
   }
+  async function requestPing(fail: boolean): Promise<void> {
+    pending = true
+    reply = ""
+    failure = ""
+    try {
+      reply = await ping(fail)
+    } catch (error) {
+      failure = error.message
+    } finally {
+      pending = false
+      attempts += 1
+    }
+  }
+  const pingSuccess = async () => { await requestPing(false) }
+  const pingFailure = async () => { await requestPing(true) }
 </script>
 
 <h1>NiralScript</h1>
+<output id="loaded">{loadedLabel}</output>
+<output id="missing">{missing === undefined}</output>
+<output id="fallback">{fallback}</output>
+<output id="kind">{countKind}</output>
+<label>Heading <input bind:value={headingDraft} /></label>
 <button on:click={increment}>Increase</button>
 <button on:click={reset}>Reset</button>
 <output id="count">{count}</output>
@@ -41,7 +80,14 @@
 <label>Draft <input bind:value={draft} /></label>
 <button disabled={!draft.trim()} on:click={addItem}>Add item</button>
 <output id="total">{total}</output>
+<output id="summary">{summary}</output>
+<button on:click={countLetters}>Count letters</button>
+<output id="letters">{letters}</output>
 <ul>{#for item of items key item.id}<li>{item.text}</li>{/for}</ul>
 
-<button on:click={async () => reply = await requestPing()}>Ping server</button>
+<button disabled={pending} on:click={pingSuccess}>Ping server</button>
+<button disabled={pending} on:click={pingFailure}>Fail server</button>
 <output id="reply">{reply}</output>
+<output id="pending">{pending}</output>
+<output id="failure">{failure}</output>
+<output id="attempts">{attempts}</output>

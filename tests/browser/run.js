@@ -18,7 +18,7 @@
 
 import { chromium } from "playwright";
 import { spawnSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,10 +49,30 @@ writeFileSync(join(app, "routes", "counter.nrs"), nrsSource);
 writeFileSync(join(app, "routes", "niralscript-external.niral"), nrsFixture.replace('<script lang="niralscript">', '<script lang="niralscript" src="./counter.nrs">').replace(nrsSource, ""));
 const moduleSource = 'import { initial, twice } from "../math.nrs"\n' + nrsSource.replace("state count = 0", "state count = initial").replace("derive doubled = count * 2", "derive doubled = twice(count)");
 writeFileSync(join(app, "base.nrs"), "export const initial = 0\nexport const factor = 2");
-writeFileSync(join(app, "math.nrs"), 'import { initial as start, factor } from "./base.nrs"\nexport const initial = start\nexport function twice(value) { return value * factor }');
+writeFileSync(join(app, "math.nrs"), 'import { initial as start, factor } from "./base.nrs"\nexport const initial: number = start\nexport const twice = (value: number): number => value * factor');
 writeFileSync(join(app, "routes", "module.nrs"), moduleSource);
 writeFileSync(join(app, "routes", "niralscript-modules.niral"), nrsFixture.replace('<script lang="niralscript">', '<script lang="niralscript" src="./module.nrs">').replace(nrsSource, "") + '<output id="imported">{twice(initial)}</output>');
 writeFileSync(join(app, "source.NRS"), "RAW_NRS_MUST_STAY_PRIVATE");
+mkdirSync(join(app, "components"), { recursive: true });
+writeFileSync(join(app, "components", "InputCard.nrs"), "input title\nstate draft = title\nderive label = title + '!'\n");
+writeFileSync(join(app, "components", "InputCard.niral"), '<script lang="niralscript" src="./InputCard.nrs"></script><section><output>{label}</output><label>Local draft <input bind:value={draft} /></label></section>');
+writeFileSync(join(app, "routes", "niralscript-inputs.niral"), `<script>
+  import InputCard from "../components/InputCard.niral";
+  let title = $state("First");
+  function change() { title = "Next"; }
+</script>
+<button on:click={change}>Change parent</button>
+<InputCard title={title} /><InputCard title="Other" />`);
+mkdirSync(join(app, "routes", "niralscript-params"));
+writeFileSync(join(app, "routes", "niralscript-params", "[slug].niral"), `<server>
+  export function load({ params }) { return { message: "Loaded " + params.slug }; }
+</server>
+<script lang="niralscript">
+  input slug
+  input message
+  derive label = slug + ": " + message
+</script>
+<output id="route-input">{label}</output>`);
 spawnSync("node", [NIRAL, "build", app], { stdio: "ignore" });
 const PORT = 4788;
 const server = spawn("node", [NIRAL, "start", app, "-p", String(PORT)], {
@@ -75,7 +95,7 @@ try {
   await waitUp(base + "/@niral/health");
   browser = await chromium.launch();
 
-  await test("NiralScript: dev and production SSR, hydration, state, bindings, keyed lists and RPC", async () => {
+  await test("NiralScript: dev and production SSR, hydration, state, bindings, keyed lists and async RPC", async () => {
     const dev = createDevServer({ root: app, port: 0, watch: false });
     try {
       const port = await new Promise(ready => dev.listen(ready));
@@ -84,16 +104,26 @@ try {
         for (const route of ["niralscript", "niralscript-external", "niralscript-modules"]) {
         const page = await browser.newPage();
         const errors = [];
+        let expectedFailure = false;
         page.on("pageerror", error => errors.push(error.message));
         page.on("console", message => {
+          if (expectedFailure && message.type() === "error" && message.text().includes("status of 500")) return;
           if (message.type() === "warning" || message.type() === "error") errors.push(message.text());
         });
         try {
           const response = await page.goto(origin + "/" + route, { waitUntil: "networkidle" });
           eq(response.status(), 200, "NiralScript route loads");
           ok((await response.text()).includes('<output id="doubled">0</output>'), "derived value server rendered");
+          ok((await response.text()).includes('<output id="loaded">Loaded on server: Input record</output>'), "server data feeds NiralScript inputs during SSR");
+          eq(await page.locator("#loaded").textContent(), "Loaded on server: Input record");
+          eq(await page.locator("#missing").textContent(), "true");
+          await page.getByLabel("Heading", { exact: true }).fill("Local edit");
+          eq(await page.getByLabel("Heading", { exact: true }).inputValue(), "Local edit");
+          eq(await page.locator("#loaded").textContent(), "Loaded on server: Input record", "local state does not write input data");
           eq(await page.locator("#count").textContent(), "0");
           if (route === "niralscript-modules") eq(await page.locator("#imported").textContent(), "0", "imported aliases remain visible to templates");
+          eq(await page.locator("#fallback").textContent(), "No value", "typed optional input fallback hydrates");
+          eq(await page.locator("#kind").textContent(), "number", "typeof derived input hydrates");
           for (let click = 0; click < 3; click++) await page.getByRole("button", { name: "Increase", exact: true }).click();
           eq(await page.locator("#count").textContent(), "3");
           eq(await page.locator("#doubled").textContent(), "6");
@@ -109,13 +139,82 @@ try {
           await page.getByRole("button", { name: "Add item", exact: true }).click();
           eq(await page.locator("li").count(), 2);
           eq(await page.locator("#total").textContent(), "2");
+          eq(await page.locator("#summary").textContent(), "First item, Second item");
+          await page.getByRole("button", { name: "Count letters", exact: true }).click();
+          eq(await page.locator("#letters").textContent(), "21");
           eq(await page.locator("li").first().getAttribute("data-retained"), "yes", "keyed node retained");
+          eq(await page.locator("#pending").textContent(), "false", "async state hydrates idle");
+          let releaseRequest;
+          const requestGate = new Promise(resolve => { releaseRequest = resolve; });
+          await page.route("**/@niral/rpc", async route => { await requestGate; await route.continue(); });
+          try {
+            await page.getByRole("button", { name: "Ping server", exact: true }).click();
+            eq(await page.locator("#pending").textContent(), "true", "state updates before RPC resolves");
+            ok(await page.getByRole("button", { name: "Ping server", exact: true }).isDisabled());
+          } finally {
+            releaseRequest();
+          }
+          await page.waitForFunction(() => document.querySelector("#reply").textContent === "pong");
+          eq(await page.locator("#pending").textContent(), "false");
+          eq(await page.locator("#attempts").textContent(), "1", "finally completes success");
+          await page.unroute("**/@niral/rpc");
+          expectedFailure = true;
+          const failedResponse = page.waitForResponse(response => response.url().endsWith("/@niral/rpc"));
+          await page.getByRole("button", { name: "Fail server", exact: true }).click();
+          eq((await failedResponse).status(), 500, "actual server rejection reached the browser");
+          await page.waitForFunction(() => document.querySelector("#failure").textContent.length > 0);
+          eq(await page.locator("#reply").textContent(), "");
+          eq(await page.locator("#pending").textContent(), "false");
+          eq(await page.locator("#attempts").textContent(), "2", "finally completes failure");
+          expectedFailure = false;
           await page.getByRole("button", { name: "Ping server", exact: true }).click();
           await page.waitForFunction(() => document.querySelector("#reply").textContent === "pong");
+          eq(await page.locator("#failure").textContent(), "", "subsequent success clears error");
+          eq(await page.locator("#attempts").textContent(), "3");
           eq(errors.length, 0, "no hydration warnings or browser errors: " + errors.join(" | "));
         } finally {
           await page.close();
         }
+        }
+      }
+    } finally {
+      dev.close();
+    }
+  });
+
+  await test("NiralScript: parent inputs update without remounting and route inputs hydrate", async () => {
+    const dev = createDevServer({ root: app, port: 0, watch: false });
+    try {
+      const port = await new Promise(ready => dev.listen(ready));
+      for (const origin of [base, `http://localhost:${port}`]) {
+        const page = await browser.newPage();
+        const errors = [];
+        page.on("pageerror", error => errors.push(error.message));
+        page.on("console", message => {
+          if (["warning", "error"].includes(message.type())) errors.push(message.text());
+        });
+        try {
+          const response = await page.goto(origin + "/niralscript-inputs", { waitUntil: "networkidle" });
+          eq(response.status(), 200, "parent input route: " + await response.text());
+          ok((await response.text()).includes("<output>First!</output>"));
+          const first = page.locator("section").nth(0);
+          const second = page.locator("section").nth(1);
+          await first.getByLabel("Local draft").fill("Edited");
+          await first.locator("output").evaluate(element => { element.dataset.retained = "yes"; });
+          await page.getByRole("button", { name: "Change parent" }).click();
+          eq(await first.locator("output").textContent(), "Next!");
+          eq(await first.locator("output").getAttribute("data-retained"), "yes");
+          eq(await first.getByLabel("Local draft").inputValue(), "Edited");
+          eq(await second.locator("output").textContent(), "Other!");
+          eq(await second.getByLabel("Local draft").inputValue(), "Other");
+          const route = await page.goto(origin + "/niralscript-params/example", { waitUntil: "networkidle" });
+          eq(route.status(), 200, "route inputs: " + await route.text());
+          ok((await route.text()).includes('<output id="route-input">example: Loaded example</output>'));
+          eq(await page.locator("#route-input").textContent(), "example: Loaded example");
+          eq(errors.length, 0, errors.join(" | "));
+          eq((await fetch(origin + "/components/InputCard.nrs")).status, 404);
+        } finally {
+          await page.close();
         }
       }
     } finally {

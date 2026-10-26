@@ -10,6 +10,57 @@ permissions:
   contents: read
 
 jobs:
+  compare-languages:
+    name: Language comparison (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    env:
+      NIRAL_TSC: ${{ runner.temp }}/niral-tools/node_modules/typescript/lib/typescript.js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install isolated pinned TypeScript
+        run: npm install --prefix "$RUNNER_TEMP/niral-tools" --no-package-lock --ignore-scripts typescript@5.7.3
+      - name: Compare JavaScript, TypeScript and NiralScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-results
+          printf 'Commit: %s\nRunner: %s/%s\n' "$GITHUB_SHA" "$RUNNER_OS" "$RUNNER_ARCH" > benchmark-results/environment.txt
+          node --input-type=module -e 'import os from "node:os"; console.log(JSON.stringify({ node: process.version, v8: process.versions.v8, platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, memoryBytes: os.totalmem() }, null, 2))' >> benchmark-results/environment.txt
+          for repeat in 1 2 3; do
+            node bench/niralscript.js language 2>&1 | tee "benchmark-results/language-$repeat.log"
+          done
+      - name: Upload comparison results
+        if: always()
+        id: comparison-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: language-comparison-node-${{ matrix.node }}-${{ github.run_attempt }}
+          path: benchmark-results/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Summarize comparison
+        if: always()
+        shell: bash
+        env:
+          NODE_MAJOR: ${{ matrix.node }}
+          RESULTS_URL: ${{ steps.comparison-artifact.outputs.artifact-url }}
+        run: |
+          printf '## JavaScript vs TypeScript vs NiralScript (Node %s)\n\n' "$NODE_MAJOR" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Commit: `%s`\n\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Three sequential processes, each using 30 warmup calls and 12 rotated rounds. Identical numeric, record, string and async function bodies; correctness assertions and strict TS checks precede timing.\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Inspect the job status and logs for completed repetitions. Hosted-runner timings are noisy; no speed thresholds or universal language ranking. Compilation and execution are separate measurements.\n\n' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$RESULTS_URL" ]]; then
+            printf '[Download raw measurements and runner metadata](%s)\n' "$RESULTS_URL" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20

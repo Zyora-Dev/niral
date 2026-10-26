@@ -4,6 +4,7 @@ import { isPrivatePath, isServableFile } from "../server/security.js";
 import { parseNiralScript as parseLanguage, analyzeNiralScript, NiralScriptError } from "../../niralscript/parser.js";
 import { linkNiralScript } from "../../niralscript/modules.js";
 import { sourceLocation } from "../../niralscript/errors.js";
+import { typeAnnotations } from "../../niralscript/types.js";
 import { NiralError } from "./errors.js";
 
 export function loadNiralScriptSource(script, componentSource, options) {
@@ -51,27 +52,29 @@ function emitProgram(program, options, direct) {
   const pureGlobals = ["Number", "String", "Boolean", "parseInt", "parseFloat", "isNaN", "isFinite", "Number.isFinite", "Number.isInteger", "Number.isNaN", "Array.isArray",
     ..."abs ceil floor round trunc max min pow sqrt cbrt sign exp log log2 log10 sin cos tan asin acos atan atan2 hypot".split(" ").map(name => `Math.${name}`)];
   const pureMethods = {
-    array: ["slice", "concat", "includes", "indexOf", "lastIndexOf", "join", "at"],
+    array: ["slice", "concat", "includes", "indexOf", "lastIndexOf", "join", "at", "map", "filter", "find", "findIndex", "some", "every", "forEach", "reduce"],
     string: ["slice", "substring", "includes", "indexOf", "lastIndexOf", "startsWith", "endsWith", "trim", "trimStart", "trimEnd", "toLowerCase", "toUpperCase", "charAt", "charCodeAt", "at", "split"],
   };
   const analysis = analyzeNiralScript(program, { globals: [...GLOBALS, ...(options.globals ?? [])], moduleGlobals: GLOBALS, reserved: options.reserved, pureGlobals, pureMethods });
   const processReference = analysis.references.find(reference => reference.binding.kind === "global" && reference.binding.name === "process");
   if (processReference) throw new NiralError("NIRAL044", "process is server-only; client code cannot read environment variables", sourceLocation(program, processReference.node));
-  const edits = [];
+  const edits = typeAnnotations(program).map(node => ({ start: node.start, end: node.end, text: "" }));
   const references = new Map();
   const signals = new Set();
   const writable = new Set();
+  const props = new Set();
   function name(binding) {
     return binding.scope && binding.scope !== analysis.root ? `__nrs${binding.index}` : binding.name;
   }
   for (const binding of analysis.bindings) {
-    if (binding.scope !== analysis.root) edits.push({ start: binding.id.start, end: binding.id.end, text: name(binding) });
+    if (binding.scope !== analysis.root) edits.push({ start: binding.id.start, end: binding.id.end, text: (binding.shorthand ? `${binding.name}: ` : "") + name(binding) });
     if (binding.kind === "state" || binding.kind === "derive") signals.add(binding.name);
     if (binding.kind === "state") writable.add(binding.name);
+    if (binding.kind === "input") props.add(binding.name);
   }
   for (const { node, binding, shorthand, localName } of analysis.references) {
     if (direct) references.set(node.start, binding);
-    const read = name(binding) + (direct && (binding.kind === "state" || binding.kind === "derive") ? ".get()" : "");
+    const read = name(binding) + (direct && ["state", "derive", "input"].includes(binding.kind) ? ".get()" : "");
     if (read !== localName) edits.push({ start: node.start, end: node.end, text: (shorthand ? `${localName}: ` : "") + read });
   }
   edits.sort((left, right) => left.start - right.start);
@@ -88,6 +91,7 @@ function emitProgram(program, options, direct) {
     }
     for (let index = low; index < edits.length && edits[index].start < node.end; index++) {
       const edit = edits[index];
+      if (edit.start < cursor) continue;
       if (edit.end > node.end) continue;
       output += program.source.slice(cursor, edit.start) + edit.text;
       cursor = edit.end;
@@ -112,6 +116,10 @@ function emitProgram(program, options, direct) {
           .map(specifier => `const ${specifier.local.name} = ${name(analysis.imports.get(specifier).binding)};`).join("\n");
       case "Program":
         return body(node, node.start, node.end);
+      case "InputDeclaration":
+        return direct
+          ? `const ${source(node.id)} = { get: __n.prop(__props, ${JSON.stringify(node.id.name)}).get };`
+          : `const { ${source(node.id)} } = $props;`;
       case "StateDeclaration":
       case "DerivedDeclaration":
         if (direct) {
@@ -124,13 +132,21 @@ function emitProgram(program, options, direct) {
       case "VariableDeclaration":
         return `${node.kind} ${source(node.id)} = (${source(node.init)}\n);`;
       case "FunctionDeclaration":
-        return `function ${source(node.id)}(${node.params.map(source).join(", ")}) ${emit(node.body)}`;
+        return `${node.async ? "async " : ""}function ${source(node.id)}(${node.params.map(source).join(", ")}) ${emit(node.body)}`;
       case "BlockStatement":
         return `{${body(node, node.start + 1, node.end - 1)}}`;
+      case "ForOfStatement":
+        return `for (${node.kind} ${source(node.id)} of ${source(node.right)}\n) ${emit(node.body)}`;
       case "IfStatement":
         return `if (${source(node.test)}\n) ${emit(node.consequent)}${node.alternate ? " else " + emit(node.alternate) : ""}`;
       case "ReturnStatement":
         return node.argument ? `return (${source(node.argument)}\n);` : "return;";
+      case "ThrowStatement":
+        return `throw (${source(node.argument)}\n);`;
+      case "TryStatement":
+        return `try ${emit(node.block)}${node.handler ? " " + emit(node.handler) : ""}${node.finalizer ? " finally " + emit(node.finalizer) : ""}`;
+      case "CatchClause":
+        return `catch${node.param ? " (" + source(node.param) + ")" : ""} ${emit(node.body)}`;
       case "AssignmentStatement":
         if (direct && node.left.type === "Identifier" && references.get(node.left.start)?.kind === "state") {
           const target = name(references.get(node.left.start));
@@ -146,7 +162,12 @@ function emitProgram(program, options, direct) {
         throw new TypeError(`Unsupported NiralScript declaration '${node.type}'`);
     }
   }
-  return { code: [...(program.modules ?? []).map(emit), body(program, program.start, program.end)].join("\n"), signals, writable, props: new Set() };
+  for (const arrow of analysis.arrows.filter(node => node.body.type === "BlockStatement").sort((left, right) => right.start - left.start)) {
+    const text = emit(arrow.body);
+    edits.push({ start: arrow.body.start, end: arrow.body.end, text });
+    edits.sort((left, right) => left.start - right.start || right.end - left.end);
+  }
+  return { code: [...(program.modules ?? []).map(emit), body(program, program.start, program.end)].join("\n"), signals, writable, props };
 }
 
 export function compileNiralScript(code, filename = "<anonymous>", options = {}) {

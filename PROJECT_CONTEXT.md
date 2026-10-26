@@ -22,7 +22,93 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
-- Windows LSP fix (2026-10-26, focused tests verified locally): portable temporary
+- GitHub comparison job prepared locally (2026-10-26) in release-check workflow:
+  isolated Ubuntu24.04 Node22/24 runners, TS5.7.3, three sequential direct-language
+  benchmark processes, raw artifacts and environment/commit metadata. YAML and
+  Bash syntax checks and a fresh full local release gate pass. User approved
+  scoped commit/push to existing ci/windows-niralscript-20261026 and manual CI
+  dispatch; main/production and unrelated files excluded. Hosted results pending.
+  Latest prior GitHub run 40282501338 is release-only, not benchmark evidence.
+
+- User clarified direct JS vs TS vs NRS language testing, not framework/state
+  comparisons. `node bench/niralscript.js language` now tests identical numeric,
+  record, string and async function bodies without component/reactive operations.
+  All main/edge/empty/nonmutation assertions and actual-source TS strict checks
+  pass (2026-10-26). Warm execution nearly identical across all three, e.g.
+  10000-number sum of squares JS/TS/NRS 0.008511/0.008446/0.008450 ms. All execute
+  as JS on the same V8; NRS factory setup excluded, unused bundled glue counted
+  in output sizes. Compiler timings separate and not equal checking work.
+  Detailed tables/limits in PROGRESS; `/tmp/niral-comparison-language-20261026.log`.
+  No core changes, installs, publication or deployment.
+
+- Fresh JS/TS comparison completed locally (2026-10-26), all four benchmark modes
+  pass: component compile/SSR, standalone output/runtime, nine type probes and
+  Chromium hydration/updates. Extended `bench/niralscript.js`, no core changes.
+  M1/Node25.6.1/TS5.7.3/Chromium151. NRS component compile 2.35-5.23x JS time;
+  shared-runtime SSR/DOM updates close. Standalone collection batch 0.7399 ms NRS
+  vs 0.7215 JS/0.7216 TS; trivial counter/read batches slower with NRS runtime.
+  NRS annotations reject tested value/record/call/async mismatches but still
+  accept wrong-type array.push that strict TS rejects. Transform timings differ
+  in work performed; no universal speed/safety ranking. Detailed results/limits
+  in PROGRESS; logs `/tmp/niral-comparison-{compile,standalone,types,browser}-20261026.log`.
+  No dependencies, production edits, publication or commit/push.
+
+- NiralScript #5/#6 complete locally (2026-10-26). Independent ESM
+  instance compiler, guarded compile CLI/source maps and gradual annotations with
+  optional chaining/nullish/typeof implemented. All 42 language checks pass,
+  including copied-package compilation and original-source exception stacks.
+  Typed inline/external/module dev/prod workflows and injected runtime contracts
+  pass. Full standard release gate passes: 258 framework, 57 language/editor/docs,
+  13 Chromium, four form variants and both offline installers. Fresh fixture LSP
+  validation is clean; existing editor warning is stale. README/spec document
+  APIs/maps and gradual limits. No runtime type validation, watch or dedicated
+  editor integration; Windows/optional Postgres/image gates not rerun. Nothing
+  published/deployed. Log: `/tmp/niral-priorities-5-6-20261026.log`.
+
+- NiralScript #4 complete locally (2026-10-26): named/exported async functions,
+  async arrows, await, try/catch/finally/throw. All 38 language tests and the full
+  standard release gate pass (258 framework, 53 combined language/editor/docs,
+  13 browser, four form variants, both offline installers). Real RPC pending,
+  success, server rejection, finally and recovery pass in dev/prod for inline,
+  external and module scripts. Fresh LSP diagnostics are empty. Catch sources
+  conservatively merge explicit throws; unknown host promises remain outside
+  readonly analysis. No top-level await/async derive; initialization remains
+  conservative across suspension. Log `/tmp/niral-priority-4-20261026.log`.
+  Windows/optional Postgres/image gates not rerun; #5/#6 deferred. Nothing deployed.
+
+- Priorities #2/#3 freshly retested at user request on 2026-10-26: standard release
+  gate passed with 258 framework tests, 50 combined checks (35 language), 13 browser
+  checks, four form variants and both offline installers. No source fixes needed.
+  Full log: `/tmp/niral-priorities-2-3-20261026.log`. Windows/optional Postgres/image
+  gates not run; #4 remains unstarted. No publication, commit, push or deployment.
+
+- NiralScript milestone #3 (2026-10-26, complete locally): concise/block arrows,
+  checked collection callbacks and uniquely resolved callback forwarding, nested
+  declaration/parameter patterns, array/object spread and braced for-of. All 35
+  language tests and the full standard release gate pass (framework regressions,
+  50 language/editor/docs checks, 13 browser checks, forms, both offline installers).
+  Direct/legacy lowering, SSR parity, module/source diagnostics, retained DOM,
+  readonly aliases, derived effects/cycles and eager initialization are covered.
+  Contract documented; code diagnostics and whitespace checks clean. No rest,
+  defaults, holes, call spread, assignment destructuring, other loops or async.
+  Input/state/derive still require identifiers; arbitrary host returns and escaping
+  closures remain outside static guarantees. Windows/optional extended gates not
+  rerun. No publication, commit, push or deployment. Milestone #4 not started.
+
+- NiralScript inputs (2026-10-26, verified locally): portable top-level `input name`
+  syntax and Niral prop adapter implemented. All 30 language tests and focused
+  dev/production browser checks pass (loader data, parent updates preserving
+  DOM/state, route parameters). NRS input-component construction is untracked to
+  isolate initial snapshots from parent mounting effects; input-free codegen is
+  unchanged. Full standard release gate passes (258 framework, 45 language/editor/
+  docs, 13 browser checks, forms and both offline installers). Fresh LSP analysis
+  is clean; the active editor has an older parser diagnostic and may need reload.
+  Windows CI/optional extended gates not rerun. Contract documented; milestone #3
+  callbacks/collections is recorded above. Inputs have no defaults/destructuring/types. Root-level component
+  build runtime imports have a separate existing limitation; fixtures use components/.
+  No publication, commit, push or deployment for this milestone.
+
+- Windows compatibility fixes (2026-10-26, verified Windows/Linux CI): portable temporary
   fixture URLs use pathToFileURL; malformed file URIs cannot enter document storage
   or crash immediate/deferred diagnostics. Invalid workspace roots are skipped.
   Both focused LSP tests pass, including delayed diagnostics and responsiveness.
@@ -35,9 +121,13 @@ are historical unless explicitly marked as verified with a date.
   timeouts. The follow-up module fixture now uses URL.href directly and its
   focused local test passes. Windows CI explicitly selects Python 3.12 and logs
   python3's executable/version to test the interpreter-selection hypothesis;
-  runtime unchanged, workflow/test diagnostics clean. Actual Windows results of
-  the follow-up remain pending. Full standard local release gate passes after the
+  runtime unchanged, workflow/test diagnostics clean. Full standard local release gate passes after the
   follow-up, including browser/forms and both installer smoke tests.
+  Follow-up committed/pushed as `f0e4698` on the temporary branch;
+  run `40282501338` completed successfully: Windows Node 22/24 full standard gates
+  and Linux Node 22/24 extended gates all passed on that exact snapshot. Python
+  worker tests pass with explicit Python setup; the prior timeout's precise
+  interpreter-level cause remains unproven.
   Main/production/npm unchanged.
 
 - Windows verification (2026-10-26, retest failed): user authorized snapshot `cc202fc`

@@ -1,6 +1,6 @@
 import { NiralScriptError } from "./errors.js";
 
-export const RESERVED_WORDS = new Set(("await break case catch class const continue debugger default delete do else enum export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield state derive arguments eval").split(" "));
+export const RESERVED_WORDS = new Set(("await break case catch class const continue debugger default delete do else enum export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield state derive input arguments eval").split(" "));
 
 export class Scanner {
   constructor(source, filename = "<anonymous>") {

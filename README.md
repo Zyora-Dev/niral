@@ -188,12 +188,49 @@ Named imports and aliases (`import { twice as scale } from "./math.nrs"`) can us
 library `export const` and `export function` declarations. Modules keep separate
 scopes and initialize once per component execution, not as process singletons.
 Transitive dependencies participate in semantic checks, SSR invalidation, dev
-reloads and build hashes. Libraries cannot declare top-level state/derive/let;
+reloads and build hashes. Libraries cannot declare top-level input/state/derive/let;
 default/namespace imports, re-exports and cycles are not supported. Private paths,
 including `.server.nrs`, are rejected throughout the graph.
 
-The script supports top-level `state`/`derive`, ordinary `let`/`const`, named
-functions, lexical blocks, braced `if`/`else`, calls, assignments and `return`.
+Read-only external inputs use `input name` in inline or external instance scripts:
+
+```html
+<server>
+  export function load() { return { title: "Server title" }; }
+</server>
+<script lang="niralscript">
+  input title
+  state draft = title
+  derive label = title + "!"
+</script>
+<h1>{label}</h1>
+<input bind:value={draft} />
+```
+
+The Niral adapter supplies same-named props, including route parameters and
+explicit `load()` results. Parent updates flow to inputs and derived values
+without remounting; local state initializers run once per instance. Missing
+inputs are `undefined`, not a default value; explicit `null` is preserved.
+Declare inputs before eager reads. Inputs and tracked aliases cannot be mutated;
+bind editable controls to local state. Defaults, destructuring and input types
+are not supported. Only return browser-safe values from loaders. These are
+adapter rules; the independent language core has no Niral server or props imports.
+
+The script supports top-level `input`/`state`/`derive`, ordinary `let`/`const`, named
+functions and concise/block arrows (including `async`), lexical blocks, braced
+`if`/`else`, `for...of`, `try`/`catch`/`finally`, `throw`, calls, assignments and
+`return`. `await` is supported inside async bodies, not at top level. Native promise
+completion is preserved; async calls and explicit throws are rejected during
+derived evaluation. Initialization remains conservative across await; known
+awaited aliases and explicitly thrown values retain readonly checks in catches.
+Catch sources are conservatively merged across explicit throws in the linked program;
+unknown host returns/rejections are not a general readonly guarantee.
+Nested object/array patterns work in
+ordinary declarations, parameters and loops; arrays/objects support shallow spread.
+Niral checks array callbacks (`map`, `filter`, `find`, `findIndex`, `some`, `every`,
+`forEach`, `reduce`) and helper callback parameters resolving to one known function.
+Patterns have no holes, rest or defaults; call spread, assignment destructuring,
+other loops and loop-control statements remain unsupported.
 Scope checks reject duplicates, unresolved names, direct use before initialization
 and immutable-binding writes. Resolved bindings drive signal reads/writes and
 nested renames without intermediate rune discovery or script token rewriting.
@@ -201,9 +238,10 @@ The rune-emitting lowering API remains available for compatibility; template
 expressions still use the existing compiler. Static checks reject detected derived effects,
 cycles, readonly-alias writes and eager captured reads. Approved intrinsics are
 target-specific; this is not a general purity proof for arbitrary host values.
-External errors retain file/range links in component diagnostics. Type
-annotations, the proposed `view` syntax, standalone code generation and
-dedicated `.nrs` editor/type-checker integration are not implemented. Template
+External errors retain file/range links in component diagnostics. Gradual type
+annotations, optional chaining, nullish coalescing, `typeof` and independent ESM
+compilation with source maps are implemented locally. The proposed `view` syntax
+and dedicated `.nrs` editor integration are not implemented. Template
 handlers remain ordinary Niral/JavaScript. The subset is not a full
 JavaScript grammar (regex literals and assignment expressions are rejected). It does
 not establish support for arbitrary frontend languages or frameworks.
@@ -212,25 +250,34 @@ Run `node --test tests/niralscript.js` for compiler/SSR checks and
 `NIRAL_BROWSER_FILTER=NiralScript node tests/browser/run.js` for dev/production
 Chromium checks using the existing browser tooling. The reusable
 [fixture](tests/fixtures/niralscript.niral) exercises named handlers, shadowing,
-state, derived values, input binding, keyed lists and RPC. These checks are
+state, derived values, server-loaded inputs, local input binding, keyed lists and
+RPC. Browser checks also cover parent/child updates and route parameters. These checks are
 included in the release gate.
 
-Standalone checking is available from this checkout, without Niral components:
+Standalone checking and compilation work from this checkout, without Niral components:
 
 ```sh
 node niralscript/cli.js --help
 node niralscript/cli.js check counter.nrs --root /path/to/project --json
+node niralscript/cli.js compile counter.nrs --root /path/to/project --out counter.mjs
 ```
 
-The check-only CLI validates explicit entry files and their relative module graphs,
-without executing source or emitting JavaScript. It reports original file/line
+The `check` command validates entry files and relative module graphs without
+executing source or emitting JavaScript. `compile` emits a self-contained ESM
+`createInstance(inputs, globals, runtime)` factory and a `.mjs.map` file. Output
+parents must exist inside the selected root; existing files are never overwritten.
+The default runtime provides isolated state and pull-based cached derived reads;
+hosts can inject signal/derived primitives. It does not mount a UI or subscribe.
+Both commands report original file/line
 diagnostics and exits 0 on success, 1 on source/file errors, or 2 on invalid usage.
 It has no implicit host globals; repeat `--global name` to declare them without
-asserting purity. This is language checking, not TypeScript-style type checking or
-Niral client/server security validation. The private package's `niralscript/check`
-API reuses the same parser/linker/analyzer; no dependencies or published package
-are required. See [standalone checking](NIRALSCRIPT.md#standalone-checking) for
-resolution rules, JSON output and API policies. Dedicated editor support is next.
+asserting purity. Primitive, union, array, structural record and `Promise<T>`
+annotations check known initializers, assignments, function arguments and returns.
+Unknown host values remain permissive; this is not runtime validation, a fully
+sound type system or Niral client/server security validation. The private package
+exports `niralscript/check` and `niralscript/compile`; neither requires Niral.
+See [standalone checking](NIRALSCRIPT.md#standalone-checking) and
+[compilation](NIRALSCRIPT.md#standalone-compilation) for API/runtime contracts.
 
 Run `node bench/niralscript.js` for warm compiler/string-SSR timings and generated
 raw/gzip sizes for equivalent NiralScript, JavaScript and annotated TypeScript
@@ -251,8 +298,35 @@ compilation.
 - `node bench/niralscript.js types`: uses the existing TypeScript compiler resolved
   by `niral check`, separately measuring fresh strict/noEmit programs with
   skipLibCheck, including standard library reads/parsing. No incremental reuse or
-  process startup. Also asserts three diagnostic probes illustrating different
-  guarantees; NiralScript is not a TypeScript-style type checker.
+  process startup. Also asserts nine diagnostic probes covering annotated values,
+  records, arguments, async returns, optional/nullish access, names and effects.
+  It explicitly tests a remaining NiralScript gap: wrong-type array-mutator
+  arguments accepted by gradual checking but rejected by strict TypeScript.
+- `node bench/niralscript.js language`: direct JavaScript vs TypeScript vs
+  NiralScript with identical function bodies for numeric aggregation, record
+  processing, strings and async/await. No components or reactive operations.
+  Asserts main/edge/empty outputs and input nonmutation; strict-checks each actual
+  TS source. Reports warmed function execution, separate source-transform times
+  and complete output sizes. Imports/factory setup/strict checks excluded from
+  runtime timings. All execute as JavaScript on the same V8 engine; compiler
+  timings differ in checking work, and NRS output includes unused runtime glue.
+- GitHub Actions: the `compare-languages` job in Release Checks configures separate
+  Ubuntu24.04 jobs on Node22/24 with TypeScript5.7.3 and three sequential `language`
+  runs per job. Artifacts contain logs and commit/runtime/hardware metadata for
+  30 days. Correctness failures fail CI; timings are informational because hosted
+  runners vary. The workflow and all compiler changes must be committed/pushed
+  before a GitHub run can test them.
+- `node bench/niralscript.js standalone`: independently compiles typed `.nrs` to
+  ESM and TypeScript via `transpileModule`, alongside an untransformed JS reference.
+  Asserts counter/collection outputs, instance isolation, input updates/reset and
+  async success/catch. Reports complete module/map sizes, warm transform times and
+  balanced runtime batches (100 writes+reads or 1000 unchanged reads), including
+  fresh instance creation. NRS bundles its pull/cached runtime; JS/TS implement
+  only the measured interface with direct variables/recomputed reads. Array copies
+  and mapping are identical; the standalone host explicitly approves native array
+  `map` on literal arrays. Only valid supplied input values are compared. TS
+  transpilation is not strict checking; maps and runtime strategies differ, so
+  transform/size numbers are not equivalent compiler-work or feature comparisons.
 
 These are local microbenchmarks, not cross-framework or end-user latency rankings.
 Recorded results, versions and limitations are in [PROGRESS.md](PROGRESS.md).

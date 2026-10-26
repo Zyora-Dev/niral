@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadTypescript } from "../src/check/check.js";
 import { compileClient, hoistImports } from "../src/compiler/codegen.js";
 import { compileNiralScript, lowerNiralScript } from "../src/compiler/niralscript.js";
+import { compileNiralScript as compileStandalone } from "../niralscript/compile.js";
 import { collectDeclarations, rewriteScript } from "../src/compiler/rewrite.js";
 import { renderComponent } from "../src/server/render.js";
 
@@ -15,7 +16,7 @@ const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
 const rounds = 12;
 const warmup = 30;
 const mode = process.argv[2] ?? "compile";
-assert.ok(["compile", "browser", "types"].includes(mode), "Mode must be compile, browser or types");
+assert.ok(["compile", "browser", "types", "standalone", "language"].includes(mode), "Mode must be compile, browser, types, standalone or language");
 let sink = 0;
 
 function summarize(values) {
@@ -89,6 +90,183 @@ function variantsFor(fixture) {
 }
 
 console.log(JSON.stringify({ mode, node: process.version, platform: platform(), arch: arch(), cpu: cpus()[0]?.model, rounds }));
+if (mode === "language") {
+  const ts = loadTypescript(fileURLToPath(new URL("../", import.meta.url)));
+  const compilerOptions = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, strict: true, skipLibCheck: true, sourceMap: true, inlineSources: true };
+  const numbers = Array.from({ length: 10000 }, (_, index) => index % 100);
+  const records = Array.from({ length: 1000 }, (_, index) => ({ price: index % 100, quantity: index % 5 + 1, active: index % 3 === 0 }));
+  const words = Array.from({ length: 1000 }, (_, index) => `word${index}`);
+  const fixtures = [
+    { name: "10000 numbers: sum of squares", type: "number[]", body: "let total = 0; for (const value of values) { total += value * value; } return total;", input: numbers, expected: numbers.reduce((total, value) => total + value * value, 0), edge: [-2, 0, 3], edgeExpected: 13, iterations: 1000 },
+    { name: "1000 records: filtered total", type: "{ price: number, quantity: number, active: boolean }[]", body: "let total = 0; for (const value of values) { if (value.active) { total += value.price * value.quantity; } } return total;", input: records, expected: records.filter(value => value.active).reduce((total, value) => total + value.price * value.quantity, 0), edge: [{ price: 3, quantity: 2, active: true }, { price: 50, quantity: 2, active: false }], edgeExpected: 6, iterations: 1000 },
+    { name: "1000 strings: uppercase and join", type: "string[]", body: "let result = ''; for (const value of values) { result += value.toUpperCase() + ':'; } return result;", returns: "string", input: words, expected: words.map(value => value.toUpperCase() + ":").join(""), edge: ["ab", "Cd"], edgeExpected: "AB:CD:", iterations: 200 },
+    { name: "100 awaits: numeric accumulation", type: "number[]", body: "let total = 0; for (const value of values) { total += await value; } return total;", async: true, input: numbers.slice(0, 100), expected: 4950, edge: [-2, 0, 3], edgeExpected: 1, iterations: 200 },
+  ];
+  console.log(`JavaScript vs TypeScript ${ts.version} vs NiralScript: identical function bodies and inputs, no component/DOM/reactive operations.`);
+  console.log("All execute on the same Node/V8 engine. Imports, instance setup, strict TS validation and assertions are outside runtime timing; function references are extracted once.");
+  console.log(`Runtime: ${warmup} warmup calls, ${rounds} rotated rounds, median/p90 batch-average ms per complete function call. Async calls are awaited sequentially.`);
+  console.log("Transforms are reported separately: NRS checking+emission+maps vs TS transpileModule+maps (not strict checking); JS needs no transform. Bundled NRS factory/runtime bytes included even though unused by these functions.");
+  const results = [];
+  for (const fixture of fixtures) {
+    const returnType = fixture.returns ?? "number";
+    const source = typed => `${fixture.async ? "async " : ""}function run(values${typed ? `: ${fixture.type}` : ""})${typed ? `: ${fixture.async ? `Promise<${returnType}>` : returnType}` : ""} { ${fixture.body} }`;
+    const scripts = [source(false) + "\nexport { run };", source(true) + "\nexport { run };", source(true)];
+    const filename = fileURLToPath(new URL("language-benchmark.ts", import.meta.url));
+    const host = ts.createCompilerHost(compilerOptions);
+    const getSourceFile = host.getSourceFile.bind(host);
+    host.getSourceFile = (path, version, onError, shouldCreateNewSourceFile) => path === filename
+      ? ts.createSourceFile(path, scripts[1], version, true)
+      : getSourceFile(path, version, onError, shouldCreateNewSourceFile);
+    const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([filename], { ...compilerOptions, noEmit: true }, host));
+    assert.equal(diagnostics.length, 0, diagnostics.map(item => ts.flattenDiagnosticMessageText(item.messageText, "\n")).join("\n"));
+    const transpile = () => {
+      const output = ts.transpileModule(scripts[1], { compilerOptions, fileName: "language-benchmark.ts", reportDiagnostics: true });
+      assert.equal(output.diagnostics.length, 0);
+      return { code: output.outputText, map: output.sourceMapText };
+    };
+    const compile = () => compileStandalone(scripts[2], "language-benchmark.nrs", { file: "language-benchmark.mjs" });
+    const output = [{ code: scripts[0] }, transpile(), compile()];
+    const variants = await Promise.all(output.map(async (result, index) => {
+      const module = await import("data:text/javascript;base64," + Buffer.from(result.code).toString("base64"));
+      return { name: ["JavaScript", "TypeScript", "NiralScript"][index], ...result, run: index === 2 ? module.createInstance().values.run : module.run };
+    }));
+    const snapshot = structuredClone(fixture.input);
+    for (const variant of variants) {
+      assert.equal(await variant.run(fixture.input), fixture.expected, `${variant.name}: main output`);
+      assert.equal(await variant.run(fixture.edge), fixture.edgeExpected, `${variant.name}: edge output`);
+      assert.equal(await variant.run([]), returnType === "string" ? "" : 0, `${variant.name}: empty output`);
+      assert.deepEqual(fixture.input, snapshot, `${variant.name}: no input mutation`);
+    }
+    const consume = value => typeof value === "string" ? value.length : value;
+    let timing;
+    if (fixture.async) {
+      const samples = variants.map(() => []);
+      for (let iteration = 0; iteration < warmup; iteration++) {
+        for (const variant of variants) sink += consume(await variant.run(fixture.input));
+      }
+      for (let round = 0; round < rounds; round++) {
+        for (let offset = 0; offset < variants.length; offset++) {
+          const index = (round + offset) % variants.length;
+          const start = performance.now();
+          for (let iteration = 0; iteration < fixture.iterations; iteration++) sink += consume(await variants[index].run(fixture.input));
+          samples[index].push((performance.now() - start) / fixture.iterations);
+        }
+      }
+      timing = samples.map(summarize);
+    } else {
+      timing = compare(variants.map(variant => ({ run: () => consume(variant.run(fixture.input)) })), fixture.iterations);
+    }
+    const transforms = compare([{ run: () => transpile().code.length }, { run: () => compile().code.length }], 20);
+    console.log(`\n${fixture.name}: main/edge/empty/nonmutation correctness and TS strict check PASS; ${fixture.iterations} calls per timed batch`);
+    console.table(variants.map((variant, index) => ({
+      language: variant.name,
+      runtimeMedianMs: timing[index].median.toFixed(6),
+      runtimeP90Ms: timing[index].p90.toFixed(6),
+      transformMedianMs: index ? transforms[index - 1].median.toFixed(4) : "not required",
+      transformP90Ms: index ? transforms[index - 1].p90.toFixed(4) : "not required",
+      sourceBytes: Buffer.byteLength(scripts[index]),
+      moduleBytes: Buffer.byteLength(variant.code),
+      gzipBytes: gzipSync(variant.code).length,
+    })));
+    results.push({ workload: fixture.name, ...Object.fromEntries(variants.map((variant, index) => [variant.name, timing[index].median.toFixed(6)])) });
+  }
+  assert.ok(sink > 0);
+  console.log("\nDirect language execution summary: median milliseconds per complete function call");
+  console.table(results);
+  console.log(`PASS: four equivalent workloads in three languages. Output consumed: ${sink}. Warm microbenchmarks, not a general language ranking; TS and NRS compile to JavaScript.`);
+}
+if (mode === "standalone") {
+  const ts = loadTypescript(fileURLToPath(new URL("../", import.meta.url)));
+  const standaloneOptions = { file: "benchmark.mjs", pureMethods: { array: ["map"] } };
+  const compilerOptions = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, sourceMap: true, strict: true };
+  const transpile = source => {
+    const result = ts.transpileModule(source, { compilerOptions, fileName: "benchmark.ts", reportDiagnostics: true });
+    assert.equal(result.diagnostics.length, 0);
+    return { code: result.outputText, map: result.sourceMapText };
+  };
+  function reference(collection, typed) {
+    const initialType = typed ? (collection ? ": number[]" : ": number") : "";
+    const returns = typed ? ": number" : "";
+    const state = collection ? "let items = [...initial];" : "let count = initial;";
+    const read = collection ? "items[0] + items.length" : "count * 2";
+    const update = collection ? "items = [...items].map(value => value + 1);" : "count += 1;";
+    return `export function createInstance(inputs${typed ? `: { initial${initialType} }` : ""}) {
+      let initial = inputs.initial;
+      ${state}
+      function increment()${returns} { ${update} return ${read}; }
+      function read()${returns} { return ${read}; }
+      function reset()${typed ? ": void" : ""} { ${collection ? "items = [...initial]" : "count = initial"}; }
+      async function settle(fail${typed ? ": boolean" : ""})${typed ? ": Promise<string>" : ""} {
+        try { if (fail) { throw "failed"; } return await "ok"; }
+        catch { return "failed"; }
+      }
+      return { values: { increment, read, reset, settle }, updateInputs(patch${typed ? `: { initial?${initialType} }` : ""}) { initial = patch.initial ?? initial; } };
+    }`;
+  }
+  console.log(`TypeScript ${ts.version}; independent ESM, no Niral runtime. Plain JS reference implements the tested operations directly.`);
+  console.log("NRS compile includes checking + emission + maps; TS transpileModule includes emission + maps, NOT type checking. JS needs no source transform.");
+  console.log("Runtime imports/compilation and assertions excluded from timing. Fresh instance per batch, 100 writes+reads or 1000 unchanged reads; all return values consumed.");
+  console.log("NRS default runtime is pull-based/cached; JS/TS references recompute on reads. Same outputs, different strategies; neither has subscriptions/DOM.");
+  console.log("Host policy explicitly trusts native Array.map on literal arrays; array copies and mapping are identical across variants.");
+  console.log("Bytes include complete generated module (NRS bundled runtime/glue) but exclude separate maps. No tree shaking/minification or startup/HTTP/paint timing.");
+  for (const collection of [false, true]) {
+    const name = collection ? "1000-number map + derived length" : "state counter + derived double";
+    const initial = collection ? Array.from({ length: 1000 }, (_, index) => index) : 2;
+    const nrs = collection
+      ? "input initial: number[]\nstate items: number[] = [...initial]\nderive total: number = items.length\nfunction increment(): number { items = [...items].map((value: number): number => value + 1); return items[0] + total }\nfunction read(): number { return items[0] + total }\nfunction reset(): void { items = [...initial] }"
+      : "input initial: number\nstate count: number = initial\nderive doubled: number = count * 2\nfunction increment(): number { count += 1; return doubled }\nfunction read(): number { return doubled }\nfunction reset(): void { count = initial }";
+    const source = nrs + '\nasync function settle(fail: boolean): Promise<string> { try { if (fail) { throw "failed" } return await "ok" } catch { return "failed" } }';
+    const scripts = [source, reference(collection, false), reference(collection, true)];
+    const output = [compileStandalone(source, "benchmark.nrs", standaloneOptions), { code: scripts[1] }, transpile(scripts[2])];
+    const variants = await Promise.all(output.map(async (result, index) => ({
+      name: ["NiralScript", "JavaScript", "TypeScript"][index],
+      ...result,
+      create: (await import("data:text/javascript;base64," + Buffer.from(result.code).toString("base64"))).createInstance,
+    })));
+    for (const variant of variants) {
+      const first = variant.create({ initial });
+      const second = variant.create({ initial });
+      assert.equal(first.values.read(), collection ? 1000 : 4);
+      assert.equal(first.values.increment(), collection ? 1001 : 6);
+      assert.equal(second.values.read(), collection ? 1000 : 4, "instance isolation");
+      first.updateInputs({ initial: collection ? [7, 8] : 9 });
+      assert.equal(first.values.read(), collection ? 1001 : 6, "inputs do not reset state");
+      first.values.reset();
+      assert.equal(first.values.read(), collection ? 9 : 18);
+      assert.equal(await first.values.settle(false), "ok");
+      assert.equal(await first.values.settle(true), "failed");
+    }
+    function batch(variant, writes) {
+      const instance = variant.create({ initial });
+      let checksum = 0;
+      for (let index = 0; index < (writes ? 100 : 1000); index++) checksum += writes ? instance.values.increment() : instance.values.read();
+      return checksum;
+    }
+    for (const writes of [false, true]) for (const variant of variants) assert.equal(batch(variant, writes), batch(variants[1], writes), "batch output parity");
+    const compile = compare([
+      { run: () => compileStandalone(source, "benchmark.nrs", standaloneOptions).code.length },
+      { run: () => transpile(scripts[2]).code.length },
+    ], 20);
+    const writes = compare(variants.map(variant => ({ run: () => batch(variant, true) })), collection ? 10 : 100);
+    const reads = compare(variants.map(variant => ({ run: () => batch(variant, false) })), 100);
+    console.log(`\n${name}: correctness PASS (outputs, input updates, reset, isolated instances, async success/catch)`);
+    console.table(variants.map((variant, index) => ({
+      language: variant.name,
+      sourceBytes: Buffer.byteLength(scripts[index]),
+      generatedBytes: Buffer.byteLength(variant.code),
+      gzipBytes: gzipSync(variant.code).length,
+      mapBytes: variant.map ? Buffer.byteLength(typeof variant.map === "string" ? variant.map : JSON.stringify(variant.map)) : 0,
+      transformMedianMs: index === 1 ? "not required" : compile[index === 0 ? 0 : 1].median.toFixed(4),
+      transformP90Ms: index === 1 ? "not required" : compile[index === 0 ? 0 : 1].p90.toFixed(4),
+      writeBatchMedianMs: writes[index].median.toFixed(4),
+      writeBatchP90Ms: writes[index].p90.toFixed(4),
+      readBatchMedianMs: reads[index].median.toFixed(4),
+      readBatchP90Ms: reads[index].p90.toFixed(4),
+    })));
+  }
+  assert.ok(sink > 0);
+  console.log(`Output consumed: ${sink}. TypeScript runs emitted JavaScript; this is not a separate runtime engine comparison.`);
+}
 if (mode === "compile") {
 console.log(JSON.stringify({ warmup, compileIterations: 50, renderIterations: 200 }));
 console.log("Warm in-process compilation and string SSR; no file I/O, HTTP, hydration or startup timings.");
@@ -177,6 +355,12 @@ if (mode === "types") {
   const probes = [
     { name: "Unresolved identifier", nrs: "state count = missing", js: "let count = $state(missing);", ts: "let count: number = $state(missing);", nrsRejects: true, tsRejects: true },
     { name: "Number assigned a string", nrs: 'state count = 0\ncount = "text"', js: 'let count = $state(0); count = "text";', ts: 'let count: number = $state(0); count = "text";', nrsRejects: false, tsRejects: true },
+    { name: "Annotated number assigned a string", nrs: 'state count: number = 0\ncount = "text"', js: 'let count = $state(0); count = "text";', ts: 'let count: number = $state(0); count = "text";', nrsRejects: true, tsRejects: true },
+    { name: "Annotated record field mismatch", nrs: 'const record: { name: string } = { name: 1 }', js: 'const record = { name: 1 };', ts: 'const record: { name: string } = { name: 1 };', nrsRejects: true, tsRejects: true },
+    { name: "Annotated function argument mismatch", nrs: 'function take(value: number): number { return value }\nconst result = take("bad")', js: 'function take(value) { return value; } const result = take("bad");', ts: 'function take(value: number): number { return value; } const result = take("bad");', nrsRejects: true, tsRejects: true },
+    { name: "Annotated async return mismatch", nrs: 'async function take(): Promise<number> { return "bad" }', js: 'async function take() { return "bad"; }', ts: 'async function take(): Promise<number> { return "bad"; }', nrsRejects: true, tsRejects: true },
+    { name: "Array mutator argument (NRS known gap)", nrs: 'const values: number[] = [1]\nvalues.push("bad")', js: 'const values = [1]; values.push("bad");', ts: 'const values: number[] = [1]; values.push("bad");', nrsRejects: false, tsRejects: true },
+    { name: "Optional/nullish typed function", nrs: 'function label(record: { name: string } | null): string { return record?.name ?? "none" }', js: 'function label(record) { return record?.name ?? "none"; }', ts: 'function label(record: { name: string } | null): string { return record?.name ?? "none"; }', nrsRejects: false, tsRejects: false },
     { name: "Impure derived call", nrs: "derive value = Math.random()", js: "let value = $derived(Math.random());", ts: "let value: number = $derived(Math.random());", nrsRejects: true, tsRejects: false },
   ];
   console.table(probes.map(probe => {
@@ -197,7 +381,7 @@ if (mode === "types") {
     result["TS strict check"] = errors.length ? errors.map(error => `TS${error.code}`).join(", ") : "accepted";
     return result;
   }));
-  console.log("PASS: valid typed fixtures and expected diagnostics. Three probes illustrate differences, not comprehensive language safety rankings.");
+  console.log("PASS: valid typed fixtures and expected diagnostics. Nine probes illustrate differences, including NRS gradual-type limits, not comprehensive language safety rankings.");
 }
 
 if (mode === "browser") {

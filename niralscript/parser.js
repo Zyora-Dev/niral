@@ -12,7 +12,7 @@ export function parseNiralScript(code, filename = "<anonymous>") {
   return { type: "Program", body, source: code, filename, start: 0, end: code.length };
 }
 
-class StatementParser {
+export class StatementParser {
   constructor(code, filename) {
     this.scanner = new Scanner(code, filename);
   }
@@ -53,6 +53,23 @@ class StatementParser {
     return body;
   }
 
+  pattern(names) {
+    this.trivia();
+    const scanner = this.scanner;
+    if (!"[{".includes(scanner.peek())) return this.name(names, scanner.pos);
+    const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+    const pattern = parser.pattern(parser.primary(), names);
+    scanner.pos = pattern.end;
+    return pattern;
+  }
+
+  annotation() {
+    const parser = new ExpressionParser(this.scanner.src, this.scanner.filename, this.scanner.pos, this.scanner.src.length);
+    const annotation = parser.annotation();
+    if (annotation) this.scanner.pos = annotation.end;
+    return annotation;
+  }
+
   block(depth, names = new Set()) {
     this.trivia();
     const scanner = this.scanner;
@@ -66,7 +83,17 @@ class StatementParser {
   statement(topLevel, depth, names) {
     const scanner = this.scanner;
     const start = scanner.pos;
-    const kind = scanner.read(IDENTIFIER);
+    let kind = scanner.read(IDENTIFIER);
+    let async = false;
+    if (kind === "async") {
+      const afterAsync = scanner.pos;
+      this.trivia();
+      if (scanner.read(IDENTIFIER) === "function") {
+        if (/[\r\n]/.test(scanner.src.slice(afterAsync, scanner.pos))) scanner.error("NRS072", "Async function declarations require the same line", { start });
+        kind = "function";
+        async = true;
+      } else scanner.pos = afterAsync;
+    }
     if (kind === "import") {
       if (!topLevel) scanner.error("NRS078", "Imports are only valid at top level", { start });
       this.trivia();
@@ -107,17 +134,32 @@ class StatementParser {
       this.trivia();
       const declarationStart = scanner.pos;
       const declarationKind = scanner.read(IDENTIFIER);
-      if (!["const", "function"].includes(declarationKind)) scanner.error("NRS078", "Only constants and functions can be exported", { start });
+      if (!["const", "function", "async"].includes(declarationKind)) scanner.error("NRS078", "Only constants and functions can be exported", { start });
       scanner.pos = declarationStart;
-      return { ...this.statement(topLevel, depth, names), exported: true, start };
+      const declaration = this.statement(topLevel, depth, names);
+      if (!["VariableDeclaration", "FunctionDeclaration"].includes(declaration.type)) scanner.error("NRS078", "Only constants and functions can be exported", { start });
+      return { ...declaration, exported: true, start };
+    }
+    if (kind === "input") {
+      if (!topLevel) scanner.error("NRS072", "Inputs are only valid at component top level", { start });
+      const id = this.name(names, start);
+      const typeAnnotation = this.annotation();
+      if (typeAnnotation) id.typeAnnotation = typeAnnotation;
+      this.trivia();
+      const terminated = scanner.eat(";");
+      const bindingEnd = typeAnnotation?.end ?? id.end;
+      if (!terminated && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(id.end, scanner.pos))) scanner.error("NRS072", "Expected a semicolon or newline after input", { start: bindingEnd });
+      return { type: "InputDeclaration", id, start, end: terminated ? scanner.pos : bindingEnd };
     }
     if (["state", "derive", "const", "let"].includes(kind)) {
       if (!topLevel && (kind === "state" || kind === "derive")) {
         scanner.error("NRS072", "Reactive declarations must be at component top level", { start });
       }
-      const id = this.name(names, start);
+      const id = kind === "const" || kind === "let" ? this.pattern(names) : this.name(names, start);
+      const typeAnnotation = this.annotation();
+      if (typeAnnotation) id.typeAnnotation = typeAnnotation;
       this.trivia();
-      scanner.expect("=", "NRS070", `Expected '=' after '${id.name}'`);
+      scanner.expect("=", "NRS070", `Expected '=' after binding`);
       if (scanner.peek() === "=" || scanner.peek() === ">") scanner.error("NRS070", `Expected an initializer after '=' for '${id.name}'`);
       const init = this.initializer(id.name, start);
       return {
@@ -134,14 +176,35 @@ class StatementParser {
       const params = [];
       this.trivia();
       while (scanner.peek() !== ")") {
-        params.push(this.name(parameters, scanner.pos));
+        const param = this.pattern(parameters);
+        const typeAnnotation = this.annotation();
+        if (typeAnnotation) param.typeAnnotation = typeAnnotation;
+        params.push(param);
         this.trivia();
         if (!scanner.eat(",")) break;
         this.trivia();
       }
       scanner.expect(")", "NRS072", "Expected ')' after function parameters");
+      const returnType = this.annotation();
       const body = this.block(depth + 1, parameters);
-      return { type: "FunctionDeclaration", id, params, body, start, end: body.end };
+      return { type: "FunctionDeclaration", ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), id, params, body, start, end: body.end };
+    }
+    if (kind === "for") {
+      this.trivia();
+      scanner.expect("(", "NRS072", "Expected '(' after for");
+      this.trivia();
+      const declarationKind = scanner.read(IDENTIFIER);
+      if (!["const", "let"].includes(declarationKind)) scanner.error("NRS072", "For-of requires a const or let binding", { start });
+      const parameters = new Set();
+      const id = this.pattern(parameters);
+      this.trivia();
+      if (scanner.read(IDENTIFIER) !== "of") scanner.error("NRS072", "Only for-of iteration is supported", { start });
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const right = parser.expression();
+      parser.expect(")");
+      scanner.pos = parser.scanner.pos;
+      const body = this.block(depth);
+      return { type: "ForOfStatement", kind: declarationKind, id, right, body, start, end: body.end };
     }
     if (kind === "if") {
       this.trivia();
@@ -163,6 +226,39 @@ class StatementParser {
       } else scanner.pos = afterConsequent;
       return { type: "IfStatement", test, consequent, alternate, start, end: alternate?.end ?? consequent.end };
     }
+    if (kind === "try") {
+      const block = this.block(depth);
+      let handler = null;
+      let finalizer = null;
+      this.trivia();
+      let next = scanner.pos;
+      if (scanner.read(IDENTIFIER) === "catch") {
+        this.trivia();
+        const parameters = new Set();
+        let param = null;
+        if (scanner.eat("(")) {
+          param = this.pattern(parameters);
+          this.trivia();
+          scanner.expect(")", "NRS072", "Expected ')' after catch binding");
+        }
+        const body = this.block(depth, parameters);
+        handler = { type: "CatchClause", param, body, start: next, end: body.end };
+      } else scanner.pos = next;
+      this.trivia();
+      next = scanner.pos;
+      if (scanner.read(IDENTIFIER) === "finally") finalizer = this.block(depth);
+      else scanner.pos = next;
+      if (!handler && !finalizer) scanner.error("NRS072", "Try requires catch or finally", { start });
+      return { type: "TryStatement", block, handler, finalizer, start, end: finalizer?.end ?? handler.end };
+    }
+    if (kind === "throw") {
+      const argumentStart = scanner.pos;
+      const raw = readExpressionStatement(scanner, true);
+      if (this.empty(raw)) scanner.error("NRS072", "Throw requires an expression on the same line", { start });
+      const argument = parseExpression(scanner.src, scanner.filename, argumentStart, scanner.pos);
+      scanner.eat(";");
+      return { type: "ThrowStatement", argument, start, end: scanner.pos };
+    }
     if (kind === "return") {
       if (!depth) scanner.error("NRS072", "Return is only valid inside a function", { start });
       const argumentStart = scanner.pos;
@@ -181,10 +277,11 @@ class StatementParser {
     if (["=", "+=", "-=", "*=", "/=", "%="].includes(operator.kind)) {
       parser.take();
       if (!["Identifier", "MemberExpression"].includes(expression.type)) scanner.error("NRS072", "Invalid assignment target", { start });
+      for (let target = expression; target && ["MemberExpression", "CallExpression"].includes(target.type); target = target.object ?? target.callee) if (target.optional) scanner.error("NRS072", "Optional chains cannot be assignment targets", { start });
       const right = parser.expression();
       statement = { type: "AssignmentStatement", left: expression, operator: operator.kind, right };
     } else {
-      if (expression.type !== "CallExpression") scanner.error("NRS072", "Only calls and assignments are expression statements", { start });
+      if (!["CallExpression", "AwaitExpression"].includes(expression.type)) scanner.error("NRS072", "Only calls, await and assignments are expression statements", { start });
       statement = { type: "ExpressionStatement", expression };
     }
     parser.expect("eof");

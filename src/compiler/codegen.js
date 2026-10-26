@@ -113,7 +113,7 @@ export function compileClient(source, options = {}) {
   // props compile to reactive prop() bindings — reads rewrite like signals
   const tracked = new Set([...signals, ...props]);
 
-  const ctx = { signals: tracked, writable: new Set([...writable, ...props]), locals: new Set(), counter: 0, lines: [], scope: componentScope(ast) };
+  const ctx = { signals: tracked, writable: new Set([...writable, ...(niralScript ? [] : props)]), readonlyInputs: niralScript ? props : new Set(), locals: new Set(), counter: 0, lines: [], scope: componentScope(ast) };
   const roots = genNodes(ast.template, ctx);
 
   const { imports, rest: scriptRest } = niralScript
@@ -191,7 +191,7 @@ import * as __n from ${JSON.stringify(runtime)};
 ${imports.join("\n")}
 
 function __build(__props = {}) {
-${body.filter(Boolean).join("\n")}
+${niralScript && props.size ? "  return __n.untrack(() => {\n" : ""}${body.filter(Boolean).join("\n")}${niralScript && props.size ? "\n  });" : ""}
 }
 
 function __ssr(__props = {}) {
@@ -349,6 +349,12 @@ function genElement(node, ctx) {
           ctx.lines.push(`__n.bindAttr(${v}, ${JSON.stringify(attr.name)}, () => (${expr(attr.expr, ctx)}));`);
         } else {
           const raw = attr.expr.raw.trim();
+          const inputRoot = raw.match(/^([A-Za-z_$][\w$]*)/)?.[1];
+          if (ctx.readonlyInputs?.has(inputRoot) && !ctx.locals.has(inputRoot)) {
+            throw new NiralError("NIRAL042", "NiralScript inputs are read-only; bind to local state instead", {
+              source: raw, filename: "<template>", start: 0,
+            });
+          }
           if (/^[A-Za-z_$][\w$]*$/.test(raw)) {
             // whole signal — classic two-way
             ctx.lines.push(`__n.bindValue(${v}, ${raw});`);

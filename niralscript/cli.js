@@ -1,30 +1,35 @@
 #!/usr/bin/env node
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, readFileSync, realpathSync, writeFileSync, unlinkSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { checkNiralScript } from "./check.js";
+import { compileNiralScript } from "./compile.js";
 import { NiralScriptError } from "./errors.js";
 
 const HELP = `Usage: nrs check <file.nrs>... [--root <directory>] [--global <name>] [--json]
+  nrs compile <file.nrs> --out <file.mjs> [--root <directory>] [--global <name>] [--json]
 
 Check source and relative imports without executing or emitting code.
+Compile emits an independent ESM instance factory and a .mjs.map source map.
+Output paths are relative to --root; parents must exist; files are never overwritten.
 Entry paths are relative to --root (default: current working directory).
 Host globals must be declared explicitly; --global can be repeated.
 Exit codes: 0 success, 1 source/file errors, 2 invalid arguments.
 `;
 
 function argumentsFor(args) {
-  if (args[0] !== "check") throw new Error("Expected the 'check' command");
-  const options = { root: process.cwd(), files: [], globals: [], json: false };
+  if (!["check", "compile"].includes(args[0])) throw new Error("Expected the 'check' or 'compile' command");
+  const options = { command: args[0], root: process.cwd(), files: [], globals: [], json: false };
   let positional = false;
   for (let index = 1; index < args.length; index++) {
     const arg = args[index];
     if (positional) options.files.push(arg);
     else if (arg === "--") positional = true;
     else if (arg === "--json") options.json = true;
-    else if (arg === "--root" || arg === "--global") {
+    else if (arg === "--root" || arg === "--global" || arg === "--out") {
       const value = args[++index];
       if (!value || value.startsWith("-")) throw new Error(`Expected a value after ${arg}`);
       if (arg === "--root") options.root = value;
+      else if (arg === "--out") options.out = value;
       else {
         if (!/^[A-Za-z_$][\w$]*$/.test(value)) throw new Error("--global requires an identifier");
         options.globals.push(value);
@@ -33,6 +38,8 @@ function argumentsFor(args) {
     else options.files.push(arg);
   }
   if (!options.files.length) throw new Error("At least one .nrs entry file is required");
+  if (options.command === "compile" && (options.files.length !== 1 || !options.out?.endsWith(".mjs"))) throw new Error("Compile requires one entry and --out <file.mjs>");
+  if (options.command === "check" && options.out) throw new Error("--out requires the compile command");
   return options;
 }
 
@@ -80,7 +87,32 @@ function checkFiles(options) {
   for (const file of options.files) {
     try {
       const input = load(resolve(root, file));
-      checkNiralScript(input.source, input.filename, { resolveModule, globals: options.globals });
+      const policy = { resolveModule, globals: options.globals };
+      if (options.command === "check") checkNiralScript(input.source, input.filename, policy);
+      else {
+        const output = resolve(root, options.out);
+        const local = relative(root, output);
+        const location = { source: input.source, filename: input.filename, start: 0, end: 0 };
+        const fail = message => { throw new NiralScriptError("NRS079", message, location); };
+        if (!local || local === ".." || local.startsWith(`..${sep}`) || isAbsolute(local)) fail("Output must stay inside the root directory");
+        const result = compileNiralScript(input.source, input.filename, { ...policy, file: basename(output) });
+        result.map.sources = result.map.sources.map(filename => relative(dirname(output), filename).split(sep).join("/"));
+        let createdMap = false;
+        try {
+          let current = root;
+          for (const segment of local.split(sep).slice(0, -1)) {
+            current = join(current, segment);
+            if (!lstatSync(current).isDirectory() || lstatSync(current).isSymbolicLink()) fail("Output parents must be existing directories without symlinks");
+          }
+          writeFileSync(output + ".map", JSON.stringify(result.map) + "\n", { flag: "wx" });
+          createdMap = true;
+          writeFileSync(output, result.code + `//# sourceMappingURL=${encodeURIComponent(basename(output))}.map\n`, { flag: "wx" });
+        } catch (error) {
+          if (createdMap) unlinkSync(output + ".map");
+          if (error instanceof NiralScriptError) throw error;
+          fail(`Cannot write output (${error.code ?? "I/O error"}); existing files are not overwritten`);
+        }
+      }
     } catch (error) {
       report(error);
     }
@@ -89,7 +121,7 @@ function checkFiles(options) {
 }
 
 function main(args) {
-  if ((args.length === 1 && ["--help", "-h"].includes(args[0])) || (args.length === 2 && args[0] === "check" && ["--help", "-h"].includes(args[1]))) {
+  if ((args.length === 1 && ["--help", "-h"].includes(args[0])) || (args.length === 2 && ["check", "compile"].includes(args[0]) && ["--help", "-h"].includes(args[1]))) {
     process.stdout.write(HELP);
     return 0;
   }
@@ -104,7 +136,7 @@ function main(args) {
   if (options.json) process.stdout.write(JSON.stringify({ ok: diagnostics.length === 0, entries: options.files.length, diagnostics }) + "\n");
   else if (diagnostics.length) {
     for (const diagnostic of diagnostics) process.stderr.write(`${diagnostic.filename}:${diagnostic.line}:${diagnostic.column} ${diagnostic.code}: ${diagnostic.message}\n`);
-  } else process.stdout.write(`Checked ${options.files.length} NiralScript ${options.files.length === 1 ? "entry" : "entries"}.\n`);
+  } else process.stdout.write(`${options.command === "compile" ? "Compiled" : "Checked"} ${options.files.length} NiralScript ${options.files.length === 1 ? "entry" : "entries"}.\n`);
   return diagnostics.length ? 1 : 0;
 }
 
