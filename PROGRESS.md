@@ -22,6 +22,10 @@
   not main. No open PR; manual workflow dispatch follows the scoped push.
   Unrelated AGENTS/CLAUDE/editor/spec files and private data excluded. Hosted
   comparison results still pending; old release runs are not evidence for them.
+- Approved source commit `a1a2c3b` pushed to that branch. First dispatch rejected
+  before any run because `runner.temp` was used in job-level env; moved it into
+  the benchmark step env, matching the existing release jobs. Focused context,
+  YAML and Bash validation pass. This correction changes no benchmark/source code.
 
 ## 2026-10-26: Direct Language-Only Comparison
 

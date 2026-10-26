@@ -29,6 +29,9 @@ are historical unless explicitly marked as verified with a date.
   scoped commit/push to existing ci/windows-niralscript-20261026 and manual CI
   dispatch; main/production and unrelated files excluded. Hosted results pending.
   Latest prior GitHub run 40282501338 is release-only, not benchmark evidence.
+  Approved source commit a1a2c3b published to the CI branch. Initial dispatch
+  schema rejection fixed by moving runner.temp from job-level to step-level env;
+  GitHub expression-context validation is not covered by a plain YAML parser.
 
 - User clarified direct JS vs TS vs NRS language testing, not framework/state
   comparisons. `node bench/niralscript.js language` now tests identical numeric,
