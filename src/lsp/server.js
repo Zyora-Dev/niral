@@ -40,10 +40,26 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
   const respondError = (id, code, message) => write({ jsonrpc: "2.0", id, error: { code, message } });
   const notify = (method, params) => write({ jsonrpc: "2.0", method, params });
 
+  function filePath(uri) {
+    if (typeof uri !== "string" || !uri.startsWith("file:")) return null;
+    try {
+      return fileURLToPath(uri);
+    } catch {
+      return null;
+    }
+  }
+
+  function validDocumentUri(uri) {
+    if (typeof uri === "string" && (!uri.startsWith("file:") || filePath(uri) !== null)) return true;
+    notify("window/logMessage", { type: 2, message: "Niral: ignored invalid document URI" });
+    return false;
+  }
+
   function publishDiagnostics(uri) {
     const text = docs.get(uri);
     if (text == null) return;
-    const filename = uri.startsWith("file:") ? fileURLToPath(uri) : uri.split("/").pop() ?? "file.niral";
+    const filename = uri.startsWith("file:") ? filePath(uri) : uri.split("/").pop() ?? "file.niral";
+    if (filename === null) return;
     notify("textDocument/publishDiagnostics", { uri, diagnostics: validate(text, filename, { root: projectRoot(filename) }) });
   }
 
@@ -53,8 +69,8 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
       const documents = new Map();
       const projects = new Map();
       for (const [uri, text] of docs) {
-        if (!uri.startsWith("file:")) continue;
-        const filename = fileURLToPath(uri);
+        const filename = filePath(uri);
+        if (filename === null) continue;
         documents.set(filename, text);
         const root = projectRoot(filename);
         if (root) projects.set(root, []);
@@ -70,8 +86,8 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
         }
       }
       for (const [uri, text] of docs) {
-        if (!uri.startsWith("file:")) continue;
-        const filename = fileURLToPath(uri);
+        const filename = filePath(uri);
+        if (filename === null) continue;
         const diagnostics = validate(text, filename, { root: projectRoot(filename) });
         if (!diagnostics.length) {
           for (const error of projects.get(projectRoot(filename)) ?? []) {
@@ -94,7 +110,7 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
     switch (method) {
       case "initialize":
         workspaceRoots = (params?.workspaceFolders?.map((folder) => folder.uri) ?? (params?.rootUri ? [params.rootUri] : []))
-          .filter((uri) => uri.startsWith("file:")).map((uri) => fileURLToPath(uri));
+          .map(filePath).filter((filename) => filename !== null);
         if (!workspaceRoots.length && params?.rootPath) workspaceRoots = [resolve(params.rootPath)];
         return respond(id, {
           capabilities: {
@@ -115,12 +131,14 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
 
       case "textDocument/didOpen": {
         const { uri, text } = params.textDocument;
+        if (!validDocumentUri(uri)) return;
         docs.set(uri, text);
         scheduleTypes();
         return publishDiagnostics(uri);
       }
       case "textDocument/didChange": {
         const { uri } = params.textDocument;
+        if (!validDocumentUri(uri)) return;
         const change = params.contentChanges?.[params.contentChanges.length - 1];
         if (change) docs.set(uri, change.text); // full sync
         scheduleTypes();

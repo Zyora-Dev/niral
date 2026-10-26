@@ -22,6 +22,27 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Windows LSP fix (2026-10-26, focused tests verified locally): portable temporary
+  fixture URLs use pathToFileURL; malformed file URIs cannot enter document storage
+  or crash immediate/deferred diagnostics. Invalid workspace roots are skipped.
+  Both focused LSP tests pass, including delayed diagnostics and responsiveness.
+  Full standard local release gate passes (258 framework tests, language/editor/
+  docs, Chromium/forms and both offline installer smoke tests); diagnostics and
+  whitespace clean. User approved commit/push to existing temporary CI branch
+  and actual Windows rerun; CI of this fix remains pending. Main/production/npm
+  unchanged.
+
+- Windows verification (2026-10-26, retest failed): user authorized snapshot `cc202fc`
+  on temporary branch `ci/windows-niralscript-20261026`, without changing main or
+  including unrelated files. Release Checks run `40273358624` dispatched for
+  Windows/Linux Node 22/24. Attempt 1 failed both Windows Validate release steps.
+  User requested cancellation/retest; cancellation unnecessary because already
+  completed. Attempt 2 finished in about 2 minutes 25 seconds: Linux Node 22/24
+  passed; Windows Node 22/24 each reported 256 passed and 1 failed. LSP fileURLToPath
+  rejected `file:///t.niral`, causing a crash and protocol-test timeout. Later
+  Windows release gates did not run. That retest used unchanged source; the local
+  fix above is subsequent. No deployment or package publication.
+
 - Semantic safeguards (2026-10-26, verified local): named-function return paths now
   feed readonly and method-override alias checks. Captured locals are checked
   against active caller positions; initialized captures remain valid. All 28

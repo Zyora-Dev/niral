@@ -1,5 +1,40 @@
 # Niral Progress
 
+## 2026-10-26: Windows LSP Compatibility Fix (Verified Local)
+
+- Replaced the Unix-only LSP fixture URI with pathToFileURL over an isolated
+  temporary path containing spaces. Malformed file URIs are rejected before
+  document storage; immediate/deferred diagnostics and workspace-root conversion
+  now safely skip invalid file URIs without crashing the language server.
+- Both focused LSP server tests pass locally, including malformed open/change,
+  invalid workspace roots, delayed diagnostics and continued hover responses.
+  Windows-only coverage includes the original `file:///t.niral` input.
+- Full standard local release gate passes: 258 framework tests, language/editor/
+  docs checks, Chromium, forms and both offline installer scaffold/build/test
+  flows. Editor diagnostics and whitespace checks are clean.
+- User approved committing/pushing this fix and progress records to the existing
+  temporary CI branch, then running Windows Node 22/24 checks. Actual Windows CI
+  of the fix remains pending. Main, production and npm remain unchanged.
+
+## 2026-10-26: Windows NiralScript Validation (Retest Failed)
+
+- User approved a temporary CI branch to test the uncommitted language work on
+  real Windows runners. Snapshot `cc202fc` pushed to
+  `ci/windows-niralscript-20261026`; `main` unchanged and unrelated local files
+  excluded. No deployment or package publication.
+- Existing Release Checks workflow dispatched as run `40273358624`, covering
+  Windows Node 22/24 standard release gates and Linux Node 22/24 extended gates.
+  Attempt 1 completed with failure: both Windows Node 22/24 jobs failed at
+  Validate release. The browser showed stale running status. Cancellation was
+  refused because the run had already completed; no active job was cancelled.
+- At the user's request, all jobs were rerun on unchanged snapshot `cc202fc`.
+  Attempt 2 completed in about 2 minutes 25 seconds: Linux Node 22/24 passed,
+  Windows Node 22/24 each reported 256 passed and 1 failed in the main suite.
+- Both attempts show an LSP crash at src/lsp/server.js:57:
+  `ERR_INVALID_FILE_URL_PATH` for `file:///t.niral`, followed by protocol-test
+  timeout. Later Windows release gates did not run. No source changes were made
+  for that retest; the subsequent local fix is recorded above.
+
 ## 2026-10-26: NiralScript Semantic Safeguards (Verified Local)
 
 - Named-function returns now participate in readonly-alias tracking and method

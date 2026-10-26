@@ -3485,6 +3485,8 @@ test("lsp analysis: diagnostics carry code/hint/range, completions are context-a
 
 test("lsp server: full protocol round-trip over stdio (initialize → diagnostics → completion → hover)", async () => {
   const { spawn } = await import("node:child_process");
+  const directory = _fs.mkdtempSync(join(_os.tmpdir(), "niral lsp "));
+  const uri = pathToFileURL(join(directory, "t.niral")).href;
   const proc = spawn(process.execPath, [join(here, "..", "bin", "niral.js"), "lsp"], {
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -3529,7 +3531,7 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
     send({
       jsonrpc: "2.0",
       method: "textDocument/didOpen",
-      params: { textDocument: { uri: "file:///t.niral", languageId: "niral", version: 1, text: "<div><p>x</div>" } },
+      params: { textDocument: { uri, languageId: "niral", version: 1, text: "<div><p>x</div>" } },
     });
     const diag = await next();
     eq(diag.method, "textDocument/publishDiagnostics");
@@ -3539,7 +3541,7 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
     send({
       jsonrpc: "2.0",
       method: "textDocument/didChange",
-      params: { textDocument: { uri: "file:///t.niral", version: 2 }, contentChanges: [{ text: "<p>{#" }] },
+      params: { textDocument: { uri, version: 2 }, contentChanges: [{ text: "<p>{#" }] },
     });
     await next(); // (still broken — unclosed brace — but that's fine, we want the doc updated)
 
@@ -3547,7 +3549,7 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
       jsonrpc: "2.0",
       id: 2,
       method: "textDocument/completion",
-      params: { textDocument: { uri: "file:///t.niral" }, position: { line: 0, character: 5 } },
+      params: { textDocument: { uri }, position: { line: 0, character: 5 } },
     });
     const comp = await next();
     ok(comp.result.some((i) => i.label.includes("{#if")), "completion over the wire");
@@ -3555,7 +3557,7 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
     send({
       jsonrpc: "2.0",
       method: "textDocument/didChange",
-      params: { textDocument: { uri: "file:///t.niral", version: 3 }, contentChanges: [{ text: "<script>let a = $state(1)</script><p>{a}</p>" }] },
+      params: { textDocument: { uri, version: 3 }, contentChanges: [{ text: "<script>let a = $state(1)</script><p>{a}</p>" }] },
     });
     const clear = await next();
     eq(clear.params.diagnostics.length, 0, "fixed doc → squiggles clear");
@@ -3564,7 +3566,7 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
       jsonrpc: "2.0",
       id: 3,
       method: "textDocument/hover",
-      params: { textDocument: { uri: "file:///t.niral" }, position: { line: 0, character: 18 } },
+      params: { textDocument: { uri }, position: { line: 0, character: 18 } },
     });
     const hov = await next();
     ok(hov.result?.contents?.value.includes("reactive state"), "hover docs over the wire");
@@ -3573,6 +3575,47 @@ test("lsp server: full protocol round-trip over stdio (initialize → diagnostic
     eq((await next()).result, null, "shutdown acknowledged");
   } finally {
     proc.kill();
+    _fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("lsp server: malformed file URIs do not disrupt delayed diagnostics", async () => {
+  const { startLsp } = await import("../src/lsp/server.js");
+  const { PassThrough } = await import("node:stream");
+  const directory = _fs.mkdtempSync(join(_os.tmpdir(), "niral lsp "));
+  const uri = pathToFileURL(join(directory, "valid.niral")).href;
+  const input = new PassThrough();
+  const messages = [];
+  const output = { write(chunk) {
+    if (Buffer.isBuffer(chunk)) messages.push(JSON.parse(chunk.toString()));
+  } };
+  const server = startLsp({ input, output });
+  const send = (method, params, id) => {
+    const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", method, params, id }));
+    input.write(Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body]));
+  };
+  const invalidUris = ["file:///bad%2Fname.niral", "file:///bad%ZZ.niral"];
+  if (process.platform === "win32") invalidUris.push("file:///t.niral");
+  try {
+    send("initialize", { workspaceFolders: [{ uri: invalidUris[0] }] }, 1);
+    ok(messages.some((message) => message.id === 1 && message.result?.capabilities));
+    for (const invalidUri of invalidUris) {
+      send("textDocument/didOpen", { textDocument: { uri: invalidUri, text: "<p/>" } });
+      send("textDocument/didChange", { textDocument: { uri: invalidUri }, contentChanges: [{ text: "<p/>" }] });
+      ok(!server.docs.has(invalidUri), "invalid document must not be retained");
+    }
+    eq(messages.filter((message) => message.method === "window/logMessage").length, invalidUris.length * 2);
+    send("textDocument/didOpen", { textDocument: { uri, text: "<p/>" } });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const diagnostics = messages.filter((message) => message.method === "textDocument/publishDiagnostics");
+    eq(diagnostics.length, 2, "immediate and delayed diagnostics both complete");
+    ok(diagnostics.every((message) => message.params.uri === uri && message.params.diagnostics.length === 0));
+    send("textDocument/hover", { textDocument: { uri }, position: { line: 0, character: 0 } }, 2);
+    ok(messages.some((message) => message.id === 2 && !message.error), "server remains responsive");
+  } finally {
+    server.dispose();
+    input.destroy();
+    _fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
