@@ -6,9 +6,9 @@
   on `ci/windows-niralscript-20261026`, tested commit
   `59d721b861a8a72ba7a8c913ce690de5f68646fb`. Both comparison jobs succeeded,
   including all three sequential processes per runner and uploaded artifacts.
-  Both Windows release jobs also passed. The two Linux release jobs were still
-  running when these results were saved; comparison success does not imply
-  whole-workflow success.
+  Final GitHub status verified: completed/success. All six jobs passed:
+  Node22/24 language comparisons and Node22/24 release checks on both Windows
+  and Linux. No jobs remain pending.
 - Every process passed all four workloads' main/edge/empty-output and nonmutation
   assertions, with actual-source strict TS validation. Identical function bodies,
   no component/reactive operations; 30 warmups and 12 rotated rounds per process.

@@ -30,8 +30,8 @@ are historical unless explicitly marked as verified with a date.
   async5.716/5.779/5.768. Node22/24 runners use different AMD EPYC hardware;
   compare languages within each runner, not Node versions. Full tables/limits in
   PROGRESS; raw artifacts retained30d and downloaded under
-  /tmp/niral-github-comparison-40311729249. Both Windows release jobs also pass;
-  two Linux release jobs still active at recording, so full CI remains pending.
+  /tmp/niral-github-comparison-40311729249. Final workflow completed/success:
+  all six jobs PASS, including Windows and Linux release checks on Node22/24.
   Main/production/unrelated files untouched. Commits a1a2c3b +59d721b published.
 
 - GitHub comparison preparation history (2026-10-26) in release-check workflow:
