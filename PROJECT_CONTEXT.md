@@ -22,12 +22,25 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
-- GitHub comparison job prepared locally (2026-10-26) in release-check workflow:
+- Real GitHub language comparisons PASS (2026-10-26), run40311729249 at
+  59d721b861a8a72ba7a8c913ce690de5f68646fb on existing CI branch. Both Node22/24
+  jobs complete with three repeats, all correctness and TS strict checks pass.
+  Node24 median-of-three us JS/TS/NRS: numeric7.476/7.469/7.420,
+  records1.165/1.235/1.154, strings35.306/35.336/35.523,
+  async5.716/5.779/5.768. Node22/24 runners use different AMD EPYC hardware;
+  compare languages within each runner, not Node versions. Full tables/limits in
+  PROGRESS; raw artifacts retained30d and downloaded under
+  /tmp/niral-github-comparison-40311729249. Both Windows release jobs also pass;
+  two Linux release jobs still active at recording, so full CI remains pending.
+  Main/production/unrelated files untouched. Commits a1a2c3b +59d721b published.
+
+- GitHub comparison preparation history (2026-10-26) in release-check workflow:
   isolated Ubuntu24.04 Node22/24 runners, TS5.7.3, three sequential direct-language
   benchmark processes, raw artifacts and environment/commit metadata. YAML and
   Bash syntax checks and a fresh full local release gate pass. User approved
   scoped commit/push to existing ci/windows-niralscript-20261026 and manual CI
-  dispatch; main/production and unrelated files excluded. Hosted results pending.
+  dispatch; main/production and unrelated files excluded. Hosted results above
+  supersede this preparation-stage status.
   Latest prior GitHub run 40282501338 is release-only, not benchmark evidence.
   Approved source commit a1a2c3b published to the CI branch. Initial dispatch
   schema rejection fixed by moving runner.temp from job-level to step-level env;

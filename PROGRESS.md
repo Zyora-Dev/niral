@@ -1,6 +1,47 @@
 # Niral Progress
 
-## 2026-10-26: GitHub Language Comparison Prepared
+## 2026-10-26: GitHub Direct Language Comparison Passed
+
+- Real GitHub Actions run: https://github.com/Zyora-Dev/niral/actions/runs/40311729249
+  on `ci/windows-niralscript-20261026`, tested commit
+  `59d721b861a8a72ba7a8c913ce690de5f68646fb`. Both comparison jobs succeeded,
+  including all three sequential processes per runner and uploaded artifacts.
+  Both Windows release jobs also passed. The two Linux release jobs were still
+  running when these results were saved; comparison success does not imply
+  whole-workflow success.
+- Every process passed all four workloads' main/edge/empty-output and nonmutation
+  assertions, with actual-source strict TS validation. Identical function bodies,
+  no component/reactive operations; 30 warmups and 12 rotated rounds per process.
+- Below: microseconds per complete function call, median of three process medians.
+  These are not pooled individual-call latencies or confidence intervals.
+
+| Runner / workload | JavaScript | TypeScript | NiralScript |
+| --- | ---: | ---: | ---: |
+| Node22: 10000-number sum of squares | 9.436 | 9.442 | 9.430 |
+| Node22: 1000-record filtered total | 1.310 | 1.303 | 1.313 |
+| Node22: 1000-string uppercase/concatenation | 37.066 | 37.346 | 37.632 |
+| Node22: 100 awaits | 7.186 | 6.708 | 6.646 |
+| Node24: 10000-number sum of squares | 7.476 | 7.469 | 7.420 |
+| Node24: 1000-record filtered total | 1.165 | 1.235 | 1.154 |
+| Node24: 1000-string uppercase/concatenation | 35.306 | 35.336 | 35.523 |
+| Node24: 100 awaits | 5.716 | 5.779 | 5.768 |
+
+- Ubuntu24.04 x64, TypeScript5.7.3, four logical CPUs/~16GB per runner.
+  Node22.23.3/V8 12.4.254.21-node.57 ran on AMD EPYC7763; Node24.21.0/V8
+  13.6.233.17-node.53 ran on AMD EPYC9V74. Different hardware: do not interpret
+  the difference between rows as a Node-version speed comparison.
+- Execution is broadly comparable for these tested workloads; no general winner.
+  Node22 async repeat ranges JS/TS/NRS: 6.542-7.406 / 6.648-7.285 /
+  6.568-7.139 us. Node24 async: 5.682-5.897 / 5.725-5.936 / 5.702-5.942 us.
+  Hosted-runner noise and the small workload set limit conclusions. TS and NRS
+  both emit JS; transform timing is separate and differs in checking work.
+- Artifacts `language-comparison-node-22-1` and `language-comparison-node-24-1`
+  contain all raw median/p90/transform/size tables and hardware/commit metadata,
+  retained30 days. Downloaded to `/tmp/niral-github-comparison-40311729249/`.
+- Approved implementation/CI commits a1a2c3b and 59d721b pushed only to the
+  existing CI branch. Main/production, unrelated local files and data untouched.
+
+## 2026-10-26: GitHub Language Comparison Preparation History
 
 - Added an isolated `compare-languages` job to the existing Release Checks
   workflow: Ubuntu24.04, Node22/24 matrix, TypeScript5.7.3 installed outside the
@@ -21,7 +62,8 @@
 - Publication target is the existing `ci/windows-niralscript-20261026` branch,
   not main. No open PR; manual workflow dispatch follows the scoped push.
   Unrelated AGENTS/CLAUDE/editor/spec files and private data excluded. Hosted
-  comparison results still pending; old release runs are not evidence for them.
+  comparison results were pending at this stage; see the completed measurements
+  above. Old release runs are not evidence for them.
 - Approved source commit `a1a2c3b` pushed to that branch. First dispatch rejected
   before any run because `runner.temp` was used in job-level env; moved it into
   the benchmark step env, matching the existing release jobs. Focused context,
