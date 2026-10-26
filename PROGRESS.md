@@ -13,8 +13,28 @@
   Desktop/mobile screenshots reviewed, existing design retained.
 - User authorized scoped commit/push and website deployment. EC2 read-only
   preflight confirms Node22.23.3, release ba264ec1f6f4, active app/watchdog/nginx
-  and zero app restarts. Deployment remains pending; production framework,
-  environment and private data have not been changed.
+  and zero app restarts before deployment.
+- Source/test/docs commit `f6e92a7` pushed to the existing
+  `ci/windows-niralscript-20261026` branch. Unrelated local files excluded.
+  Private EC2 checkpoint `/root/niral-upgrade-checkpoints/20261026-niralscript-details`
+  preserves the page, environment, service/nginx configuration, release pointer
+  and old release. Isolated source stage created at
+  `/var/tmp/niral-language-details-20261026`; one-file transfer dry run reviewed.
+  Stage built with the unchanged production compiler as release `e7fd55f3a801`.
+  Ephemeral production-server validation passed: 28 sitemap pages, six referenced
+  assets, three private-path checks and integrity59/59. Expected shield warnings
+  from private-path probes were confined to the isolated stage.
+- Website-only deployment completed: live rebuild matches `e7fd55f3a801`,
+  integrity59/59 passes, previous ba264ec1f6f4 retained. App/watchdog/nginx active,
+  automatic restart counts zero. Origin and public health, home, language page,
+  getting-started, sitemap and hashed language asset pass. Public browser checks
+  at390/1440 confirm all eight benchmark rows, canonical URL, loaded fonts/images
+  and no document overflow; desktop/mobile screenshots reviewed.
+- Production environment is byte-identical to checkpoint; data was not copied,
+  replaced or deleted. Production compiler/server fingerprints remain unchanged.
+  The activation SSH shell emitted an exit-trap warning after successful checks;
+  independent read-only service/release/file/HTTP checks confirmed activation
+  remained healthy. No framework upgrade, main merge, new CI run or publication.
 
 ## 2026-10-26: Typed Array Mutation Checks
 
@@ -33,7 +53,9 @@
   258 framework tests, 60 combined language/editor/docs tests (45 language),
   13 browser tests, four form variants and both offline installer checks.
   Windows CI and optional Postgres/image gates were not rerun for this change.
-- Local changes only; no commit, push, new CI run, merge or deployment.
+- Committed/pushed as `f6e92a7` on the existing CI branch. The website-only
+  deployment above does not deploy the compiler changes to the production host.
+  No new CI run, main merge or package publication.
 
 ## 2026-10-26: GitHub Direct Language Comparison Passed
 

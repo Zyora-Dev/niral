@@ -28,7 +28,18 @@ are historical unless explicitly marked as verified with a date.
   actual displayed-code compilation/execution and 390/1024/1440px layouts.
   User authorized scoped commit/push and website-only deployment. Read-only EC2
   preflight: Node22.23.3, release ba264ec1f6f4, app/watchdog/nginx active,
-  NRestarts0. Checkpoint/staging/deployment still pending; no framework upgrade.
+  NRestarts0. Source commit f6e92a7 pushed to the existing CI branch. Private
+  checkpoint20261026-niralscript-details and isolated stage
+  /var/tmp/niral-language-details-20261026 created; one-page dry run reviewed.
+  Stage release e7fd55f3a801 passes28 sitemap pages, six assets, three private
+  paths and integrity59/59 using unchanged production compiler. Live rebuild
+  matches stage and is active; old ba264ec1f6f4 retained. App/watchdog/nginx active,
+  NRestarts0, origin/public health/pages/hashed asset pass. Public390/1440 browser
+  checks confirm eight rows, fonts/images, canonical and no overflow; screenshots
+  reviewed. Environment byte-identical, data untouched, compiler/server hashes
+  unchanged. Post-activation shell exit-trap warning did not affect deployment:
+  independent service/file/HTTP verification passed. No main merge/new CI/npm
+  publication; only website content deployed, not the compiler changes.
 
 - Typed array mutation checking added locally (2026-10-26): static `push`,
   `unshift`, `splice`, `fill` check element types, positions and arity through
@@ -38,8 +49,10 @@ are historical unless explicitly marked as verified with a date.
   method selection, detached methods and general alias/callback inference are
   not made sound. Full standard local release PASS: 258 framework, 60 combined
   language/editor/docs (45 language), 13 browser, four forms and both offline
-  installers. Windows/optional Postgres/image gates not rerun for this change;
-  no commit/push/CI/deploy.
+  installers. Windows/optional Postgres/image gates not rerun for this change.
+  Committed/pushed as f6e92a7 on ci/windows-niralscript-20261026; no new CI/main
+  merge/package publication. Website deployment above leaves production compiler
+  unchanged.
 
 - Real GitHub language comparisons PASS (2026-10-26), run40311729249 at
   59d721b861a8a72ba7a8c913ce690de5f68646fb on existing CI branch. Both Node22/24
