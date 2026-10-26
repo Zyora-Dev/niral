@@ -2,7 +2,11 @@
   "name": "niralscript",
   "private": true,
   "type": "module",
-  "exports": "./parser.js",
+  "exports": {
+    ".": "./parser.js",
+    "./check": "./check.js"
+  },
+  "bin": { "nrs": "./cli.js" },
   "engines": { "node": ">=22" },
   "dependencies": {}
 }

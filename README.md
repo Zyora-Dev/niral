@@ -202,7 +202,7 @@ expressions still use the existing compiler. Static checks reject detected deriv
 cycles, readonly-alias writes and eager captured reads. Approved intrinsics are
 target-specific; this is not a general purity proof for arbitrary host values.
 External errors retain file/range links in component diagnostics. Type
-annotations, the proposed `view` syntax, standalone tooling and
+annotations, the proposed `view` syntax, standalone code generation and
 dedicated `.nrs` editor/type-checker integration are not implemented. Template
 handlers remain ordinary Niral/JavaScript. The subset is not a full
 JavaScript grammar (regex literals and assignment expressions are rejected). It does
@@ -214,6 +214,23 @@ Chromium checks using the existing browser tooling. The reusable
 [fixture](tests/fixtures/niralscript.niral) exercises named handlers, shadowing,
 state, derived values, input binding, keyed lists and RPC. These checks are
 included in the release gate.
+
+Standalone checking is available from this checkout, without Niral components:
+
+```sh
+node niralscript/cli.js --help
+node niralscript/cli.js check counter.nrs --root /path/to/project --json
+```
+
+The check-only CLI validates explicit entry files and their relative module graphs,
+without executing source or emitting JavaScript. It reports original file/line
+diagnostics and exits 0 on success, 1 on source/file errors, or 2 on invalid usage.
+It has no implicit host globals; repeat `--global name` to declare them without
+asserting purity. This is language checking, not TypeScript-style type checking or
+Niral client/server security validation. The private package's `niralscript/check`
+API reuses the same parser/linker/analyzer; no dependencies or published package
+are required. See [standalone checking](NIRALSCRIPT.md#standalone-checking) for
+resolution rules, JSON output and API policies. Dedicated editor support is next.
 
 Run `node bench/niralscript.js` for warm compiler/string-SSR timings and generated
 raw/gzip sizes for equivalent NiralScript, JavaScript and annotated TypeScript

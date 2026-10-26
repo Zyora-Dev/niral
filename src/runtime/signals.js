@@ -122,8 +122,30 @@ export function derived(fn) {
   signalSink = null;
   const out = signal(undefined);
   signalSink = prevSink;
-  effect(() => out.set(fn()));
-  return { get: () => out.get() };
+  const computation = { dependencies: new Set() };
+  effect(() => {
+    activeEffect.derived = computation;
+    computation.dependencies.clear();
+    out.set(fn());
+  });
+  return {
+    get() {
+      const reader = activeEffect?.derived;
+      if (reader) {
+        const pending = [computation];
+        const seen = new Set();
+        while (pending.length) {
+          const target = pending.pop();
+          if (target === reader) throw new Error("derived dependency cycle");
+          if (seen.has(target)) continue;
+          seen.add(target);
+          pending.push(...target.dependencies);
+        }
+        reader.dependencies.add(computation);
+      }
+      return out.get();
+    },
+  };
 }
 
 export function effect(fn) {

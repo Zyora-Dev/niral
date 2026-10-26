@@ -1,5 +1,51 @@
 # Niral Progress
 
+## 2026-10-26: NiralScript Semantic Safeguards (Verified Local)
+
+- Named-function returns now participate in readonly-alias tracking and method
+  override detection, including const function aliases, nested calls and recursive
+  return paths. Nested function declarations are excluded from an enclosing
+  function's return values; fresh mutable object returns remain writable.
+- Captured local initialization checks now use active enclosing-function call
+  positions, including nested forwarding calls and top-level blocks. Calls after
+  initialization remain valid. All 28 language tests and editor diagnostics pass.
+  Return analysis remains conservative and merges
+  parameter sources across calls; arbitrary host calls are not analyzed.
+- Niral's shared reactive runtime now detects self/mutual derived dependency
+  cycles on reads, before the generic scheduling limit. Conditional recovery
+  passes; 257 framework tests pass and runtime diagnostics are clean. Browser
+  reporting/server throwing continue through the existing error handler.
+- Cross-module diagnostic locations and logical returned aliases pass. Full
+  standard `npm run test:release` passes, including language/framework/editor/docs,
+  browser/forms and both offline installer scaffold/build/test flows. Whitespace
+  and diagnostics clean. Windows CI and optional extended gates were not run.
+- This completes the first bounded safeguard milestone, not a general soundness
+  proof: unknown host calls and escaping/higher-order closures remain outside
+  analysis. Next feature: props/server-data support. No publication, deployment
+  or Git commit/push; pre-existing local changes preserved.
+
+## 2026-10-26: Standalone NiralScript Checking (Verified Local)
+
+- Added target-neutral `checkNiralScript(source, filename, options)` through the
+  private language package's `./check` export. It composes the existing parser,
+  module linker and analyzer without framework imports or implicit host globals.
+- Added executable `niralscript/cli.js check` (`nrs` in the private package), with
+  explicit entry files, canonical root, guarded relative imports, repeated host
+  globals, text/JSON diagnostics and exit statuses 0/1/2. No source execution,
+  output generation, dependencies or automatic discovery. Private sources may be
+  checked; Niral client/server security validation remains the adapter's job.
+- All 28 language tests pass, including a copied-package CLI without the framework,
+  source-located transitive errors, cycles, missing/non-regular files, path escapes,
+  symlinks, argument handling, explicit globals and non-execution. Executable help
+  and editor diagnostics pass. Both package exports work in isolation; all 6
+  release/build checks pass, including new core-file hashes. Full standard
+  `npm run test:release` passes: framework/language/editor/docs regressions,
+  browser/forms and both offline installer scaffold/build/test flows. Windows CI
+  and optional extended gates were not run. README/design/local website source
+  updated; whitespace checks clean.
+- Dedicated editor support remains a subsequent step. No publication, deployment,
+  commit or push.
+
 ## 2026-10-26: NiralScript Named Modules (Verified Local)
 
 - Named imports/aliases and exported constants/functions now link through an

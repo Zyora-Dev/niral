@@ -55,8 +55,9 @@ Tests verify parsing from an isolated copy of this directory as well as the
 integrated compiler. This is source organization, not a published package.
 
 External `.nrs` instance scripts and named utility-module imports/exports work in
-Niral dev/build/SSR. A standalone CLI and dedicated `.nrs` editor/type-checker
-support are not implemented. Component diagnostics link to imported source errors. Niral is
+Niral dev/build/SSR. A standalone checking API and check-only CLI are implemented
+locally. Dedicated `.nrs` editor/type-checker support remains deferred.
+Component diagnostics link to imported source errors. Niral is
 the only current target. React/Next.js and other integrations are future work.
 
 ### Implemented Expression Subset
@@ -118,15 +119,23 @@ the only current target. React/Next.js and other integrations are future work.
 - Derived dependencies include reads inside called helpers. Direct, mutual and
   helper-mediated cycles fail NRS076. Initializers are eager: dependencies must
   already be initialized. Named-call reads of later root bindings fail NRS074.
-- Readonly origin tracking follows binding assignments and named-call arguments.
+  Calls also check captured locals against active enclosing-function positions,
+  including nested forwarding calls and top-level block bindings.
+- Readonly origin tracking follows binding assignments, named-call arguments and
+  named-function returns, including const function aliases and recursive paths.
+  Method-override detection also follows returned aliases. Return analysis skips
+  nested function declarations and conservatively merges sources across calls.
   Derived/global aliases cannot be property-assignment targets. Unapproved methods
   on derived aliases are rejected. Niral also rejects references to the server-only
   process global, including aliases and computed access, with NIRAL044.
 
 These are conservative static checks, not a general sound purity guarantee for
-arbitrary host objects, getters, coercions or callbacks. Function-return aliases
-and all local/interprocedural initialization paths are not tracked. There is no
-new dynamic runtime cycle guard. Host implementations of approved intrinsics are
+arbitrary host objects, getters, coercions or callbacks. Unknown host-call returns
+and escaping/higher-order closure initialization paths are not tracked. Niral's
+runtime detects dynamic cycles when a derived read closes a dependency cycle;
+SSR throws and the browser uses the existing runtime error reporting path.
+Dependencies are refreshed on recomputation so conditional cycles can recover.
+Host implementations of approved intrinsics are
 trusted. Nested state-object mutation is not deep-reactive; replace the whole
 binding to notify dependents. Template
 handlers remain ordinary Niral/JavaScript, outside this script analyzer. Parsing
@@ -273,6 +282,49 @@ Raw `.nrs` sources are not publicly served or copied into production static asse
 remain intact. External diagnostics retain the actual file, source and span.
 The same guards apply transitively; `.server.nrs` files cannot be client sources.
 
+## Standalone Checking
+
+Run the check-only CLI from this repository; no global installation is needed:
+
+```sh
+node niralscript/cli.js --help
+node niralscript/cli.js check counter.nrs --root /path/to/project
+node niralscript/cli.js check counter.nrs math.nrs --root /path/to/project --json
+```
+
+The private language package also declares an `nrs` executable. It is not a
+published npm release. The entire `niralscript/` directory works independently
+of Niral, using Node >=22 and no runtime dependencies.
+
+Entry paths are relative to `--root`, which defaults to the working directory.
+Imports must use explicit relative `.nrs` paths inside that root; missing files,
+non-regular files, descendant symlinks and escapes are rejected. The explicitly
+selected root is canonicalized. No directory scanning, package resolution,
+extension inference, source execution or JavaScript emission occurs. Entries use
+instance-script rules; imported dependencies use the existing library restrictions.
+
+The CLI has no implicit browser, JavaScript or Niral globals. Repeated
+`--global name` options declare host-provided names in entries and libraries, but
+do not assert that calls to them are pure. Unknown effects reached from `derive`
+remain errors. Standalone success does not prove type correctness or satisfy
+Niral's client/server security policy. This check-only tool can inspect private
+source directories; it does not serve files or replace Niral's guarded loader.
+
+Text errors include the original filename, one-based line/column and `NRS` code.
+`--json` writes `{ ok, entries, diagnostics }` to stdout, with each diagnostic's
+code, message, filename, zero-based `start`/exclusive `end`, line and column.
+Checking reports the first error per entry graph and continues with other entries.
+Exit status is 0 for success, 1 for source/file errors and 2 for invalid arguments.
+Usage errors are written to stderr even when `--json` is supplied.
+
+`niralscript/check` exports `checkNiralScript(source, filename, options)`, returning
+`{ program, analysis }` or throwing the existing `NiralScriptError`. The package
+root's parser exports remain unchanged. Options accept the linker's `resolveModule`
+and the analyzer's explicit `globals`, `moduleGlobals`, `reserved`, `pureGlobals`
+and `pureMethods` policies. The API performs no filesystem access or execution;
+hosts supply resolution and policy. The CLI is a Node filesystem adapter to this
+same parser/linker/analyzer, not a second implementation of language checks.
+
 ## Compiler Structure
 
 ```text
@@ -319,7 +371,22 @@ boundary handling. Neither target is part of the first milestone.
   dependencies, publication or deployment. Windows CI and optional extended gates
   were not run for this milestone.
 
-Standalone CLI commands, type annotations, async language constructs, effects,
+7. Standalone checking API and CLI implemented locally on 2026-10-26. All 28
+  language tests pass, including a copied-package CLI with source/file errors,
+  explicit globals, JSON output, exit codes and no framework or source execution.
+  Both package exports, all 6 release/build checks and the full standard local
+  release gate pass, including browser/forms and offline installer flows.
+  Windows CI and optional extended gates were not run. Nothing published/deployed.
+
+8. Semantic safeguards extended locally on 2026-10-26: named-function returned
+  aliases, captured-local initialization checks and Niral runtime derived-cycle
+  detection with conditional recovery. All 28 language tests, 257 framework tests
+  and the full standard local release gate pass, including browser/forms and both
+  offline installer flows. Cross-module diagnostic locations are preserved.
+  The bounded-analysis limitations above still apply. Windows/extended gates were
+  not run; nothing published or deployed.
+
+Standalone compilation/watch commands, type annotations, async language constructs, effects,
 classes, regex literals, component-valued modules, a new view syntax and other
 framework targets are deferred. Props/server-data syntax and source-map/editor
 integration need separate design before being advertised as supported.

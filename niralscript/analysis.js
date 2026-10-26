@@ -217,6 +217,23 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     const fn = callable(call.callee);
     if (fn) fn.params.forEach((param, index) => addSource(bindings.find(binding => binding.id === param), call.arguments[index]));
   }
+  const returns = new Map();
+  function returnValues(fn) {
+    if (!returns.has(fn)) {
+      const values = [];
+      function collect(node) {
+        if (node.type === "FunctionDeclaration") return;
+        if (node.type === "ReturnStatement") {
+          if (node.argument) values.push(node.argument);
+          return;
+        }
+        for (const child of children(node)) collect(child);
+      }
+      collect(fn.body);
+      returns.set(fn, values);
+    }
+    return returns.get(fn);
+  }
   function readOnlyOrigin(node, seen = new Set()) {
     node = unwrap(node);
     if (!node) return null;
@@ -229,8 +246,17 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         const origin = readOnlyOrigin(source, new Set(seen));
         if (origin) return origin;
       }
+    } else if (node.type === "CallExpression") {
+      const fn = callable(node.callee);
+      if (fn && !seen.has(fn)) {
+        seen.add(fn);
+        for (const value of returnValues(fn)) {
+          const origin = readOnlyOrigin(value, new Set(seen));
+          if (origin) return origin;
+        }
+      }
     } else if (node.type === "MemberExpression") return readOnlyOrigin(node.object, seen);
-    else if (["ConditionalExpression", "ArrayExpression", "ObjectExpression", "Property"].includes(node.type)) {
+    else if (["ConditionalExpression", "LogicalExpression", "ArrayExpression", "ObjectExpression", "Property"].includes(node.type)) {
       for (const child of children(node)) {
         const origin = readOnlyOrigin(child, new Set(seen));
         if (origin) return origin;
@@ -263,6 +289,18 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     node = unwrap(node);
     if (!node) return seen;
     if (node.type === "MemberExpression") return origins(node.object, seen);
+    if (node.type === "CallExpression") {
+      const fn = callable(node.callee);
+      if (fn && !seen.has(fn)) {
+        seen.add(fn);
+        for (const value of returnValues(fn)) origins(value, seen);
+      }
+      return seen;
+    }
+    if (["ConditionalExpression", "LogicalExpression", "ArrayExpression", "ObjectExpression", "Property"].includes(node.type)) {
+      for (const child of children(node)) origins(child, seen);
+      return seen;
+    }
     const binding = resolved.get(node);
     if (binding && !seen.has(binding)) {
       seen.add(binding);
@@ -331,15 +369,21 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   }
   for (const binding of dependencies.keys()) visit(binding);
 
-  function initialized(node, position, seen = new Set()) {
+  function initialized(node, position, seen = new Set(), active = new Map(), owner = null) {
     if (!node || node.type === "FunctionDeclaration") return;
+    if (owner) active.set(owner, node.start);
+    if (node.type === "BlockStatement" && !owner) {
+      for (const child of node.body) initialized(child, child.start, seen, active);
+      return;
+    }
     if (node.type === "Identifier") {
       const binding = resolved.get(node);
-      if ((binding?.scope === root || binding?.scope?.module) && !["function", "parameter"].includes(binding.kind)) {
-        if (binding.end > position) fail("NRS074", `Call reads '${binding.name}' before initialization`, node);
+      const currentPosition = binding?.scope?.depth === 0 ? position : active.get(binding?.scope?.owner);
+      if (currentPosition !== undefined && !["function", "parameter"].includes(binding.kind)) {
+        if (binding.end > currentPosition) fail("NRS074", `Call reads '${binding.name}' before initialization`, node);
         if (binding.kind === "derive" && !seen.has(binding)) {
           seen.add(binding);
-          initialized(declarations.get(binding).init, position, seen);
+          initialized(declarations.get(binding).init, position, seen, active);
         }
       }
       return;
@@ -348,10 +392,10 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       const fn = callable(node.callee);
       if (fn && !seen.has(fn)) {
         seen.add(fn);
-        initialized(fn.body, position, seen);
+        initialized(fn.body, position, seen, new Map(active), fn.body);
       }
     }
-    for (const child of children(node)) initialized(child, position, seen);
+    for (const child of children(node)) initialized(child, position, seen, active, owner);
   }
   for (const module of [...(program.modules ?? []), program]) {
     for (const node of module.body) initialized(node, node.start);

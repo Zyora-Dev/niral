@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cpSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,6 +13,115 @@ import { collectDeclarations, rewriteScript } from "../src/compiler/rewrite.js";
 import { parseNiralScript, analyzeNiralScript, NiralScriptError } from "../niralscript/parser.js";
 import { ExpressionParser } from "../niralscript/expressions.js";
 import { linkNiralScript } from "../niralscript/modules.js";
+import { checkNiralScript } from "../niralscript/check.js";
+
+test("NiralScript standalone CLI checks copied sources without the framework", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "nrs-cli-")));
+  try {
+    const project = join(root, "project");
+    mkdirSync(project);
+    cpSync(new URL("../niralscript/", import.meta.url), join(root, "language"), { recursive: true });
+    const cli = join(root, "language", "cli.js");
+    const api = spawnSync(process.execPath, ["--input-type=module", "--eval", 'import { parseNiralScript } from "niralscript"; import { checkNiralScript } from "niralscript/check"; if (parseNiralScript("state count = 1").body.length !== 1 || checkNiralScript("state count = 1").analysis.bindings.length !== 1) throw new Error("Invalid package exports")'], { cwd: join(root, "language"), encoding: "utf8", timeout: 10000 });
+    assert.ifError(api.error);
+    assert.equal(api.status, 0, api.stderr);
+    const run = (...args) => {
+      const result = spawnSync(process.execPath, [cli, ...args], { cwd: project, encoding: "utf8", timeout: 10000 });
+      assert.ifError(result.error);
+      assert.equal(result.signal, null);
+      return result;
+    };
+    const check = (...args) => run("check", ...args);
+    writeFileSync(join(project, "base.nrs"), "export const base = 2");
+    writeFileSync(join(project, "math.nrs"), 'import { base } from "./base.nrs"\nexport function twice(value) { return value * base }');
+    writeFileSync(join(project, "entry.nrs"), 'import { twice } from "./math.nrs"\nstate count = 2\nderive result = twice(count)');
+    assert.equal(check("entry.nrs").status, 0);
+    assert.match(check("entry.nrs").stdout, /Checked 1 NiralScript entry/);
+    assert.equal(check("project/entry.nrs", "--root", "..").status, 0);
+    const successful = check("--root", project, "entry.nrs", "math.nrs", "--json");
+    assert.equal(successful.status, 0);
+    assert.equal(successful.stderr, "");
+    assert.deepEqual(JSON.parse(successful.stdout), { ok: true, entries: 2, diagnostics: [] });
+    writeFileSync(join(project, "host.nrs"), "const result = mustNotExecute()");
+    const before = readdirSync(project).sort();
+    assert.equal(check("host.nrs").status, 1);
+    assert.equal(check("host.nrs", "--global", "mustNotExecute").status, 0);
+    assert.deepEqual(readdirSync(project).sort(), before);
+    writeFileSync(join(project, "base.nrs"), "\nexport const base = missing");
+    const invalid = check("entry.nrs", "--json");
+    assert.equal(invalid.status, 1);
+    const report = JSON.parse(invalid.stdout);
+    assert.equal(report.ok, false);
+    assert.deepEqual(report.diagnostics[0], { code: "NRS073", message: "Unresolved name 'missing'", filename: join(project, "base.nrs"), start: 21, end: 28, line: 2, column: 21 });
+    assert.match(check("entry.nrs").stderr, /base\.nrs:2:21 NRS073/);
+    assert.equal(JSON.parse(check("entry.nrs", "host.nrs", "--json").stdout).diagnostics.length, 2);
+    writeFileSync(join(project, "base.nrs"), 'import { twice } from "./math.nrs"\nexport const base = 2');
+    assert.equal(JSON.parse(check("entry.nrs", "--json").stdout).diagnostics[0].code, "NRS078");
+    writeFileSync(join(project, "base.nrs"), "export const base = 2");
+    writeFileSync(join(root, "outside.nrs"), "export const base = 99");
+    symlinkSync(join(root, "outside.nrs"), join(project, "link.nrs"));
+    symlinkSync(root, join(project, "linked"), process.platform === "win32" ? "junction" : "dir");
+    mkdirSync(join(project, "directory.nrs"));
+    for (const file of ["../outside.nrs", "link.nrs", "linked/outside.nrs", "missing.nrs", "directory.nrs", "base.js"]) {
+      const failure = check(file, "--json");
+      assert.equal(failure.status, 1, file);
+      assert.equal(JSON.parse(failure.stdout).diagnostics[0].code, "NRS077", file);
+    }
+    for (const specifier of ["../outside.nrs", "./link.nrs", "./linked/outside.nrs", "./missing.nrs", "./directory.nrs", "./base.js", "package", "https://example.invalid/base.nrs", "./base.nrs?raw", "./%62ase.nrs", ".\\base.nrs"]) {
+      writeFileSync(join(project, "entry.nrs"), `import { base } from ${JSON.stringify(specifier)}`);
+      const failure = check("entry.nrs", "--json");
+      assert.equal(failure.status, 1, specifier);
+      const diagnostic = JSON.parse(failure.stdout).diagnostics[0];
+      assert.equal(diagnostic.code, "NRS077", specifier);
+      assert.equal(diagnostic.filename, join(project, "entry.nrs"));
+      assert.equal(diagnostic.start, 21);
+    }
+    assert.equal(check("entry.nrs", "--root", join(root, "absent"), "--json").status, 1);
+    for (const args of [[], ["build"], ["check"], ["check", "--root"], ["check", "--global"], ["check", "--global", "not.a.name", "entry.nrs"], ["check", "--unknown", "entry.nrs"]]) {
+      const failure = run(...args);
+      assert.equal(failure.status, 2, args.join(" "));
+      assert.match(failure.stderr, /Usage: nrs check/);
+    }
+    for (const args of [["--help"], ["-h"], ["check", "--help"]]) {
+      const help = run(...args);
+      assert.equal(help.status, 0);
+      assert.match(help.stdout, /without executing or emitting code/);
+    }
+    writeFileSync(join(project, "-entry.nrs"), "state count = 1");
+    assert.equal(check("--", "-entry.nrs").status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("NiralScript standalone checking shares module and semantic diagnostics", () => {
+  const source = 'import { twice } from "./math.nrs"\nstate count = 2\nderive result = twice(count)';
+  let dependency = "export function twice(value) { return value * 2 }";
+  const resolveModule = () => ({ filename: "math.nrs", source: dependency });
+  const checked = checkNiralScript(source, "entry.nrs", { resolveModule });
+  assert.equal(checked.program.modules.length, 1);
+  assert.ok(checked.analysis.bindings.some(binding => binding.name === "result" && binding.kind === "derive"));
+  dependency = "export function twice(value) {\n  return missing\n}";
+  assert.throws(() => checkNiralScript(source, "entry.nrs", { resolveModule }), error => error.code === "NRS073" && error.filename === "math.nrs" && error.line === 2 && error.col === 10);
+  assert.throws(() => checkNiralScript(source, "entry.nrs"), { code: "NRS078" });
+  for (const [script, code] of [
+    ["state count = 1\nstate count = 2", "NRS070"],
+    ["state count = missing", "NRS073"],
+    ["const count = 1\ncount = 2", "NRS074"],
+    ["state count = read()\nfunction read() { return later }\nconst later = 1", "NRS074"],
+    ["state count = 1\nfunction change() { count += 1; return count }\nderive result = change()", "NRS075"],
+    ["derive first = second\nderive second = first", "NRS076"],
+  ]) assert.throws(() => checkNiralScript(script, "entry.nrs"), { code }, script);
+  assert.throws(() => checkNiralScript("state result = ping()"), { code: "NRS073" });
+  assert.doesNotThrow(() => checkNiralScript("state result = ping()", "entry.nrs", { globals: ["ping"] }));
+  dependency = "export function twice(value) { return ping() }";
+  assert.throws(() => checkNiralScript(source, "entry.nrs", { resolveModule, globals: ["ping"], moduleGlobals: [] }), { code: "NRS073" });
+  dependency = "export function twice(value) { return value }";
+  const returnedAlias = 'import { twice } from "./math.nrs"\nderive value = { item: 1 }\nconst alias = twice(value)\nalias.item = 2';
+  assert.throws(() => checkNiralScript(returnedAlias, "entry.nrs", { resolveModule }), error => error.code === "NRS074" && error.filename === "entry.nrs" && error.line === 4);
+  dependency = "export function twice(value) {\n  function read() { return later }\n  const result = read()\n  const later = value\n  return result\n}";
+  assert.throws(() => checkNiralScript(source, "entry.nrs", { resolveModule }), error => error.code === "NRS074" && error.filename === "math.nrs" && error.line === 2);
+});
 
 test("NiralScript links isolated modules with transitive semantic checks", async () => {
   const files = new Map([
@@ -143,12 +253,29 @@ test("NiralScript checks aliases and eager captured reads", () => {
     "derive value = { item: 1 }\nlet alias = {}\nalias = value\nalias.item = 2",
     "derive value = { item: 1 }\nfunction change(item) { item.item = 2 }\nchange(value)",
     "derive values = []\nconst alias = values\nalias.push(1)",
+    "derive value = { item: 1 }\nfunction read() { return value }\nconst alias = read()\nalias.item = 2",
+    "derive value = { item: 1 }\nfunction identity(item) { return item }\nconst alias = identity(value)\nalias.item = 2",
+    "derive value = { item: 1 }\nfunction read() { return value }\nconst reader = read\nfunction forward() { return reader() }\nforward().item = 2",
+    "derive values = []\nfunction read() { return values }\nread().push(1)",
+    "derive value = { item: 1 }\nfunction read(flag) { if (flag) { return read(false) } return value }\nread(true).item = 2",
+    "derive value = { item: 1 }\nfunction read() { return value || {} }\nread().item = 2",
+    "derive value = { item: 1 }\nfunction read() { return true && value }\nread().item = 2",
+    "function read() { return Math }\nread().abs = replacement\nfunction replacement(value) { return value }",
     "state result = read()\nconst later = 2\nfunction read() { return later }",
     "derive result = later\nstate later = 2",
     "derive result = later\nconst eager = result\nstate later = 2",
+    "function run() { const result = read(); const later = 2; function read() { return later } return result }\nstate result = run()",
+    "function run() { const result = forward(); const later = 2; function forward() { return read() } function read() { return later } return result }\nstate result = run()",
+    "{ const result = read(); const later = 2; function read() { return later } }",
     "const math = Math\nmath.abs = replacement\nfunction replacement(value) { return value }",
   ]) assert.throws(() => lowerNiralScript(script), { code: "NIRAL074" }, script);
   assert.doesNotThrow(() => lowerNiralScript("state count = 0\nfunction read() { return count }\nstate result = read()"));
+  assert.doesNotThrow(() => lowerNiralScript("function run() { function read() { return later } const later = 2; return read() }\nstate result = run()"));
+  assert.doesNotThrow(() => lowerNiralScript("{ function read() { return later } const later = 2; const result = read() }"));
+  assert.doesNotThrow(() => lowerNiralScript("derive value = { item: 1 }\nfunction fresh() { function nested() { return value } return { item: 0 } }\nfresh().item = 2"));
+  assert.doesNotThrow(() => lowerNiralScript("function fresh() { return { item: 0 } }\nconst first = fresh()\nfirst.item = 2"));
+  assert.throws(() => lowerNiralScript("state values = []\nstate count = 0\nfunction read() { return values }\nfunction change() { count += 1; return count }\nread().slice = change\nderive result = values.slice()"), { code: "NIRAL075" });
+  assert.throws(() => lowerNiralScript("state values = []\nstate count = 0\nfunction read() { return values || [] }\nfunction change() { count += 1; return count }\nread().slice = change\nderive result = values.slice()"), { code: "NIRAL075" });
 });
 
 test("NiralScript external sources resolve securely and retain their own diagnostics", () => {

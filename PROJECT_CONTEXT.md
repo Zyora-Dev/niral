@@ -22,6 +22,26 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Semantic safeguards (2026-10-26, verified local): named-function return paths now
+  feed readonly and method-override alias checks. Captured locals are checked
+  against active caller positions; initialized captures remain valid. All 28
+  language tests and diagnostics pass. Runtime derived reads now detect dependency
+  cycles; recovery and all 257 framework tests pass. Cross-module diagnostics and
+  logical aliases pass. Full standard local release gate passes, including browser/
+  forms and both offline installer flows; Windows/extended gates not run. Unknown
+  host calls and escaping closures remain outside analysis. Props/server-data
+  support is next. No publication, deployment, commit or push.
+
+- Standalone NiralScript checking (2026-10-26, local): `./check` exposes
+  checkNiralScript, composing the existing independent frontend with explicit
+  host policies. Check-only CLI supports guarded root-relative graphs, declared
+  globals, text/JSON diagnostics and exit codes; no execution/emission. All 28
+  language tests pass, including an isolated copied CLI; executable help and
+  diagnostics clean. Package exports and all 6 release/build checks pass. Full
+  standard release gate passes, including browser/forms and both offline installer
+  flows; Windows CI and optional extended gates not run.
+  Dedicated editor support remains deferred. No production changes.
+
 - NiralScript modules (2026-10-26, local): independent graph linker, named imports
   and aliases, const/function exports, isolated scopes and cross-module semantic
   checks implemented. Guarded filesystem imports feed existing SSR/build source

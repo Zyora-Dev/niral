@@ -98,7 +98,7 @@ export function registerBuildReleaseTests(test) {
     const originalRead = fs.readFileSync;
     const hashes = new Set([first.hash]);
     let previous = first;
-    for (const path of ["../src/runtime/rpc.js", "../niralscript/parser.js", "../niralscript/scanner.js", "../niralscript/errors.js", "../niralscript/expressions.js", "../niralscript/analysis.js", "../niralscript/modules.js"]) {
+    for (const path of ["../src/runtime/rpc.js", "../niralscript/parser.js", "../niralscript/scanner.js", "../niralscript/errors.js", "../niralscript/expressions.js", "../niralscript/analysis.js", "../niralscript/modules.js", "../niralscript/check.js", "../niralscript/cli.js"]) {
       const input = fileURLToPath(new URL(path, import.meta.url));
       fs.readFileSync = (file, options) => {
         const value = originalRead(file, options);

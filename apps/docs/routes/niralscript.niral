@@ -76,7 +76,7 @@
         <div class="milestones">
           <div><h3>Implemented locally</h3><p>Independent expression and statement parsing, lexical scopes, functions, reactive declarations and semantic diagnostics. Named module imports and constant/function exports retain isolated scopes.</p></div>
           <div><h3>Niral integration</h3><p>Inline and external scripts work in dev, builds and SSR. Transitive imports participate in reloads, release hashes and client-source privacy checks.</p></div>
-          <div><h3>Future work</h3><p>Dedicated language tooling and additional framework targets remain deferred. Default imports, re-exports and cyclic module graphs are not supported.</p></div>
+          <div><h3>Tooling</h3><p>A standalone check-only CLI and shared checking API are implemented locally. Dedicated editor support and additional framework targets remain deferred.</p></div>
         </div>
         <p>Existing JavaScript, TypeScript and JSX/TSX support in Niral stays intact. NiralScript is an additional language direction, not a replacement for those workflows.</p>
         <div class="links"><a class="text-link" href="/about">About ZyoraLabs</a><a class="text-link" href="/contact">Talk to us about NiralScript</a></div>

@@ -241,6 +241,31 @@ test("derived recomputes only from its inputs", () => {
   eq(runs, 2);
 });
 
+test("derived rejects dynamic cycles and recovers after a branch changes", () => {
+  const [, dispose] = root(() => {
+    const enabled = signal(false);
+    let recursive;
+    recursive = derived(() => enabled.get() ? recursive.get() : 1);
+    let message = "";
+    try { enabled.set(true); } catch (error) { message = error.message; }
+    eq(message, "derived dependency cycle");
+    enabled.set(false);
+    eq(recursive.get(), 1);
+
+    const linked = signal(false);
+    let second;
+    const first = derived(() => linked.get() ? second.get() : 2);
+    second = derived(() => first.get() * 2);
+    message = "";
+    try { linked.set(true); } catch (error) { message = error.message; }
+    eq(message, "derived dependency cycle");
+    linked.set(false);
+    eq(first.get(), 2);
+    eq(second.get(), 4);
+  });
+  dispose();
+});
+
 test("root disposal tears down nested effects", () => {
   const s = signal(0);
   let runs = 0;
