@@ -74,7 +74,7 @@ export async function load() {
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/changelog" />
-  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Niral" />
   <meta property="og:title" content="Niral Changelog | Framework Updates and Fixes" />
@@ -93,7 +93,7 @@ export async function load() {
 <main>
   <nav class="nav" aria-label="Main navigation">
     <div class="nav-inner">
-      <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral" height="30" /></a>
+      <a class="mark" href="/"><img class="brand-logo" src="/niral-logo.png" alt="Niral" height="30" /></a>
       <div class="nav-links">
         <a href="/docs/getting-started">Docs</a>
         <a href="/docs/benchmarks">Benchmarks</a>
@@ -144,7 +144,7 @@ export async function load() {
   </section>
 
   <footer class="foot">
-    <a href="/"><img class="brand-logo" src="/niral-logo.svg" alt="Niral home" height="30" /></a>
+    <a href="/"><img class="brand-logo" src="/niral-logo.png" alt="Niral home" height="30" /></a>
     <span>Built in India. Made for everyone.</span>
     <a href="/docs/getting-started">Read the docs ↗</a>
   </footer>
@@ -162,7 +162,7 @@ export async function load() {
   .nav { position: sticky; top: 0; z-index: 50; background: #0b0b0df5; border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
   .nav-inner { max-width: 1184px; min-height: 80px; margin: auto; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; position: relative; gap: 24px; }
   .mark { display: flex; }
-  .brand-logo { display: block; height: 30px; width: auto; filter: grayscale(1) brightness(1.6); }
+  .brand-logo { display: block; height: 30px; width: auto; }
   .nav-links { display: flex; align-items: center; gap: 30px; }
   .nav-links a { font-size: 14px; }
   a[aria-current="page"] { color: var(--gold); }

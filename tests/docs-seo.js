@@ -3,11 +3,15 @@ import { test } from "node:test";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { PAGES, GROUPS } from "../apps/docs/lib/content.js";
 import { handle } from "../apps/docs/hooks.js";
 import { createDevServer } from "../src/dev/server.js";
 import { compileClient } from "../src/compiler/codegen.js";
 import { compileNiralScript } from "../niralscript/compile.js";
+import { preparePlayground } from "../apps/docs/prepare.server.js";
+import { build } from "../src/build/build.js";
+import { createProdServer } from "../src/server/prod.js";
 
 const source = new URL("../apps/docs/", import.meta.url);
 const decode = value => value.replace(/&(amp|quot|#39|lt|gt);/g, (entity, name) => ({ amp: "&", quot: '"', "#39": "'", lt: "<", gt: ">" })[name]);
@@ -37,6 +41,21 @@ test("docs middleware rejects missing and inherited slugs and canonicalizes guid
   assert.equal(handle({ ...event("/contact"), method: "POST" }), undefined);
 });
 
+test("prepared playground compiler executes runtime contracts without dependencies", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "niral-contract-playground-"));
+  try {
+    preparePlayground(directory);
+    const compiler = await import(pathToFileURL(join(directory, "playground/compiler/compile.js")).href);
+    const output = compiler.compileNiralScript('function read(candidate: unknown) { return contract<{ amount: number }>(candidate) }');
+    const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+    const instance = module.createInstance();
+    assert.deepEqual(instance.values.read({ amount: 2 }), { amount: 2 });
+    assert.throws(() => instance.values.read({ amount: "2" }), { code: "NRS081" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("all sitemap pages expose complete SEO in initial HTML", async () => {
   const directory = mkdtempSync(join(tmpdir(), "niral-seo-"));
   const previousRoot = globalThis.__niralProjectRoot;
@@ -45,8 +64,12 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
   let browser;
   globalThis.fetch = (url, options) => String(url).startsWith("https://api.github.com/") ? Promise.resolve(new Response("Offline test", { status: 503 })) : previousFetch(url, options);
   try {
-    for (const file of ["routes", "components", "lib", "styles", "hooks.js", "robots.txt", "sitemap.xml", "n.png", "niral-logo.svg"]) cpSync(new URL(file, source), join(directory, file), { recursive: true });
-    app = createDevServer({ root: directory, port: 0, watch: false });
+    for (const file of ["routes", "components", "lib", "styles", "playground", "hooks.js", "robots.txt", "sitemap.xml", "n.png", "niral-logo.svg"]) cpSync(new URL(file, source), join(directory, file), { recursive: true });
+    preparePlayground(directory);
+    if (process.env.NIRAL_SEO_PRODUCTION) build({ root: directory });
+    app = process.env.NIRAL_SEO_PRODUCTION
+      ? createProdServer({ dist: join(directory, "dist"), cwd: directory, port: 0 })
+      : createDevServer({ root: directory, port: 0, watch: false });
     const port = await new Promise(accept => app.listen(accept));
     const base = `http://localhost:${port}`;
     const sitemap = await (await fetch(base + "/sitemap.xml")).text();
@@ -101,6 +124,12 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
         assert.match(html, /actions\/runs\/40311729249/);
         assert.match(html, /Hosted results predate the typed-array follow-up/);
         assert.match(html, /aria-current="page"[^>]*>NiralScript/);
+        const contractSource = decode(html.match(/aria-label="Runtime contract example"[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>/)[1]);
+        const contractOutput = compileNiralScript(contractSource, "orders.nrs", { strictTypes: true });
+        const contractModule = await import("data:text/javascript;base64," + Buffer.from(contractOutput.code).toString("base64"));
+        const contracts = contractModule.createInstance().values;
+        assert.deepEqual(contracts.accepted, { quantity: 2 });
+        assert.throws(() => contracts.readOrder({ quantity: "2" }), { code: "NRS081", path: "$.quantity" });
       }
       if (path.startsWith("/docs/")) {
         const guide = PAGES[path.slice(6)];
@@ -143,6 +172,86 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
         await page.screenshot({ path: `/tmp/niral-seo-docs-${width}.png`, fullPage: false, animations: "disabled" });
       }
       await page.goto(base + "/niralscript");
+      const sandboxResponse = await fetch(base + "/playground/sandbox");
+      assert.equal(sandboxResponse.status, 200);
+      assert.match(sandboxResponse.headers.get("content-security-policy"), /sandbox allow-scripts/);
+      assert.match(sandboxResponse.headers.get("content-security-policy"), /connect-src 'none'/);
+      const runSource = source => page.evaluate(async source => {
+        const { createPlayground } = await import("/lib/playground.js");
+        return new Promise(accept => {
+          const results = {};
+          const runner = createPlayground(result => {
+            Object.assign(results, result);
+            if (result.busy === false) accept(results);
+          });
+          runner.run(source);
+        });
+      }, source);
+      const executed = await runSource('state count: number = 2\nderive doubled: number = count * 2\nexport function main(): number { count += 1; return doubled }');
+      assert.equal(executed.output, "6");
+      assert.match(executed.code, /createInstance/);
+      assert.match((await runSource('state count: number = "wrong"')).output, /NRS080/);
+      assert.match((await runSource('throw "runtime test"')).output, /runtime test/);
+      assert.match((await runSource('function loop() { loop() }\nloop()')).output, /stack|recursion/i);
+      const sandboxRun = code => page.evaluate(code => new Promise(accept => {
+        const frame = document.createElement("iframe");
+        frame.hidden = true;
+        frame.sandbox = "allow-scripts";
+        frame.src = "/playground/sandbox";
+        const result = [];
+        frame.onload = () => {
+          const channel = new MessageChannel();
+          channel.port1.onmessage = ({ data }) => {
+            if (data.output) result.push(data.output);
+            if (data.done || data.error) { channel.port1.close(); frame.remove(); accept({ result, error: data.error }); }
+          };
+          frame.contentWindow.postMessage({ type: "niralscript-run", code }, "*", [channel.port2]);
+        };
+        document.body.append(frame);
+      }), code);
+      const requests = [];
+      page.on("request", request => { if (request.url().includes("network-probe")) requests.push(request.url()); });
+      const isolated = await sandboxRun(`export function createInstance() { return { values: { async main() {
+        const result = { origin: self.origin, document: typeof document };
+        try { await fetch(${JSON.stringify(base + "/network-probe")}, { credentials: "include" }); } catch { result.network = "blocked"; }
+        try { indexedDB.open("niral-playground-probe"); } catch { result.storage = "blocked"; }
+        try { Function("return 1")(); } catch { result.eval = "blocked"; }
+        return result;
+      } } }; }`);
+      assert.deepEqual(JSON.parse(isolated.result[0]), { origin: "null", document: "undefined", network: "blocked", storage: "blocked", eval: "blocked" });
+      assert.deepEqual(requests, []);
+      assert.match((await sandboxRun("export function createInstance() { for (;;) {} }")).error, /2 seconds/);
+      assert.equal((await runSource("print(7)")).output, "7");
+      const runButton = page.getByRole("button", { name: "Run", exact: true });
+      await runButton.click();
+      await page.waitForFunction(() => document.querySelector("#playground .status").textContent === "Completed");
+      assert.equal(await page.locator("#playground-output").innerText(), "Count: 3\n6");
+      await page.getByRole("tab", { name: "JavaScript", exact: true }).click();
+      assert.match(await page.locator("#playground-code").innerText(), /createInstance/);
+      await page.getByRole("tab", { name: "JavaScript", exact: true }).press("ArrowLeft");
+      assert.equal(await page.getByRole("tab", { name: "Output", exact: true }).getAttribute("aria-selected"), "true");
+      for (const [example, expected] of [["collections", "Doubled: [2,4,6,8]\n10"], ["async", "Resolved: 42\n42"], ["types", "NRS080"]]) {
+        await page.locator("#playground-example").selectOption(example);
+        await runButton.click();
+        await page.waitForFunction(() => ["Completed", "Error"].includes(document.querySelector("#playground .status").textContent));
+        assert.ok((await page.locator("#playground-output").innerText()).includes(expected));
+      }
+      await page.getByLabel("NiralScript source", { exact: true }).fill('print("<img src=x onerror=alert(1)>")');
+      await page.getByLabel("NiralScript source", { exact: true }).press("Control+Enter");
+      await page.waitForFunction(() => document.querySelector("#playground .status").textContent === "Completed");
+      assert.equal(await page.locator("#playground-output img").count(), 0);
+      assert.match(await page.locator("#playground-output").innerText(), /<img/);
+      let release;
+      const delayed = new Promise(accept => { release = accept; });
+      await page.route("**/playground/compile-worker.js", async route => { await delayed; await route.continue().catch(() => {}); });
+      await runButton.click();
+      await page.getByRole("button", { name: "Stop execution" }).click();
+      assert.equal(await page.locator("#playground .status").innerText(), "Stopped");
+      release();
+      await page.unroute("**/playground/compile-worker.js");
+      await page.locator("#playground-example").selectOption("counter");
+      await page.getByRole("button", { name: "Reset example" }).click();
+      assert.equal(await page.locator("#playground-output").innerText(), "");
       const embeddedExample = await page.getByLabel("NiralScript counter example", { exact: true }).innerText();
       assert.doesNotThrow(() => compileClient(embeddedExample));
       const mutationExample = await page.getByLabel("Typed array mutation example", { exact: true }).innerText();
@@ -152,11 +261,13 @@ test("all sitemap pages expose complete SEO in initial HTML", async () => {
       const generated = compileNiralScript(standaloneExample);
       const { createInstance } = await import("data:text/javascript;base64," + Buffer.from(generated.code).toString("base64"));
       assert.equal(createInstance({ initial: 2 }).values.increment(), 6);
-      for (const width of [390, 1024, 1440]) {
+      for (const width of [320, 390, 1024, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         assert.equal(await page.locator("h1").innerText(), "NiralScript.");
         await page.screenshot({ path: `/tmp/niral-language-${width}.png`, fullPage: true, animations: "disabled" });
+        await page.locator("#playground").scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `/tmp/niral-playground-${width}.png`, animations: "disabled" });
       }
       await page.setViewportSize({ width: 390, height: 900 });
       await page.getByLabel("Navigation menu", { exact: true }).click();

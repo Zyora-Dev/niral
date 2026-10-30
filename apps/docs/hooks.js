@@ -8,7 +8,7 @@ const notFound = {
   body: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Page Not Found | Niral Docs</title><meta name="robots" content="noindex, follow">
-<link rel="stylesheet" href="/styles/fonts.css"><link rel="icon" href="/niral-logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles/fonts.css"><link rel="icon" href="/favicon.png" type="image/png">
 <style>body{margin:0;background:#090909;color:#fafafa;font:16px/1.7 Geist,sans-serif}main{max-width:640px;margin:80px auto;padding:24px}a{color:#f2b544}h1{font-size:32px}</style>
 </head><body><main><a href="/">Niral</a><h1>Documentation page not found</h1>
 <p>This guide does not exist. Browse the documentation to find the topic you need.</p>

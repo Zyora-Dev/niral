@@ -104,7 +104,7 @@ VERIFY AND HAND OFF
   <meta name="robots" content="{robots}" />
   <meta name="theme-color" content="#090909" />
   <link rel="canonical" href="https://niral.site/docs/{slug}" />
-  <link rel="icon" href="/niral-logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="/n.png" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Niral" />

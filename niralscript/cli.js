@@ -5,14 +5,15 @@ import { checkNiralScript } from "./check.js";
 import { compileNiralScript } from "./compile.js";
 import { NiralScriptError } from "./errors.js";
 
-const HELP = `Usage: nrs check <file.nrs>... [--root <directory>] [--global <name>] [--json]
-  nrs compile <file.nrs> --out <file.mjs> [--root <directory>] [--global <name>] [--json]
+const HELP = `Usage: nrs check <file.nrs>... [--root <directory>] [--global <name>] [--strict] [--json]
+  nrs compile <file.nrs> --out <file.mjs> [--root <directory>] [--global <name>] [--strict] [--json]
 
 Check source and relative imports without executing or emitting code.
 Compile emits an independent ESM instance factory and a .mjs.map source map.
 Output paths are relative to --root; parents must exist; files are never overwritten.
 Entry paths are relative to --root (default: current working directory).
 Host globals must be declared explicitly; --global can be repeated.
+--strict requires narrowing unknown and nullable values before typed use.
 Exit codes: 0 success, 1 source/file errors, 2 invalid arguments.
 `;
 
@@ -25,6 +26,7 @@ function argumentsFor(args) {
     if (positional) options.files.push(arg);
     else if (arg === "--") positional = true;
     else if (arg === "--json") options.json = true;
+    else if (arg === "--strict") options.strictTypes = true;
     else if (arg === "--root" || arg === "--global" || arg === "--out") {
       const value = args[++index];
       if (!value || value.startsWith("-")) throw new Error(`Expected a value after ${arg}`);
@@ -87,7 +89,7 @@ function checkFiles(options) {
   for (const file of options.files) {
     try {
       const input = load(resolve(root, file));
-      const policy = { resolveModule, globals: options.globals };
+      const policy = { resolveModule, globals: options.globals, strictTypes: options.strictTypes };
       if (options.command === "check") checkNiralScript(input.source, input.filename, policy);
       else {
         const output = resolve(root, options.out);

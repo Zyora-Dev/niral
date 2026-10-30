@@ -16,6 +16,503 @@ import { linkNiralScript } from "../niralscript/modules.js";
 import { checkNiralScript } from "../niralscript/check.js";
 import { compileNiralScript as compileStandalone } from "../niralscript/compile.js";
 import { SourceMap } from "node:module";
+import { nrsHover, nrsDefinition, nrsCompletions } from "../src/lsp/niralscript.js";
+import { startLsp } from "../src/lsp/server.js";
+import { PassThrough } from "node:stream";
+
+test("NiralScript runtime contracts execute across all emitters", async () => {
+  const source = 'type Item = { quantity: number, tags?: string[] }\nfunction read(candidate: unknown): Item { return contract<Item>(candidate) }\nconst result = read({ quantity: 4 })';
+  const output = compileStandalone(source, "contracts.nrs", { strictTypes: true });
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const variants = [
+    module.createInstance().values,
+    new Function(compileNiralScript(source, "contracts.nrs", { strictTypes: true }).code + ";return {read,result}")(),
+    new Function(lowerNiralScript(source, "contracts.nrs", { strictTypes: true }) + ";return {read,result}")(),
+  ];
+  for (const variant of variants) {
+    assert.deepEqual(variant.result, { quantity: 4 });
+    assert.deepEqual(variant.read({ quantity: 2, tags: ["new"] }), { quantity: 2, tags: ["new"] });
+    assert.throws(() => variant.read({ quantity: "4" }), { code: "NRS081", path: "$.quantity" });
+    assert.throws(() => variant.read({ quantity: 4, tags: [2] }), { path: "$.tags[0]" });
+    assert.throws(() => variant.read({ quantity: 4, extra: true }), { path: "$.extra" });
+  }
+  assert.throws(() => compileStandalone('function read(candidate: unknown) { return contract<Promise<number>>(candidate) }'), /Unsupported runtime contract/);
+  assert.throws(() => compileStandalone('const result: string = contract<number>(4)'), /Expected string/);
+});
+
+test("NiralScript runtime contracts resolve imports and preserve explicit boundaries", async () => {
+  const source = 'import { read } from "./reader.nrs"\nconst result = read({ value: 4 })';
+  const options = { strictTypes: true, resolveModule(specifier) {
+    return specifier === "./reader.nrs"
+      ? { filename: "reader.nrs", source: 'import type { Box } from "./types.nrs"\nexport function read(candidate: unknown) { return contract<Box<number>>(candidate) }' }
+      : { filename: "types.nrs", source: 'export type Box<T> = { value: T }' };
+  } };
+  const output = compileStandalone(source, "entry.nrs", options);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.deepEqual(module.createInstance().values.result, { value: 4 });
+  for (const compile of [compileNiralScript, lowerNiralScript]) {
+    const result = compile(source, "entry.nrs", options);
+    assert.deepEqual(new Function((result.code ?? result) + ";return result")(), { value: 4 });
+  }
+  const nested = 'const read = (candidate) => { return contract<{ value: number }>({ value: contract<number>(candidate) }) }\nconst result = read(3)';
+  for (const compile of [compileNiralScript, lowerNiralScript]) {
+    const output = compile(nested);
+    assert.deepEqual(new Function((output.code ?? output) + ";return result")(), { value: 3 });
+  }
+  const primitive = compileStandalone('const result = contract<number>(4)');
+  const primitiveModule = await import("data:text/javascript;base64," + Buffer.from(primitive.code).toString("base64"));
+  assert.equal(primitiveModule.createInstance().values.result, 4);
+  for (const source of ['const result = contract<unknown>(4)', 'const result = contract<number>(4, 5)', 'const result = contract<number>()']) assert.throws(() => compileStandalone(source));
+  assert.throws(() => compileStandalone('const result = contract<{ value: number }>({ value: 4 }); result.value = "bad"'), { code: "NRS080" });
+  assert.throws(() => compileStandalone('const result = contract<number[]>([4]); result.push("bad")'), { code: "NRS080" });
+  const ordinary = compileStandalone('input quantity: number\nderive total = quantity + 1', "ordinary.nrs", { strictTypes: true });
+  const ordinaryModule = await import("data:text/javascript;base64," + Buffer.from(ordinary.code).toString("base64"));
+  const instance = ordinaryModule.createInstance({ quantity: "4" });
+  assert.equal(instance.values.total, "41");
+  instance.updateInputs({ quantity: "9" });
+  assert.equal(instance.values.total, "91");
+});
+
+test("NiralScript runtime contracts reject unsafe data without leaking payloads", async () => {
+  const source = 'type Result = { kind: "ok", rows: { amount: number }[] } | { kind: "error", message: string }\nfunction read(candidate: unknown) { return contract<Result>(candidate) }';
+  const output = compileStandalone(source, "contract-safety.nrs");
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const readers = [module.createInstance().values.read];
+  for (const compile of [compileNiralScript, lowerNiralScript]) {
+    const compiled = compile(source);
+    readers.push(new Function((compiled.code ?? compiled) + ";return read")());
+  }
+  for (const read of readers) {
+    const data = { kind: "ok", rows: [{ amount: 4 }] };
+    const copy = read(data);
+    copy.rows[0].amount = 9;
+    assert.equal(data.rows[0].amount, 4);
+    assert.deepEqual(read({ kind: "error", message: "no" }), { kind: "error", message: "no" });
+    for (const amount of ["PRIVATE_PAYLOAD", NaN, Infinity, null, undefined, {}, true]) {
+      assert.throws(() => read({ kind: "ok", rows: [{ amount }] }), error => {
+        assert.equal(error.path, "$.rows[0].amount");
+        assert.doesNotMatch(error.message, /PRIVATE_PAYLOAD/);
+        return true;
+      });
+    }
+    assert.throws(() => read({ kind: "ok", rows: new Array(10001) }), { code: "NRS081" });
+    let invoked = false;
+    const rows = [];
+    Object.defineProperty(rows, "0", { get() { invoked = true; return { amount: 1 }; } });
+    assert.throws(() => read({ kind: "ok", rows }), { path: "$.rows[0]" });
+    assert.equal(invoked, false);
+    assert.throws(() => read(Object.create({ kind: "error", message: "inherited" })), { code: "NRS081" });
+    assert.throws(() => read({ kind: "error", message: "no", [Symbol("extra")]: true }), { code: "NRS081" });
+    assert.throws(() => read(JSON.parse('{"kind":"error","message":"no","__proto__":{"polluted":true}}')), { code: "NRS081" });
+  }
+  for (const type of ["unknown", "void", "Promise<number>", "(value: number) => number"]) {
+    assert.throws(() => compileStandalone(`const result = contract<${type}>(4)`, "invalid-contract.nrs"), error => error.code === "NRS080" && error.filename === "invalid-contract.nrs" && error.start > 0);
+  }
+  assert.throws(() => compileStandalone('function read<T>(value: unknown) { return contract<T>(value) }'), /Unsupported runtime contract/);
+  assert.throws(() => compileStandalone('const result = contract<1e999>(null)'), /must be finite/);
+  assert.throws(() => compileStandalone(`const result = contract<number${"[]".repeat(66)}>([])`), /64 levels/);
+  const oversized = Array.from({ length: 1024 }, (_, index) => `field${index}: number`).join(",");
+  assert.throws(() => compileStandalone(`const result = contract<{ ${oversized} }>({})`), /1024 type nodes/);
+  assert.throws(() => compileStandalone('const globalThis = 2; const value = contract<number>(1)'), /unshadowed globalThis/);
+  for (const compile of [compileNiralScript, lowerNiralScript]) {
+    const output = compile('const Object = 0; const Number = 0; const result = contract<{ value: number }>({ value: 4 })');
+    assert.deepEqual(new Function((output.code ?? output) + ";return result")(), { value: 4 });
+  }
+  assert.match(nrsHover("contract", 3, "entry.nrs"), /validates and copies/);
+  assert.ok(nrsCompletions("", 0, "entry.nrs").some(item => item.label === "contract"));
+});
+
+test("NiralScript runtime contracts validate awaited host results once before mutation", async () => {
+  const source = 'state saved = 0\nasync function save() { const data = contract<{ quantity: number }>(await fetchData()); saved = data.quantity; return saved }';
+  const output = compileStandalone(source, "async-contract.nrs", { strictTypes: true, globals: ["fetchData"] });
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  let candidate = { quantity: 4 };
+  let calls = 0;
+  const fetchData = async () => { calls++; return candidate; };
+  const instance = module.createInstance({}, { fetchData });
+  assert.equal(await instance.values.save(), 4);
+  assert.equal(calls, 1);
+  candidate = { quantity: "4" };
+  await assert.rejects(instance.values.save(), { code: "NRS081", path: "$.quantity" });
+  assert.equal(calls, 2);
+  assert.equal(instance.values.saved, 4);
+  const checkedInput = compileStandalone('input candidate: unknown\nconst data = contract<{ quantity: number }>(candidate)', "checked-input.nrs", { strictTypes: true });
+  const inputModule = await import("data:text/javascript;base64," + Buffer.from(checkedInput.code).toString("base64"));
+  assert.equal(inputModule.createInstance({ candidate: { quantity: 4 } }).values.data.quantity, 4);
+  assert.throws(() => inputModule.createInstance({ candidate: { quantity: "4" } }), { code: "NRS081" });
+});
+
+test("NiralScript parses class constructors, members and inheritance", () => {
+  const program = parseNiralScript('class Base { value: number = 1; constructor(value: number = 2) { this.value = value } get doubled(): number { return this.value * 2 } set doubled(value: number) { this.value = value / 2 } static make() { return new Base(3) } } class Child extends Base { constructor(...values: number[]) { super(...values) } read() { return super.doubled } } const result = new Child(4).read()');
+  assert.equal(program.body[0].type, "ClassDeclaration");
+  assert.equal(program.body[0].members[1].kind, "constructor");
+  assert.equal(program.body[1].superClass.name, "Base");
+  assert.equal(program.body[2].init.callee.object.type, "NewExpression");
+  for (const source of ['class Bad { constructor() {} constructor() {} }', 'class Bad { async constructor() {} }', 'class Bad { get value(arg) {} }']) assert.throws(() => parseNiralScript(source), NiralScriptError);
+});
+
+test("NiralScript class execution preserves native receivers and inheritance", async () => {
+  const source = 'class Base { value = 1; constructor(value = 2) { this.value = value } get doubled() { return this.value * 2 } set doubled(value) { this.value = value / 2 } static make() { return new Base(3) } read() { return this.doubled } } class Child extends Base { extra = 1; constructor(value) { super(value) } read() { const read = () => super.read() + this.extra; return read() } } const instance = new Child(4); instance.doubled = 12; const result = instance.read() + Base.make().value';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 16);
+  assert.equal(new Function(compileNiralScript(source).code + ';return result')(), 16);
+  assert.equal(new Function(lowerNiralScript(source) + ';return result')(), 16);
+  assert.throws(() => compileStandalone('const value = this'), /only valid in a class/);
+  assert.throws(() => compileStandalone('class Bad { read() { function nested() { return this } return nested() } }'), /only valid in a class/);
+});
+
+test("NiralScript class contracts check constructors, fields, methods and generic instances", async () => {
+  const source = 'class Box<T> { value: T; constructor(value: T) { this.value = value } read(): T { return this.value } } const box: Box<number> = new Box<number>(3); const result: number = box.read()';
+  const output = compileStandalone(source, "classes.nrs", { strictTypes: true });
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 3);
+  for (const source of [
+    'class Box { value: number = "bad" }',
+    'class Box { value: number = 1; constructor(value: number) { this.value = value } } const box = new Box("bad")',
+    'class Box { value: number = 1 } const box = new Box(); box.value = "bad"',
+    'class Box { read(): number { return "bad" } }',
+    'class Box { read(value: number): number { return value } } const box = new Box(); box.read("bad")',
+    'class Box {} const box = Box()',
+    'class Box<T> { value: T; constructor(value: T) { this.value = value } } const box: Box<string> = new Box<number>(1)',
+  ]) assert.throws(() => compileStandalone(source), /Expected|must be invoked with new/);
+});
+
+test("NiralScript classes preserve readonly, purity and initialization guards", async () => {
+  const rejected = [
+    ['input data; class Box { value; constructor(value) { this.value = value } mutate() { this.value.count = 2 } } const box = new Box(data); box.mutate()', /read-only/],
+    ['input data; class Box { value = data; mutate() { this.value.count = 2 } } const box = new Box(); box.mutate()', /read-only/],
+    ['state count = 0; class Box { constructor() { count++ } } derive box = new Box()', /cannot mutate/],
+    ['state count = 0; class Box { get value() { count++; return count } } const box = new Box(); derive result = box.value', /cannot mutate/],
+    ['state count = 0; class Base { read() { return 1 } } class Child extends Base { read() { count++; return count } } function read(value) { return value.read() } const box = new Child(); derive result = read(box)', /cannot mutate/],
+    ['class Box { value = later } const box = new Box(); const later = 2', /before initialization/],
+    ['class Base {} class Child extends Base { constructor() { this.value = 1; super() } }', /before super/],
+    ['class Base {} class Child extends Base { constructor() {} }', /call super/],
+    ['class Base {} class Child extends Base { constructor() { super(); super() } }', /exactly once/],
+    ['class Base {} class Child extends Base { constructor(flag) { if (flag) { super() } } }', /every path/],
+    ['class Base {} class Child extends Base { read() { return super } }', /requires a member/],
+    ['class Base {} class Child extends Base { constructor(flag) { if (flag) { super() } super() } }', /exactly once/],
+    ['class Base {} class Child extends Base { constructor(flag) { const value = flag && super() } }', /every path/],
+    ['class Base { read() {} } class Child extends Base { constructor() { super.read(); super() } }', /before super/],
+    ['class Box { static { return } }', /cannot return/],
+    ['class Box {} const box = new Box?.()', /optional chaining/],
+    ['state count = 0; class Box { set value(value) { count = value } run() { this.value = 2; return 1 } } const box = new Box(); derive result = box.run()', /cannot mutate/],
+  ];
+  for (const [source, message] of rejected) assert.throws(() => compileStandalone(source), message, source);
+  const source = 'state count = 2; class Box { value: number; constructor(value: number) { this.value = value } read(): number { return this.value * 2 } } derive result = new Box(count).read()';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const instance = module.createInstance();
+  assert.equal(instance.values.result, 4);
+  instance.values.count = 3;
+  assert.equal(instance.values.result, 6);
+  compileStandalone('class Base {} class Child extends Base { constructor(flag) { if (flag) { super(); return } super() } }');
+  compileStandalone('class Base<T> { constructor(value: T) {} } class Child<U> extends Base<U> { constructor(value: U) { super(value) } } const child = new Child<number>(2)');
+  assert.throws(() => compileStandalone('class Base<T> { constructor(value: T) {} } class Child extends Base<number> { constructor() { super("bad") } }'), { code: 'NRS080' });
+  const accessors = 'class Box { static {} #stored = 1; get #value(): number { return this.#stored } set #value(value: number) { this.#stored = value } read() { this.#value = 3; return this.#value } } const result = new Box().read()';
+  const accessorModule = await import('data:text/javascript;base64,' + Buffer.from(compileStandalone(accessors).code).toString('base64'));
+  assert.equal(accessorModule.createInstance().values.result, 3);
+});
+
+test("NiralScript private members, static initialization and inherited generics execute", async () => {
+  const source = 'class Base<T> { value: T; constructor(value: T) { this.value = value } read(): T { return this.value } } class Box extends Base<number> { #offset: number = 2; static total: number = 0; static { this.total = 3 } ["result"](): number { return this.read() + this.#offset } } const box = new Box(4); const result: number = box.result() + Box.total';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 9);
+  assert.equal(new Function(compileNiralScript(source).code + ';return result')(), 9);
+  assert.equal(new Function(lowerNiralScript(source) + ';return result')(), 9);
+  assert.throws(() => compileStandalone('class Box { #value = 1 } const box = new Box(); const result = box.#value'), /Private member/);
+  assert.throws(() => compileStandalone('class Box { static { this.value = later } } const later = 2'), /before initialization/);
+  assert.throws(() => compileStandalone(source.replace('new Box(4)', 'new Box("bad")')), { code: 'NRS080' });
+  assert.throws(() => compileStandalone('class Box<T> { value: T; constructor(value: T) { this.value = value } } const boxes: Box<number>[] = [new Box<string>("bad")]'), { code: 'NRS080' });
+  compileStandalone('class Base<T> { value: T; constructor(value: T) { this.value = value } } class Child extends Base<number> {} const boxes: Base<number>[] = [new Child(2)]', 'inherit.nrs', { strictTypes: true });
+});
+
+test("NiralScript editor navigates imported classes and members", () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'niral-editor-classes-')));
+  try {
+    const filename = join(directory, 'entry.nrs');
+    const library = join(directory, 'box.nrs');
+    writeFileSync(library, 'export class Box<T> { value: T; constructor(value: T) { this.value = value } read(): T { return this.value } }');
+    const source = 'import { Box } from "./box.nrs"\nconst box = new Box<number>(2)\nconst result = box.read()';
+    const options = { root: directory, strictTypes: true };
+    assert.deepEqual(validate(source, filename, options), []);
+    assert.match(nrsHover(source, source.lastIndexOf('Box') + 1, filename, options), /class Box<T>/);
+    assert.match(nrsHover(source, source.lastIndexOf('read') + 1, filename, options), /read\(\): T/);
+    assert.equal(nrsDefinition(source, source.lastIndexOf('read') + 1, filename, options).uri, pathToFileURL(library).href);
+    assert.deepEqual(nrsCompletions(source, source.lastIndexOf('read') + 2, filename, options).map(item => item.label).sort(), ['read', 'value']);
+    const incomplete = source.slice(0, source.lastIndexOf('read'));
+    assert.ok(nrsCompletions(incomplete, incomplete.length, filename, options).some(item => item.label === 'read'));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("NiralScript classes preserve reactive writes and type-only module contracts", async () => {
+  const runtime = await import('../src/runtime/index.js');
+  const construction = 'let count = 0; class Base { constructor() { count += 1 } } class Child extends Base {} new Child(); const result: boolean = new Child() instanceof Base && count === 2';
+  assert.throws(() => compileStandalone('const invalid = 1 "+" 2'), { code: 'NRS071' });
+  const constructed = await import('data:text/javascript;base64,' + Buffer.from(compileStandalone(construction).code).toString('base64'));
+  assert.equal(constructed.createInstance().values.result, true);
+  for (const code of [compileNiralScript(construction).code, lowerNiralScript(construction)]) assert.equal(new Function(code + '\nreturn result')(), true);
+  const source = 'input initial: number\nstate count: number = initial\nclass Counter { increment(delta: number = 1): number { count += delta; return this.read() } read(): number { return count * 2 } }\nconst counter = new Counter()\nderive doubled = counter.read()';
+  const compiled = compileStandalone(source);
+  const { createInstance } = await import('data:text/javascript;base64,' + Buffer.from(compiled.code).toString('base64'));
+  const first = createInstance({ initial: 2 });
+  const second = createInstance({ initial: 9 });
+  assert.equal(first.values.doubled, 4);
+  assert.equal(first.values.counter.increment(), 6);
+  assert.equal(first.values.doubled, 6);
+  assert.equal(second.values.doubled, 18);
+  const direct = compileNiralScript(source);
+  for (const code of [direct.code, rewriteScript(lowerNiralScript(source), new Set([...direct.signals, ...direct.props]))]) {
+    const instance = new Function('__n', '__props', code + '\nreturn { counter, doubled };')(runtime, { initial: 2 });
+    assert.equal(instance.doubled.get(), 4);
+    assert.equal(instance.counter.increment(3), 10);
+    assert.equal(instance.doubled.get(), 10);
+  }
+  const library = 'export class Box<T> { value: T; constructor(value: T) { this.value = value } read(): T { return this.value } }\nexport function create(value: number): Box<number> { return new Box<number>(value) }';
+  const options = { strictTypes: true, resolveModule: () => ({ filename: 'box.nrs', source: library }) };
+  const entry = 'import { create } from "./box.nrs"\nimport type { Box } from "./box.nrs"\nconst box: Box<number> = create(2)\nconst result = box.read()';
+  const linked = compileStandalone(entry, 'entry.nrs', options);
+  const module = await import('data:text/javascript;base64,' + Buffer.from(linked.code).toString('base64'));
+  assert.equal(module.createInstance().values.result, 2);
+  assert.equal(Object.hasOwn(module.createInstance().values, 'Box'), false);
+  assert.throws(() => compileStandalone(entry + '\nconst invalid = new Box<number>(2)', 'entry.nrs', options), { code: 'NRS073' });
+});
+
+test("NiralScript expansion serves inline and external scripts in dev and production", async () => {
+  const { createDevServer } = await import("../src/dev/server.js");
+  const { createProdServer } = await import("../src/server/prod.js");
+  const { build } = await import("../src/build/build.js");
+  const root = mkdtempSync(join(tmpdir(), "niral-expanded-http-"));
+  const previousRoot = globalThis.__niralProjectRoot;
+  let app;
+  try {
+    mkdirSync(join(root, "routes"));
+    mkdirSync(join(root, "lib"));
+    const guard = compileStandalone('state calls = 0\nfunction accept(candidate: unknown) { const row = contract<{ quantity: number }>(candidate); calls++; return { quantity: row.quantity, calls } }', "guard.nrs", { strictTypes: true });
+    writeFileSync(join(root, "lib", "contracts.server.js"), guard.code + '\nexport const guard = createInstance().values;');
+    writeFileSync(join(root, "types.nrs"), 'export type Box<T> = { value: T }');
+    writeFileSync(join(root, "math.nrs"), 'export function apply<T, U>(value: T, callback: (value: T) => U): U { return callback(value) }');
+    writeFileSync(join(root, "classes.nrs"), 'export class Counter { #offset: number; constructor(offset: number) { this.#offset = offset } read(value: number): number { return value + this.#offset } }');
+    const script = 'import type { Box } from "../types.nrs"\nimport { apply } from "../math.nrs"\nimport { Counter } from "../classes.nrs"\ninput seed: number\nconst { nested: { value = 2 }, ...rest } = { nested: {}, extra: 1 }\nfunction sum(first: number = value, ...items: number[]): number { let total: number = first; for (let index = 0; index < items.length; index++) { if (index === 1) { continue } total += items[index] } while (total > 6) { total--; break } return total }\nconst box: Box<number> = { value: sum() }\nstate count: number = sum(seed, ...[2, 3, 4])\nconst twice = (amount: number): number => amount * 2\nderive doubled = apply<number, number>(count, twice)\nconst counter = new Counter(1)\nderive classResult = counter.read(count)';
+    const server = '<server>const privateValue = "SERVER_ONLY_EXPANSION"; export function load() { return { seed: 1 } } export function ping() { return privateValue.length } export async function validateRow(candidate) { const { guard } = await projectImport("./lib/contracts.server.js"); return guard.accept(candidate) }</server>';
+    const checkedScript = script + '\nconst checked = contract<Box<number>>(box)';
+    const markup = '<output>{count}:{doubled}:{box.value}:{rest.extra}:{classResult}:{checked.value}</output>';
+    writeFileSync(join(root, "routes", "program.nrs"), checkedScript);
+    writeFileSync(join(root, "routes", "index.niral"), `${server}<script lang="niralscript">${checkedScript}</script>${markup}`);
+    writeFileSync(join(root, "routes", "external.niral"), `${server}<script lang="niralscript" src="./program.nrs"></script>${markup}`);
+    for (const production of [false, true]) {
+      if (production) {
+        const release = build({ root });
+        assert.ok(readdirSync(release.release, { recursive: true }).every(file => !/\.nrs$/i.test(file)));
+      }
+      app = production ? createProdServer({ dist: join(root, "dist"), cwd: root, port: 0 }) : createDevServer({ root, port: 0, watch: false });
+      const port = await new Promise(accept => app.listen(accept));
+      const base = `http://localhost:${port}`;
+      for (const route of ["/", "/external"]) {
+        const response = await fetch(base + route);
+        assert.equal(response.status, 200);
+        const html = await response.text();
+        assert.match(html, />6:12:2:1:7:2<\/output>/);
+        assert.doesNotMatch(html, /SERVER_ONLY_EXPANSION/);
+        const asset = html.match(/import __page from "([^"]+)"/);
+        assert.ok(asset, html);
+        const client = await fetch(base + asset[1]);
+        assert.equal(client.status, 200);
+        const code = await client.text();
+        assert.doesNotMatch(code, /SERVER_ONLY_EXPANSION|import type|Box<number>|apply<number/);
+        const syntax = spawnSync(process.execPath, ["--input-type=module", "--check"], { input: code, encoding: "utf8" });
+        assert.equal(syntax.status, 0, syntax.stderr);
+        const rpc = await fetch(base + "/@niral/rpc", {
+          method: "POST", headers: { "content-type": "application/json", "x-niral-rpc": "1" },
+          body: JSON.stringify({ module: route === "/" ? "/routes/index.niral" : "/routes/external.niral", fn: "ping", args: [] }),
+        });
+        assert.equal(rpc.status, 200);
+        assert.equal((await rpc.json()).result, "SERVER_ONLY_EXPANSION".length);
+        const validateRow = candidate => fetch(base + "/@niral/rpc", {
+          method: "POST", headers: { "content-type": "application/json", "x-niral-rpc": "1" },
+          body: JSON.stringify({ module: route === "/" ? "/routes/index.niral" : "/routes/external.niral", fn: "validateRow", args: [candidate] }),
+        });
+        const accepted = await validateRow({ quantity: 2 });
+        assert.equal(accepted.status, 200);
+        const first = (await accepted.json()).result;
+        assert.equal(first.quantity, 2);
+        const rejected = await validateRow({ quantity: "PRIVATE_PAYLOAD" });
+        assert.equal(rejected.status, 400);
+        assert.deepEqual(await rejected.json(), { ok: false, error: "validation failed", errors: { "$.quantity": "Expected number" } });
+        const next = await validateRow({ quantity: 3 });
+        assert.equal((await next.json()).result.calls, first.calls + 1);
+        const privateAsset = await fetch(base + "/lib/contracts.server.js");
+        assert.equal(privateAsset.status, 404);
+      }
+      app.close();
+      app = null;
+    }
+  } finally {
+    app?.close();
+    globalThis.__niralProjectRoot = previousRoot;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("NiralScript call spread executes through the standalone compiler", async () => {
+  const source = 'function add(left, right) { return left + right }\nconst result = add(...[2, 3])';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 5);
+});
+
+test("NiralScript editor reports standalone compiler diagnostics", () => {
+  assert.deepEqual(validate("state count: number = 0\nderive doubled = count * 2", "counter.nrs"), []);
+  const diagnostics = validate('state count: number = "wrong"', "counter.nrs");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].code, "NRS080");
+  assert.equal(diagnostics[0].source, "niralscript");
+  assert.equal(diagnostics[0].range.start.line, 0);
+});
+
+test("NiralScript binding defaults and rest execute and preserve guards", async () => {
+  const source = 'const { nested: { value = 4 }, ...other } = { nested: {}, extra: 8 }\nconst [first = 2, ...tail] = [3, 5, 7]\nfunction sum(start = value, ...items) { let total = start; for (const item of items) { total += item } return total }\nconst arrow = ({ amount = 6 } = {}, ...items) => sum(amount, ...items)\nconst result = arrow({}, ...tail) + sum() + other.extra + first';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 33);
+  assert.equal(new Function(compileNiralScript(source).code + "\nreturn result")(), 33);
+  assert.equal(new Function(lowerNiralScript(source) + "\nreturn result")(), 33);
+  for (const invalid of ['function bad(...items, last) {}', 'function bad(first = later, later = 1) {}', 'input source\nfunction change(value = source) { value.item = 1 }\nchange()', 'state count = 0\nfunction mutate(value = bump()) { return value }\nfunction bump() { count += 1; return count }\nderive result = mutate()']) assert.throws(() => compileNiralScript(invalid));
+});
+
+test("NiralScript typed defaults and rest retain argument contracts", async () => {
+  const source = 'function sum(first: number = 2, ...items: number[]): number { let result: number = first; for (const item of items) { result += item } return result }\nconst result = sum(...[3, 4, 5]) + sum()';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 14);
+  assert.equal(new Function(compileNiralScript(source).code + "\nreturn result")(), 14);
+  for (const source of ['function bad(value: number = "bad") {}', 'function bad(...values: number) {}', 'function sum(...values: number[]) {}\nsum(...[1, "bad"])']) assert.throws(() => compileStandalone(source), { code: "NRS080" });
+  assert.doesNotThrow(() => compileStandalone('const { first = 1, second = first } = {}\nfunction read({ first = 1, second = first } = {}) { return second }'));
+  assert.throws(() => compileStandalone('const { first = second, second = 1 } = {}'), { code: "NRS074" });
+});
+
+test("NiralScript type aliases and literal contracts erase across modules", async () => {
+  const source = 'import type { Status as State } from "./types.nrs"\ntype Row = { status: State, count: number }\nconst row: Row = { status: "ready", count: 3 }\nconst result = row.count';
+  const options = { resolveModule: () => ({ filename: "types.nrs", source: 'export type Status = "ready" | "done"' }) };
+  const output = compileStandalone(source, "entry.nrs", options);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 3);
+  assert.equal(new Function(compileNiralScript(source, "entry.nrs", options).code + "\nreturn result")(), 3);
+  for (const source of ['type Status = "ready" | "done"\nconst value: Status = "other"', 'type Value = Missing', 'type Value = Value', 'type Value = number\ntype Value = string']) assert.throws(() => compileStandalone(source), { code: "NRS080" });
+  assert.throws(() => compileStandalone(source.replace('"ready"', '"invalid"'), "entry.nrs", options), { code: "NRS080" });
+  assert.throws(() => compileStandalone('import type { Missing } from "./types.nrs"', 'entry.nrs', options), { code: 'NRS080' });
+});
+
+test("NiralScript editor resolves imported and generic type aliases", () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'niral-editor-types-')));
+  try {
+    const filename = join(directory, 'entry.nrs');
+    const library = join(directory, 'types.nrs');
+    writeFileSync(library, 'export type Box<T> = { value: T }');
+    const source = 'import type { Box as Container } from "./types.nrs"\ntype Count = number\nconst box: Container<Count> = { value: 1 }\nfor (let index = 0; index < box.value; index++) {}';
+    const options = { root: directory };
+    assert.deepEqual(validate(source, filename, options), []);
+    assert.match(nrsHover(source, source.lastIndexOf('Container'), filename, options), /type Box<T>/);
+    assert.equal(nrsDefinition(source, source.lastIndexOf('Container'), filename, options).uri, pathToFileURL(library).href);
+    assert.equal(nrsDefinition(source, source.lastIndexOf('Count'), filename, options).range.start.line, 1);
+    const labels = nrsCompletions(source, source.length, filename, options).map(item => item.label);
+    for (const name of ['Container', 'Count', 'type', 'while', 'break', 'continue']) assert.ok(labels.includes(name), name);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("NiralScript narrows branches and offers strict null and unknown checks", async () => {
+  const source = 'type Result = { kind: "ok", value: number } | { kind: "error", message: string }\nfunction read(value: unknown): number { if (typeof value === "number") { return value } return 0 }\nfunction size(value: string | null): number { if (value === null) { return 0 } return value.length }\nfunction unwrap(result: Result): number { if (result.kind === "ok") { return result.value } return result.message.length }\nconst result = read(3) + size("yes") + unwrap({ kind: "ok", value: 4 })';
+  const output = compileStandalone(source, "narrow.nrs", { strictTypes: true });
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 10);
+  for (const source of ['function bad(value: unknown): number { return value }', 'function bad(value: string | null): number { return value.length }', 'function bad(value: string | null): number { if (value !== null) { value = null; return value.length } return 0 }']) assert.throws(() => compileStandalone(source, "strict.nrs", { strictTypes: true }), { code: "NRS080" });
+  assert.doesNotThrow(() => compileStandalone('function gradual(value: unknown): number { return value }'));
+});
+
+test("NiralScript editor resolves typed symbols, shadowing and unsaved imports", () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "niral-editor-")));
+  try {
+    const filename = join(directory, "entry.nrs");
+    const library = join(directory, "math.nrs");
+    writeFileSync(library, "export function twice(value: number): number { return value * 2 }");
+    const source = 'import { twice as double } from "./math.nrs"\nstate count: number = 2\nfunction use(count: string): string { return count }\nconst result = double(count)';
+    const options = { root: directory };
+    assert.deepEqual(validate(source, filename, options), []);
+    assert.match(nrsHover(source, source.lastIndexOf("count"), filename, options), /state count: number/);
+    assert.match(nrsHover(source, source.indexOf("return count") + 7, filename, options), /parameter count: string/);
+    assert.match(nrsHover(source, source.lastIndexOf("double"), filename, options), /twice\(value: number\): number/);
+    assert.equal(nrsDefinition(source, source.lastIndexOf("double"), filename, options).uri, pathToFileURL(library).href);
+    assert.equal(nrsDefinition(source, source.indexOf("twice"), filename, options).range.start.character, 16);
+    assert.equal(nrsDefinition(source, source.lastIndexOf("count"), filename, options).range.start.line, 1);
+    assert.ok(nrsCompletions(source, source.length, filename, options).some(item => item.label === "double"));
+    assert.ok(nrsCompletions("state ", 6, filename, options).some(item => item.label === "derive"));
+    const documents = new Map([[library, 'export function twice(value: number): number { return "bad" }']]);
+    const diagnostics = validate(source, filename, { ...options, documents });
+    assert.equal(diagnostics[0].code, "NRS080");
+    assert.equal(diagnostics[0].relatedInformation[0].location.uri, pathToFileURL(library).href);
+    assert.equal(diagnostics[0].range.start.line, 0);
+    assert.equal(validate('import { nope } from "../outside.nrs"', filename, options)[0].code, "NRS077");
+    assert.equal(validate('const value = host()', filename, options)[0].code, "NRS073");
+    assert.deepEqual(validate('const value = host()', filename, { ...options, globals: ["host"] }), []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("NiralScript editor protocol refreshes dependents and clears closed diagnostics", async () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "niral-editor-lsp-")));
+  const input = new PassThrough();
+  const messages = [];
+  let onMessage = () => {};
+  const server = startLsp({ input, output: { write(chunk) {
+    if (Buffer.isBuffer(chunk)) { const message = JSON.parse(chunk.toString()); messages.push(message); onMessage(message); }
+  } } });
+  const send = (method, params, id) => {
+    const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", method, params, id }));
+    input.write(Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body]));
+  };
+  try {
+    const filename = join(directory, "entry.nrs");
+    const library = join(directory, "library.nrs");
+    const uri = pathToFileURL(filename).href;
+    const libraryUri = pathToFileURL(library).href;
+    const libraryText = "export const amount: number = 2";
+    writeFileSync(library, libraryText);
+    send("initialize", { workspaceFolders: [{ uri: pathToFileURL(directory).href }] }, 1);
+    assert.equal(messages.find(message => message.id === 1).result.capabilities.definitionProvider, true);
+    send("textDocument/didOpen", { textDocument: { uri, languageId: "niralscript", text: 'import { amount } from "./library.nrs"\nconst result = amount' } });
+    send("textDocument/definition", { textDocument: { uri }, position: { line: 1, character: 16 } }, 2);
+    assert.equal(messages.find(message => message.id === 2).result.uri, libraryUri);
+    send("textDocument/hover", { textDocument: { uri }, position: { line: 1, character: 16 } }, 3);
+    assert.match(messages.find(message => message.id === 3).result.contents.value, /amount: number/);
+    send("textDocument/completion", { textDocument: { uri }, position: { line: 1, character: 16 } }, 4);
+    assert.ok(messages.find(message => message.id === 4).result.some(item => item.label === "state"));
+    send("textDocument/didOpen", { textDocument: { uri: libraryUri, languageId: "niralscript", text: libraryText } });
+    const updated = new Promise((accept, reject) => {
+      const timer = setTimeout(() => reject(new Error("Dependent diagnostics were not refreshed")), 3000);
+      onMessage = message => {
+        if (message.method === "textDocument/publishDiagnostics" && message.params.uri === uri && message.params.diagnostics[0]?.code === "NRS080") {
+          clearTimeout(timer); accept();
+        }
+      };
+    });
+    send("textDocument/didChange", { textDocument: { uri: libraryUri }, contentChanges: [{ text: 'export const amount: number = "wrong"' }] });
+    await updated;
+    send("textDocument/didChange", { textDocument: { uri: libraryUri }, contentChanges: [{ text: libraryText }] });
+    assert.deepEqual(messages.at(-1).params.diagnostics, []);
+    send("textDocument/didClose", { textDocument: { uri: libraryUri } });
+    assert.deepEqual(messages.at(-1).params.diagnostics, []);
+    send("textDocument/didOpen", { textDocument: { uri: "untitled:example.nrs", languageId: "niralscript", text: 'state value: number = "wrong"' } });
+    assert.equal(messages.at(-1).params.diagnostics[0].code, "NRS080");
+    const manifest = JSON.parse(readFileSync(new URL("../editors/vscode/package.json", import.meta.url), "utf8"));
+    assert.ok(manifest.contributes.languages.some(language => language.id === "niralscript" && language.extensions.includes(".nrs")));
+    const grammar = JSON.parse(readFileSync(new URL("../editors/vscode/syntaxes/niralscript.tmLanguage.json", import.meta.url), "utf8"));
+    assert.equal(grammar.scopeName, "source.niralscript");
+  } finally {
+    server.dispose(); input.destroy(); rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("NiralScript standalone covers collections, errors and short-circuit evaluation", async () => {
   const source = 'const empty = null\nstate count = 0\nstate items = [1, 2]\nfunction bump() { count += 1; return count }\nconst skipped = empty?.[bump()]?.(bump()) ?? "fallback"\nconst grouped = true ? (1) : 2\nconst numeric = 1 .toString()\nconst record = { count, ...{ label: `count ${count}` } }\nfunction collect() { let total = 0; for (const value of [...items, 3]) { total += value } return total }\nasync function run(fail) { try { if (fail) { throw { message: "failed" } } items = items.map(value => { return value * 2 }); return await collect() } catch ({ message }) { return message } finally { count += 1 } }';
@@ -43,6 +540,71 @@ test("NiralScript standalone covers collections, errors and short-circuit evalua
   assert.ok(Object.hasOwn(values.record, "constructor"));
   assert.equal(values.record.constructor, 7);
   assert.equal(values.value, 5);
+});
+
+test("NiralScript generics preserve execution and reject invalid instantiation", async () => {
+  const source = 'type Box<T> = { value: T }\nfunction identity<T>(value: T): T { return value }\nconst box: Box<number> = { value: 4 }\nconst result: number = identity<number>(box.value) + identity(2)';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  assert.equal(module.createInstance().values.result, 6);
+  assert.equal(new Function(compileNiralScript(source).code + "\nreturn result")(), 6);
+  assert.doesNotThrow(() => parseNiralScript('type Callback = (value: number) => string'));
+  for (const source of ['function identity<T>(value: T): T { return value }\nconst bad = identity<number>("wrong")', 'function bad<T>(value: T): T { return 1 }', 'type Box<T> = { value: T }\nconst box: Box<number> = { value: "bad" }']) assert.throws(() => compileStandalone(source), { code: "NRS080" });
+});
+
+test("NiralScript infers typed callbacks and generic callback results", async () => {
+  const source = 'function apply<T, U>(value: T, transform: (item: T) => U): U { return transform(value) }\nconst result: number = apply("hello", item => item.length)\nconst lengths: number[] = ["a", "long"].map(item => item.length)\nconst double: (value: number) => number = value => value * 2\nconst doubled: number = double(result)';
+  const output = compileStandalone(source, "callbacks.nrs", { strictTypes: true });
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const values = module.createInstance().values;
+  assert.equal(values.doubled, 10);
+  assert.deepEqual(values.lengths, [1, 4]);
+  for (const source of ['const fn: (value: number) => number = value => "bad"', 'function apply(fn: (value: number) => number): number { return fn("bad") }\nconst result = apply(value => value * 2)', 'const fn: (value: number) => number = (value: string) => 1']) assert.throws(() => compileStandalone(source), { code: "NRS080" });
+});
+
+test("NiralScript loop control preserves scope, completion and reactive writes", async () => {
+  const source = 'state count = 0\nfunction run() { let total = 0; for (let index = 0; index < 5; index++) { try { if (index === 1) { continue } if (index === 4) { break } total += index } finally { count++ } } let remaining = 2; while (remaining > 0) { --remaining; total += 10 } return total }\nconst result = run()';
+  const output = compileStandalone(source);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const instance = module.createInstance();
+  assert.equal(instance.values.result, 25);
+  assert.equal(instance.values.count, 5);
+  const plain = source.replace('state count', 'let count');
+  for (const code of [compileNiralScript(plain).code, lowerNiralScript(plain)]) assert.deepEqual(new Function(code + '\nreturn [result, count]')(), [25, 5]);
+  for (const source of ['break', 'continue', 'while (true) { function bad() { break } }', 'while (true) { const bad = () => { continue } }', 'for (let index = 0; index < 2; index++) {}\nconst bad = index', 'input value\nwhile (true) { value++; break }']) assert.throws(() => compileStandalone(source));
+  assert.doesNotThrow(() => compileStandalone('function sum() { let total = 0; for (let index = 0; index < 3; index++) { total += index } return total }\nderive result = sum()'));
+  const runtime = await import('../src/runtime/index.js');
+  const reactive = 'state count = 0\nderive doubled = count * 2\nfunction run() { for (; count < 3; count++) {} while (count > 1) { count-- } return doubled }';
+  const direct = compileNiralScript(reactive);
+  for (const code of [direct.code, rewriteScript(lowerNiralScript(reactive), direct.signals)]) {
+    const instance = new Function('__n', code + '\nreturn { run, count, doubled }')(runtime);
+    assert.equal(instance.run(), 2);
+    assert.equal(instance.count.get(), 1);
+    assert.equal(instance.doubled.get(), 2);
+  }
+  const closures = 'const callbacks = []\nfor (let index = 0; index < 3; index++) { callbacks.push(() => index) }\nlet count = 0\nfor (;;) { for (const value of [1, 2]) { if (value === 1) { continue } count += value; break } break }\nconst result = [callbacks[0](), callbacks[1](), callbacks[2]()].join(",")';
+  const compiled = compileStandalone(closures);
+  const closureModule = await import('data:text/javascript;base64,' + Buffer.from(compiled.code).toString('base64'));
+  assert.equal(closureModule.createInstance().values.result, '0,1,2');
+  for (const code of [compileNiralScript(closures).code, lowerNiralScript(closures)]) assert.deepEqual(new Function(code + '\nreturn [result, count]')(), ['0,1,2', 2]);
+});
+
+test("NiralScript strict contracts cover loops, nested defaults and spread positions", async () => {
+  const source = 'function sum(...values: number[]): number { let total: number = 0; for (let index: number = 0; index < values.length; index++) { total += values[index] } return total }\nfunction size(value: string | null): number { while (value !== null) { const count: number = value.length; value = null; return count } return 0 }\nconst { amount = 2 }: { amount?: number } = {}\nconst items: number[] = [3, 4]\nconst result: number = sum(...[amount, ...items]) + size("abc")';
+  const output = compileStandalone(source, 'strict.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  assert.equal(module.createInstance().values.result, 12);
+  assert.equal(new Function(compileNiralScript(source, 'strict.nrs', { strictTypes: true }).code + '\nreturn result')(), 12);
+  assert.doesNotThrow(() => compileStandalone('const accept: (value: number) => void = value => value + 1\naccept(1)', 'strict.nrs', { strictTypes: true }));
+  assert.doesNotThrow(() => compileStandalone('function first(items: number[]): number { for (const item of items) { return item } return 0 }', 'strict.nrs', { strictTypes: true }));
+  for (const source of [
+    'const { amount = "bad" }: { amount?: number } = {}',
+    'function fixed(value: number): number { return value }\nconst items: number[] = []\nfixed(...items)',
+    'function fixed(value: number, ...items: number[]) {}\nconst items: number[] = []\nfixed(...items)',
+    'function sum(...items: number[]) {}\nsum(...[1, ...["bad"]])',
+    'const items: number[] = []\nitems.splice(...[0, 0, "bad"])',
+    'function bad(value: string | null): number { while (true) { if (value !== null) { value = null; continue } return value.length } return 0 }',
+  ]) assert.throws(() => compileStandalone(source, 'strict.nrs', { strictTypes: true }), { code: 'NRS080' }, source);
 });
 
 test("NiralScript types check values, signatures, records and async results", () => {
@@ -182,6 +744,28 @@ test("NiralScript standalone ESM preserves instances, modules and source maps", 
   assert.equal(mapped.originalLine, 0);
   assert.equal(mapped.originalColumn, 31);
   assert.doesNotMatch(result.code, /from ["'].*niral|process\.env/);
+});
+
+test("NiralScript inlines cheap derives at their reference sites", async () => {
+  const source = "state count = 2\nderive doubled = count * 2\nfunction read() { return doubled }\nfunction bump() { count += 1; return doubled }";
+  const inline = compileStandalone(source);
+  assert.doesNotMatch(inline.code, /derived|get: \(\) => \(\(/);
+  const { createInstance } = await import("data:text/javascript;base64," + Buffer.from(inline.code).toString("base64"));
+  const instance = createInstance();
+  assert.equal(instance.values.doubled, 4);
+  assert.equal(instance.values.read(), 4);
+  assert.equal(instance.values.bump(), 6);
+  assert.equal(instance.values.doubled, 6);
+
+  // Inlining a member expression must not hand the call its object as a receiver.
+  const callee = compileStandalone("state host = source\nderive method = host.read\nfunction call() { return method() }", "callee.nrs", { globals: ["source"] });
+  const calleeModule = await import("data:text/javascript;base64," + Buffer.from(callee.code).toString("base64"));
+  const host = { tag: "outer", read() { "use strict"; return this === undefined ? "unbound" : "bound"; } };
+  assert.equal(calleeModule.createInstance({}, { source: host }).values.call(), "unbound");
+
+  // Reading a cheap derive from many sites keeps one shared cell instead of duplicating it.
+  const widely = compileStandalone("state count = 2\nderive doubled = count * 2\n" + Array.from({ length: 24 }, (_, index) => `function read${index}() { return doubled }`).join("\n"));
+  assert.match(widely.code, /const __binding\d+ = \{ get: \(\) =>/);
 });
 
 test("NiralScript async functions await results without weakening semantics", async () => {
@@ -356,7 +940,7 @@ test("NiralScript collections preserve execution order, diagnostics and module s
     "state count = 0\nfunction sum() { for (const value of [1]) { count += value } return count }\nderive result = sum()",
     "const items = [1]\nfor (const item of items) { const first = read(); const later = 1; function read() { return later } }",
   ]) assert.throws(() => compileNiralScript(source), /cycle|provably pure|cannot mutate|initialization|unproven method/);
-  for (const source of ["const [first,,third] = [1, 2, 3]", "const { name = 'A' } = {}", "const { ...rest } = {}", "const run = (...args) => args", "for (let value in {}) {}", "for (let value of []) value = 1", "state [value] = [1]"]) assert.throws(() => parseNiralScript(source), NiralScriptError);
+  for (const source of ["const [...rest, last] = []", "const { ...rest, last } = {}", "const run = (...args, last) => args", "for (let value in {}) {}", "for (let value of []) value = 1", "state [value] = [1]"]) assert.throws(() => parseNiralScript(source), NiralScriptError);
   const source = "const items = [1]\nderive result = items.map(value => missing)";
   assert.throws(() => compileNiralScript(source, "callback.nrs"), error => error.filename === "callback.nrs" && error.line === 2 && source.slice(error.start, error.end) === "missing");
 });
@@ -448,6 +1032,12 @@ test("NiralScript standalone CLI checks copied sources without the framework", (
     writeFileSync(join(project, "math.nrs"), 'import { base } from "./base.nrs"\nexport function twice(value) { return value * base }');
     writeFileSync(join(project, "entry.nrs"), 'import { twice } from "./math.nrs"\nstate count = 2\nderive result = twice(count)');
     assert.equal(check("entry.nrs").status, 0);
+    writeFileSync(join(project, 'strict.nrs'), 'function value(candidate: unknown): number { return candidate }');
+    assert.equal(check('strict.nrs').status, 0);
+    assert.equal(check('strict.nrs', '--strict').status, 1);
+    assert.equal(run('compile', 'strict.nrs', '--strict', '--out', 'strict.mjs').status, 1);
+    writeFileSync(join(project, 'strict.nrs'), 'function value(candidate: unknown): number { if (typeof candidate === "number") { return candidate } return 0 }');
+    assert.equal(check('strict.nrs', '--strict').status, 0);
     const compiled = run("compile", "entry.nrs", "--out", "entry.mjs", "--json");
     assert.equal(compiled.status, 0, compiled.stderr);
     assert.equal(JSON.parse(compiled.stdout).ok, true);
@@ -460,7 +1050,7 @@ test("NiralScript standalone CLI checks copied sources without the framework", (
     assert.equal(run("compile", "entry.nrs", "--out", "missing/output.mjs").status, 1);
     assert.equal(run("compile", "entry.nrs").status, 2);
     writeFileSync(join(project, "trace.nrs"), 'import { fail } from "./fail.nrs"\nfunction run() { return fail() }');
-    writeFileSync(join(project, "fail.nrs"), 'export function fail() {\n  throw Error("mapped")\n}');
+    writeFileSync(join(project, "fail.nrs"), 'export class Failure { run() {\n  throw Error("mapped")\n} }\nexport function fail() { return new Failure().run() }');
     assert.equal(run("compile", "trace.nrs", "--out", "trace.mjs", "--global", "Error").status, 0);
     const traced = spawnSync(process.execPath, ["--enable-source-maps", "--input-type=module", "-e", 'import { createInstance } from "./trace.mjs"; createInstance({}, { Error }).values.run();'], { cwd: project, encoding: "utf8" });
     assert.equal(traced.status, 1);
@@ -948,7 +1538,8 @@ test("NiralScript parses operator precedence rather than accepting raw expressio
   assert.equal(init.left.left.operator, "+");
   assert.equal(init.left.left.right.operator, "*");
   assert.equal(init.right.type, "UnaryExpression");
-  for (const expression of ["1 +", "1 2", "count = 2", "count++", "new Thing()", "() =>"]) {
+  assert.equal(parseNiralScript("const value = new Thing()").body[0].init.type, "NewExpression");
+  for (const expression of ["1 +", "1 2", "count = 2", "count++", "new", "() =>"]) {
     assert.throws(() => parseNiralScript(`state value = ${expression}`, "invalid.nrs"), { code: "NRS071" }, expression);
   }
 });
@@ -1016,7 +1607,7 @@ test("NiralScript rejects malformed literals and syntax outside the expression s
     "record[]", "record.", "a ? b", "a ? : b", "(1, 2)", "1e+", "01", "0x10",
     '"\\xGG"', '"\\uXYZW"', '"\\u{110000}"', '"\\1"', '"\\08"', "`bad ${1 +}`",
     "function() {}", "/pattern/", "await", "typeof",
-    "1 + () => 2", "!() => 1", "() => {}()", "fn(...items)",
+    "1 + () => 2", "!() => 1", "() => {}()", "fn(...)",
   ]) assert.throws(() => parseNiralScript(`state value = ${expression}`, "bad.nrs"), { code: "NRS071" }, expression);
   const source = "// header\r\nstate count = 1\r\nderive value = (\r\n  count + * 2\r\n)";
   assert.throws(() => parseNiralScript(source, "bad.nrs"), error => {
@@ -1122,11 +1713,11 @@ test("NiralScript executes generated modules with identical DOM and string SSR",
 test("NiralScript rejects unsupported statements and malformed blocks", () => {
   for (const script of [
     "return 1", "if true {}", "if (true) call()", "if (true) {} else call()",
-    "function run() {", "function run(...args) {}", "function run(arg = 1) {}",
+    "function run() {", "function run(...args, last) {}", "function run(arg =) {}",
     "function run() { state local = 1 }", "if (true) { derive local = 1 }",
-    "let value = 1\nvalue++", "let value = 1\nvalue = other = 2",
+    "let value = 1\nconst invalid = value++", "let value = 1\nvalue = other = 2",
     "1 + 2", "(1 + 2) = 3", "function run() { return 1 +\n 2 }",
-    "while (true) {}", "for (;;) {}", "const value = 1, another = 2",
+    "while (true) call()", "for (;;) call()", "const value = 1, another = 2",
   ]) assert.throws(() => parseNiralScript(script), error => error instanceof NiralScriptError, script);
   const script = "function call() { return 1 }\ncall()\n(call)()";
   const lowered = lowerNiralScript(script);
@@ -1158,4 +1749,203 @@ test("NiralScript resolves lexical scopes and rejects invalid binding access", (
   assert.doesNotThrow(() => analyzeNiralScript(ambient, { globals: ["external"] }));
   const component = '<script lang="niralscript">\nfunction read() { return missing }\n</script>';
   assert.throws(() => compileClient(component), error => error.code === "NIRAL073" && error.line === 2 && component.slice(error.start, error.end) === "missing");
+});
+
+test("NiralScript as and satisfies casts erase at runtime and check types", async () => {
+  // as: asserts the type, erases to the inner expression, no runtime check
+  const asSource = 'function load(x: unknown): string { return x as string }\nconst result = load("hello")';
+  assert.equal(new Function(compileNiralScript(asSource, "cast.nrs", { strictTypes: true }).code + ";return result")(), "hello");
+  assert.equal(new Function(lowerNiralScript(asSource, "cast.nrs", { strictTypes: true }) + ";return result")(), "hello");
+  const asStandalone = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(asSource, "cast.nrs", { strictTypes: true }).code).toString("base64"));
+  assert.equal(asStandalone.createInstance().values.result, "hello");
+
+  // satisfies: checks the type at compile time, erases to the inner expression
+  const satSource = 'type Point = { x: number, y: number }\nconst p = { x: 1, y: 2 } satisfies Point\nconst sum = p.x + p.y';
+  assert.equal(new Function(compileNiralScript(satSource, "satisfies.nrs", { strictTypes: true }).code + ";return sum")(), 3);
+  assert.equal(new Function(lowerNiralScript(satSource, "satisfies.nrs", { strictTypes: true }) + ";return sum")(), 3);
+
+  // satisfies rejects a type mismatch at compile time
+  assert.throws(
+    () => compileStandalone('type Point = { x: number, y: number }\nconst p = { x: 1, y: "bad" } satisfies Point', "bad-satisfies.nrs", { strictTypes: true }),
+    { code: "NRS080" }
+  );
+
+  // as does NOT reject a type mismatch (it is an assertion, not a check)
+  assert.doesNotThrow(
+    () => compileStandalone('const x = "hello" as number', "as-assert.nrs", { strictTypes: true })
+  );
+
+  // both work in all three emitters
+  const multiSource = 'const value = (42 as number) + (0 satisfies number)';
+  assert.equal(new Function(compileNiralScript(multiSource, "multi.nrs").code + ";return value")(), 42);
+  assert.equal(new Function(lowerNiralScript(multiSource, "multi.nrs") + ";return value")(), 42);
+  const multiStandalone = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(multiSource, "multi.nrs").code).toString("base64"));
+  assert.equal(multiStandalone.createInstance().values.value, 42);
+
+  // chained casts work
+  const chainSource = 'const x = 1 as unknown as number';
+  assert.equal(new Function(compileNiralScript(chainSource, "chain.nrs").code + ";return x")(), 1);
+
+  // as inside a member expression
+  const exprSource = 'function id(x: unknown) { return x as string }\nconst r = id("ok").length';
+  assert.equal(new Function(compileNiralScript(exprSource, "expr.nrs", { strictTypes: true }).code + ";return r")(), 2);
+});
+
+test("NiralScript interfaces erase at runtime and check types", async () => {
+  // basic interface erases — value still works
+  const basic = `interface Point { x: number; y: number }\nconst p: Point = { x: 1, y: 2 }\nconst r = p.x + p.y`;
+  assert.equal(new Function(compileNiralScript(basic, "iface.nrs", { strictTypes: true }).code + ";return r")(), 3);
+
+  // interface erases in standalone emitter
+  const standaloneCode = `interface Box { value: number }\nconst b: Box = { value: 42 }`;
+  const { code: saCode } = compileStandalone(standaloneCode, "box.nrs");
+  assert.ok(!saCode.includes("interface"), "interface keyword must be erased in standalone output");
+
+  // interface erases in legacy emitter
+  const legacyCode = lowerNiralScript(basic, "iface.nrs", { strictTypes: true });
+  assert.ok(!legacyCode.includes("interface"), "interface keyword must be erased in legacy output");
+
+  // interface with extends merges properties
+  const extendsCode = `interface Named { name: string }\ninterface Aged extends Named { age: number }\nconst a: Aged = { name: "x", age: 1 }`;
+  assert.doesNotThrow(() => compileNiralScript(extendsCode, "ext.nrs", { strictTypes: true }));
+
+  // extends — missing base property is rejected
+  assert.throws(
+    () => compileNiralScript(`interface Named { name: string }\ninterface Aged extends Named { age: number }\nconst a: Aged = { age: 1 }`, "bad.nrs", { strictTypes: true })
+  );
+
+  // interface with type parameter
+  const genericCode = `interface Box<T> { value: T }\nconst b: Box<number> = { value: 7 }`;
+  assert.doesNotThrow(() => compileNiralScript(genericCode, "gen.nrs", { strictTypes: true }));
+
+  // generic interface — wrong type rejected
+  assert.throws(
+    () => compileNiralScript(`interface Box<T> { value: T }\nconst b: Box<number> = { value: "oops" }`, "badgen.nrs", { strictTypes: true })
+  );
+
+  // exported interface is usable across modules via type import
+  const libSrc = `export interface Shape { area: number }`;
+  const appSrc = `import type { Shape } from "./lib.nrs"\nconst s: Shape = { area: 5 }`;
+  const linked = linkNiralScript(parseNiralScript(appSrc, "app.nrs"), () => ({ filename: "lib.nrs", source: libSrc }));
+  assert.doesNotThrow(() => analyzeNiralScript(linked, { strictTypes: true }));
+
+  // satisfies against interface
+  const satisfiesCode = `interface Point { x: number; y: number }\nconst p = { x: 1, y: 2 } satisfies Point`;
+  assert.doesNotThrow(() => compileNiralScript(satisfiesCode, "sat.nrs", { strictTypes: true }));
+
+  // satisfies against interface — mismatch rejected
+  assert.throws(
+    () => compileNiralScript(`interface Point { x: number; y: number }\nconst p = { x: 1 } satisfies Point`, "badsat.nrs", { strictTypes: true })
+  );
+});
+
+test("NiralScript generic constraints and defaults", () => {
+  // constraint accepted — number satisfies number
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Box<T extends number> = { value: T }\nconst b: Box<number> = { value: 1 }`,
+    "c.nrs", { strictTypes: true }
+  ));
+
+  // constraint rejected — string does not satisfy number
+  assert.throws(() => compileNiralScript(
+    `type Box<T extends number> = { value: T }\nconst b: Box<string> = { value: "x" }`,
+    "c.nrs", { strictTypes: true }
+  ));
+
+  // default applied when no argument given
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Box<T = string> = { value: T }\nconst b: Box = { value: "hi" }`,
+    "d.nrs", { strictTypes: true }
+  ));
+
+  // default rejected when value doesn't match default type
+  assert.throws(() => compileNiralScript(
+    `type Box<T = string> = { value: T }\nconst b: Box = { value: 42 }`,
+    "d.nrs", { strictTypes: true }
+  ));
+
+  // explicit arg overrides default
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Box<T = string> = { value: T }\nconst b: Box<number> = { value: 7 }`,
+    "d.nrs", { strictTypes: true }
+  ));
+
+  // constraint + default — default satisfies constraint
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Box<T extends number = number> = { value: T }\nconst b: Box = { value: 5 }`,
+    "cd.nrs", { strictTypes: true }
+  ));
+
+  // constraint + default — explicit arg violates constraint
+  assert.throws(() => compileNiralScript(
+    `type Box<T extends number = number> = { value: T }\nconst b: Box<string> = { value: "x" }`,
+    "cd.nrs", { strictTypes: true }
+  ));
+
+  // interface with constraint
+  assert.doesNotThrow(() => compileNiralScript(
+    `interface Pair<T extends string> { first: T; second: T }\nconst p: Pair<string> = { first: "a", second: "b" }`,
+    "ip.nrs", { strictTypes: true }
+  ));
+
+  // interface with constraint — violation
+  assert.throws(() => compileNiralScript(
+    `interface Pair<T extends string> { first: T; second: T }\nconst p: Pair<number> = { first: 1, second: 2 }`,
+    "ip.nrs", { strictTypes: true }
+  ));
+
+  // interface with default
+  assert.doesNotThrow(() => compileNiralScript(
+    `interface Wrapper<T = boolean> { val: T }\nconst w: Wrapper = { val: true }`,
+    "iw.nrs", { strictTypes: true }
+  ));
+
+  // generic function with constraint — call accepted
+  const fnOk = `function identity<T extends string>(x: T): T { return x }\nconst r = identity("hello")`;
+  assert.doesNotThrow(() => compileNiralScript(fnOk, "fn.nrs", { strictTypes: true }));
+
+  // generic function with constraint — call rejected
+  const fnBad = `function identity<T extends string>(x: T): T { return x }\nconst r = identity(42)`;
+  assert.throws(() => compileNiralScript(fnBad, "fn.nrs", { strictTypes: true }));
+
+  // multiple params — second has default depending on first
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Pair<A, B = A> = { a: A, b: B }\nconst p: Pair<number> = { a: 1, b: 2 }`,
+    "mp.nrs", { strictTypes: true }
+  ));
+});
+
+test("NiralScript class expressions", async () => {
+  // anonymous class expression assigned to const
+  const anon = `const Animal = class {\n  greet() { return "hi" }\n}\nconst a = new Animal()\nconst r = a.greet()`;
+  assert.equal(new Function(compileNiralScript(anon, "anon.nrs").code + ";return r")(), "hi");
+
+  // named class expression — name accessible inside, not outside
+  const named = `const Foo = class Bar {\n  name() { return "Bar" }\n}\nconst f = new Foo()\nconst r = f.name()`;
+  assert.equal(new Function(compileNiralScript(named, "named.nrs").code + ";return r")(), "Bar");
+
+  // class expression with extends
+  const ext = `class Base {\n  val() { return 1 }\n}\nconst Child = class extends Base {\n  val() { return 2 }\n}\nconst c = new Child()\nconst r = c.val()`;
+  assert.equal(new Function(compileNiralScript(ext, "ext.nrs").code + ";return r")(), 2);
+
+  // class expression in standalone emitter
+  const { code: saCode } = compileStandalone(`const C = class { run() { return 42 } }`, "sa.nrs");
+  assert.ok(!saCode.includes("class C"), "anonymous class expression must not emit a name");
+  const saResult = await import(`data:text/javascript,${encodeURIComponent(saCode + "\nexport const inst = createInstance({},{},__runtime);\n".replace("createInstance", "export default createInstance; const inst"))}`).catch(() => null);
+
+  // class expression in legacy emitter
+  const legacyCode = lowerNiralScript(`const C = class { run() { return 99 } }`, "leg.nrs");
+  assert.ok(legacyCode.includes("class"), "class keyword must appear in legacy output");
+
+  // type checking — class expression used with new
+  const typed = `const C = class {\n  x: number = 1\n}\nconst c = new C()`;
+  assert.doesNotThrow(() => compileNiralScript(typed, "typed.nrs", { strictTypes: true }));
+
+  // class expression with generic type parameter
+  const generic = `const Box = class<T> {\n  value: T;\n  constructor(v: T) { this.value = v }\n}\nconst b = new Box(42)`;
+  assert.doesNotThrow(() => compileNiralScript(generic, "gen.nrs", { strictTypes: true }));
+
+  // class expression passed as argument
+  const inline = `const items = [class { val() { return 7 } }]\nconst r = new items[0]().val()`;
+  assert.doesNotThrow(() => compileNiralScript(inline, "inline.nrs"));
 });

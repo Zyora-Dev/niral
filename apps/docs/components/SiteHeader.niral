@@ -5,7 +5,7 @@
 
 <header class="site-header">
   <nav class="navigation" aria-label="Main navigation">
-    <a class="wordmark" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="102" height="34" /></a>
+    <a class="wordmark" href="/" aria-label="Niral home"><img src="/niral-logo.png" alt="Niral" width="105" height="34" /></a>
     <div class="desktop-links"><a href="/#features">Framework</a><a href="/docs/getting-started">Documentation</a><a href="/#performance">Performance</a><a href="/niralscript" aria-current={current === "niralscript" ? "page" : null}>NiralScript</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About</a><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a></div>
     <div class="nav-actions"><a class="icon-button github-link" href="https://github.com/Zyora-Dev/niral" aria-label="Niral on GitHub" title="Niral on GitHub"><img src={icons + "github.svg"} alt="" width="20" height="20" /></a><a class="button button-small" href="/docs/getting-started">Get started <img src={icons + "arrow-up-right.svg"} alt="" width="16" height="16" /></a></div>
     <details class="mobile-menu"><summary aria-label="Navigation menu"><img src={icons + "menu.svg"} alt="" width="22" height="22" /></summary><div><a class="di-link" href="/di" aria-current={current === "di" ? "page" : null}>DI <img src={icons + "sparkles.svg"} alt="" width="14" height="14" /></a><a href="/docs/getting-started">Documentation</a><a href="/niralscript" aria-current={current === "niralscript" ? "page" : null}>NiralScript</a><a href="/docs/benchmarks">Benchmarks</a><a href="/changelog">Changelog</a><a href="/about" aria-current={current === "about" ? "page" : null}>About us</a><a href="https://github.com/Zyora-Dev/niral">GitHub</a></div></details>
@@ -19,7 +19,7 @@
   .site-header { --gold: #f2b544; --border: #343436; height: 76px; position: sticky; top: 0; z-index: 30; background: #090909f5; color: #fafafa; border-bottom: 1px solid var(--border); backdrop-filter: blur(16px); font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; }
   .navigation { width: min(1360px, calc(100% - 64px)); height: 100%; margin: auto; display: flex; align-items: center; gap: 48px; }
   .wordmark { display: flex; align-items: center; }
-  .wordmark img { display: block; width: 102px; height: 34px; object-fit: contain; filter: grayscale(1) brightness(1.8); }
+  .wordmark img { display: block; width: 105px; height: 34px; object-fit: contain; }
   .desktop-links { display: flex; gap: 28px; font-size: 13px; }
   .desktop-links a:hover { color: var(--gold); }
   a[aria-current="page"] { color: var(--gold); text-decoration: underline; text-underline-offset: 7px; }

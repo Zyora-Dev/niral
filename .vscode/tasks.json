@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Preview Niral docs",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--env-file-if-exists=apps/docs/.env",
+				"bin/niral.js",
+				"dev",
+				"apps/docs",
+				"-p",
+				"5199"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

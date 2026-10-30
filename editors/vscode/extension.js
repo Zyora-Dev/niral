@@ -16,6 +16,7 @@ let proc = null;
 let nextId = 1;
 const pending = new Map(); // id → resolve
 let diagnostics = null;
+const languages = ["niral", "niralscript"];
 
 function findServer() {
   const configured = vscode.workspace.getConfiguration("niral").get("serverPath");
@@ -70,6 +71,12 @@ function onServerMessage(msg) {
         const diag = new vscode.Diagnostic(range, d.message, vscode.DiagnosticSeverity.Error);
         diag.source = d.source ?? "niral";
         if (d.code) diag.code = d.code;
+        if (d.relatedInformation) diag.relatedInformation = d.relatedInformation.map(info => new vscode.DiagnosticRelatedInformation(
+          new vscode.Location(vscode.Uri.parse(info.location.uri), new vscode.Range(
+            info.location.range.start.line, info.location.range.start.character,
+            info.location.range.end.line, info.location.range.end.character
+          )), info.message
+        ));
         return diag;
       })
     );
@@ -98,10 +105,10 @@ function attachReader(stream) {
 }
 
 function syncDoc(doc, isOpen) {
-  if (doc.languageId !== "niral") return;
+  if (!languages.includes(doc.languageId)) return;
   const uri = doc.uri.toString();
   if (isOpen) {
-    notifyServer("textDocument/didOpen", { textDocument: { uri, languageId: "niral", version: 1, text: doc.getText() } });
+    notifyServer("textDocument/didOpen", { textDocument: { uri, languageId: doc.languageId, version: doc.version, text: doc.getText() } });
   } else {
     notifyServer("textDocument/didChange", {
       textDocument: { uri, version: doc.version },
@@ -124,7 +131,11 @@ function activate(context) {
 
   proc = spawn(process.execPath, [serverPath, "lsp"], { stdio: ["pipe", "pipe", "inherit"] });
   attachReader(proc.stdout);
-  request("initialize", { processId: process.pid, capabilities: {} }).then(() => notifyServer("initialized", {}));
+  request("initialize", {
+    processId: process.pid, capabilities: {},
+    workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map(folder => ({ uri: folder.uri.toString(), name: folder.name })),
+    initializationOptions: { niralscriptGlobals: vscode.workspace.getConfiguration("niral").get("niralscriptGlobals", []), niralscriptStrictTypes: vscode.workspace.getConfiguration("niral").get("niralscriptStrictTypes", false) },
+  }).then(() => notifyServer("initialized", {}));
 
   // document lifecycle → server
   for (const doc of vscode.workspace.textDocuments) syncDoc(doc, true);
@@ -132,7 +143,7 @@ function activate(context) {
     vscode.workspace.onDidOpenTextDocument((doc) => syncDoc(doc, true)),
     vscode.workspace.onDidChangeTextDocument((e) => syncDoc(e.document, false)),
     vscode.workspace.onDidCloseTextDocument((doc) => {
-      if (doc.languageId === "niral") {
+      if (languages.includes(doc.languageId)) {
         notifyServer("textDocument/didClose", { textDocument: { uri: doc.uri.toString() } });
       }
     })
@@ -141,7 +152,7 @@ function activate(context) {
   // completions
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
-      "niral",
+      languages,
       {
         async provideCompletionItems(doc, position) {
           const items = await request("textDocument/completion", {
@@ -163,7 +174,7 @@ function activate(context) {
 
   // hover
   context.subscriptions.push(
-    vscode.languages.registerHoverProvider("niral", {
+    vscode.languages.registerHoverProvider(languages, {
       async provideHover(doc, position) {
         const res = await request("textDocument/hover", {
           textDocument: { uri: doc.uri.toString() },
@@ -174,6 +185,18 @@ function activate(context) {
       },
     })
   );
+
+  context.subscriptions.push(vscode.languages.registerDefinitionProvider("niralscript", {
+    async provideDefinition(doc, position) {
+      const result = await request("textDocument/definition", {
+        textDocument: { uri: doc.uri.toString() }, position: { line: position.line, character: position.character },
+      });
+      if (!result) return null;
+      return new vscode.Location(vscode.Uri.parse(result.uri), new vscode.Range(
+        result.range.start.line, result.range.start.character, result.range.end.line, result.range.end.character
+      ));
+    },
+  }));
 }
 
 function deactivate() {

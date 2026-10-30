@@ -17,12 +17,15 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { check } from "../check/check.js";
+import { nrsCompletions, nrsHover, nrsDefinition } from "./niralscript.js";
 
 export function startLsp({ input = process.stdin, output = process.stdout } = {}) {
   const docs = new Map(); // uri → text
   let buf = Buffer.alloc(0);
   let typeTimer;
   let workspaceRoots = [];
+  let nrsGlobals = [];
+  let nrsStrictTypes = false;
 
   function projectRoot(filename) {
     for (let directory = dirname(filename); ; directory = dirname(directory)) {
@@ -60,7 +63,12 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
     if (text == null) return;
     const filename = uri.startsWith("file:") ? filePath(uri) : uri.split("/").pop() ?? "file.niral";
     if (filename === null) return;
-    notify("textDocument/publishDiagnostics", { uri, diagnostics: validate(text, filename, { root: projectRoot(filename) }) });
+    notify("textDocument/publishDiagnostics", { uri, diagnostics: validate(text, filename, analysisOptions(filename, uri)) });
+  }
+
+  function analysisOptions(filename, uri) {
+    return { root: projectRoot(filename) ?? dirname(resolve(filename)), uri, globals: nrsGlobals, strictTypes: nrsStrictTypes,
+      documents: new Map([...docs].map(([key, text]) => [filePath(key), text]).filter(([key]) => key !== null)) };
   }
 
   function scheduleTypes() {
@@ -72,6 +80,7 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
         const filename = filePath(uri);
         if (filename === null) continue;
         documents.set(filename, text);
+        if (filename.endsWith(".nrs")) continue;
         const root = projectRoot(filename);
         if (root) projects.set(root, []);
       }
@@ -88,8 +97,8 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
       for (const [uri, text] of docs) {
         const filename = filePath(uri);
         if (filename === null) continue;
-        const diagnostics = validate(text, filename, { root: projectRoot(filename) });
-        if (!diagnostics.length) {
+        const diagnostics = validate(text, filename, analysisOptions(filename, uri));
+        if (!diagnostics.length && !filename.endsWith(".nrs")) {
           for (const error of projects.get(projectRoot(filename)) ?? []) {
             if (error.file !== filename) continue;
             const start = { line: Math.max(0, error.line - 1), character: Math.max(0, error.col - 1) };
@@ -109,6 +118,8 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
     const { id, method, params } = msg;
     switch (method) {
       case "initialize":
+        nrsStrictTypes = params?.initializationOptions?.niralscriptStrictTypes === true;
+        nrsGlobals = (params?.initializationOptions?.niralscriptGlobals ?? []).filter(name => typeof name === "string" && /^[A-Za-z_$][\w$]*$/.test(name));
         workspaceRoots = (params?.workspaceFolders?.map((folder) => folder.uri) ?? (params?.rootUri ? [params.rootUri] : []))
           .map(filePath).filter((filename) => filename !== null);
         if (!workspaceRoots.length && params?.rootPath) workspaceRoots = [resolve(params.rootPath)];
@@ -117,6 +128,7 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
             textDocumentSync: 1, // full document sync
             completionProvider: { triggerCharacters: ["{", "#", ":", "@", "$", "<", " "] },
             hoverProvider: true,
+            definitionProvider: true,
           },
           serverInfo: { name: "niral", version: "0.1.0" },
         });
@@ -155,14 +167,25 @@ export function startLsp({ input = process.stdin, output = process.stdout } = {}
         const text = docs.get(params.textDocument.uri);
         if (text == null) return respond(id, []);
         const offset = positionToOffset(text, params.position);
+        const filename = filePath(params.textDocument.uri) ?? params.textDocument.uri;
+        if (filename.endsWith(".nrs")) return respond(id, nrsCompletions(text, offset, filename, analysisOptions(filename, params.textDocument.uri)));
         return respond(id, completions(text, offset));
       }
       case "textDocument/hover": {
         const text = docs.get(params.textDocument.uri);
         if (text == null) return respond(id, null);
         const offset = positionToOffset(text, params.position);
-        const md = hover(text, offset);
+        const filename = filePath(params.textDocument.uri) ?? params.textDocument.uri;
+        const md = filename.endsWith(".nrs") ? nrsHover(text, offset, filename, analysisOptions(filename, params.textDocument.uri)) : hover(text, offset);
         return respond(id, md ? { contents: { kind: "markdown", value: md } } : null);
+      }
+
+      case "textDocument/definition": {
+        const uri = params.textDocument.uri;
+        const text = docs.get(uri);
+        const filename = filePath(uri) ?? uri;
+        if (text == null || !filename.endsWith(".nrs")) return respond(id, null);
+        return respond(id, nrsDefinition(text, positionToOffset(text, params.position), filename, analysisOptions(filename, uri)));
       }
 
       default:

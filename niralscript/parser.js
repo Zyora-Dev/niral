@@ -1,5 +1,6 @@
 import { Scanner, readExpressionStatement, RESERVED_WORDS } from "./scanner.js";
-import { parseExpression, ExpressionParser } from "./expressions.js";
+import { parseExpression, ExpressionParser, patternBindings } from "./expressions.js";
+import { readType, readTypeParameters, typeReadCount } from "./types.js";
 
 export { NiralScriptError } from "./errors.js";
 export { analyzeNiralScript } from "./analysis.js";
@@ -8,13 +9,16 @@ const IDENTIFIER = /[A-Za-z_$][\w$]*/y;
 
 export function parseNiralScript(code, filename = "<anonymous>") {
   const parser = new StatementParser(code, filename);
+  const reads = typeReadCount();
   const body = parser.body(true, 0);
-  return { type: "Program", body, source: code, filename, start: 0, end: code.length };
+  const typed = typeReadCount() > reads;
+  return { type: "Program", body, source: code, filename, typed, start: 0, end: code.length };
 }
 
 export class StatementParser {
   constructor(code, filename) {
     this.scanner = new Scanner(code, filename);
+    this.loopDepth = 0;
   }
 
   trivia() {
@@ -58,7 +62,7 @@ export class StatementParser {
     const scanner = this.scanner;
     if (!"[{".includes(scanner.peek())) return this.name(names, scanner.pos);
     const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
-    const pattern = parser.pattern(parser.primary(), names);
+    const pattern = parser.binding(names, false);
     scanner.pos = pattern.end;
     return pattern;
   }
@@ -80,6 +84,110 @@ export class StatementParser {
     return { type: "BlockStatement", body, start, end: scanner.pos };
   }
 
+  classDeclaration(start, depth, names, optional = false) {
+    const scanner = this.scanner;
+    let id = null;
+    if (!optional) {
+      id = this.name(names, start);
+    } else {
+      const savedPos = scanner.pos;
+      this.trivia();
+      const IDENTIFIER = /[A-Za-z_$][\w$]*/y;
+      IDENTIFIER.lastIndex = scanner.pos;
+      const word = IDENTIFIER.exec(scanner.src)?.[0];
+      scanner.pos = savedPos;
+      if (word && word !== "extends" && !RESERVED_WORDS.has(word)) id = this.name(names, start);
+    }
+    let parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+    const typeParameters = readTypeParameters(parser);
+    let superClass = null;
+    let superTypeArguments = null;
+    if (parser.peek().value === "extends") {
+      parser.take();
+      superClass = parser.primary();
+      if (parser.peek().kind === "<") {
+        const opening = parser.take();
+        const values = [];
+        do { values.push(readType(parser).value); } while (parser.eat(","));
+        const close = parser.expect(">");
+        superTypeArguments = { type: "TypeAnnotation", value: { kind: "arguments", values }, start: opening.start, end: close.end };
+      }
+    }
+    parser.expect("{");
+    const members = [];
+    const keys = new Map();
+    while (parser.peek().kind !== "}") {
+      if (parser.eat(";")) continue;
+      const memberStart = parser.peek().start;
+      let key = parser.take();
+      let isStatic = false;
+      let async = false;
+      let kind = "method";
+      if (key.value === "static" && !["(", ":", "=", ";", "}"].includes(parser.peek().kind)) {
+        isStatic = true;
+        if (parser.peek().kind === "{") {
+          scanner.pos = parser.peek().start;
+          const outerLoopDepth = this.loopDepth;
+          this.loopDepth = 0;
+          const body = this.block(depth + 1);
+          this.loopDepth = outerLoopDepth;
+          members.push({ type: "StaticBlock", static: true, body, start: memberStart, end: body.end });
+          parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+          continue;
+        }
+        key = parser.take();
+      }
+      if (key.value === "async" && ["identifier", "#", "["].includes(parser.peek().kind)) { async = true; key = parser.take(); }
+      if (["get", "set"].includes(key.value) && ["identifier", "#", "["].includes(parser.peek().kind)) { kind = key.value; key = parser.take(); }
+      if (async && kind !== "method") parser.error("Accessors cannot be async", key.start);
+      if (key.kind === "#") { const privateName = parser.expect("identifier"); key = { ...privateName, value: "#" + privateName.value, start: key.start }; }
+      if (key.kind === "[") {
+        key = parser.take();
+        if (!["string", "number"].includes(key.kind)) parser.error("Computed class names require a string or number literal", key.start);
+        parser.expect("]");
+      }
+      if (!["identifier", "string", "number"].includes(key.kind)) parser.error("Expected a class member name", key.start);
+      const name = String(key.value);
+      const memberKey = { type: "Identifier", name, start: key.start, end: key.end };
+      const identity = `${isStatic}:${name}`;
+      const previous = keys.get(identity);
+      if (name === "#constructor") parser.error("Private constructors are not allowed", key.start);
+      if (name.startsWith("#") && keys.has(`${!isStatic}:${name}`)) parser.error("Private names cannot be shared by static and instance members", key.start);
+      if (previous && !(previous === "get" && kind === "set" || previous === "set" && kind === "get")) parser.error(`Duplicate class member '${name}'`, key.start);
+      if (isStatic && name === "prototype") parser.error("Static prototype members are not allowed", key.start);
+      const methodTypes = readTypeParameters(parser);
+      if (parser.eat("(")) {
+        if (name === "constructor" && !isStatic) {
+          if (async || kind !== "method" || methodTypes) parser.error("A constructor cannot be async, generic or an accessor", key.start);
+          kind = "constructor";
+        }
+        const params = parser.parameters().items;
+        if (kind === "get" && params.length || kind === "set" && (params.length !== 1 || params[0].type === "RestElement")) parser.error("Invalid accessor parameters", key.start);
+        const returnType = parser.annotation();
+        if (kind === "constructor" && returnType) parser.error("Constructors cannot declare a return type", returnType.start);
+        scanner.pos = parser.peek().start;
+        const outerLoopDepth = this.loopDepth;
+        this.loopDepth = 0;
+        const body = this.block(depth + 1, new Set(params.flatMap(patternBindings).map(binding => binding.id.name)));
+        this.loopDepth = outerLoopDepth;
+        members.push({ type: "MethodDefinition", key: memberKey, static: isStatic, kind, async, params, returnType, typeParameters: methodTypes, body, start: memberStart, end: body.end });
+        parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      } else {
+        if (async || kind !== "method" || methodTypes || name === "constructor") parser.error("Invalid class field", key.start);
+        const typeAnnotation = parser.annotation();
+        const value = parser.eat("=") ? parser.expression() : null;
+        const end = value?.end ?? typeAnnotation?.end ?? key.end;
+        if (!parser.eat(";") && parser.peek().kind !== "}" && !/[\r\n]/.test(scanner.src.slice(end, parser.peek().start))) parser.error("Expected a semicolon or newline after field", end);
+        members.push({ type: "PropertyDefinition", key: memberKey, static: isStatic, typeAnnotation, value, start: memberStart, end });
+        kind = "field";
+      }
+      keys.set(identity, previous ? "accessors" : kind);
+    }
+    const end = parser.expect("}").end;
+    scanner.pos = end;
+    return { type: "ClassDeclaration", id, typeParameters, superClass, superTypeArguments, members, start, end };
+  }
+
   statement(topLevel, depth, names) {
     const scanner = this.scanner;
     const start = scanner.pos;
@@ -97,6 +205,10 @@ export class StatementParser {
     if (kind === "import") {
       if (!topLevel) scanner.error("NRS078", "Imports are only valid at top level", { start });
       this.trivia();
+      const importStart = scanner.pos;
+      const typeOnly = scanner.read(IDENTIFIER) === "type";
+      if (!typeOnly) scanner.pos = importStart;
+      else { names = new Set(); this.trivia(); }
       scanner.expect("{", "NRS078", "Expected named imports in braces");
       const specifiers = [];
       this.trivia();
@@ -127,18 +239,71 @@ export class StatementParser {
       this.trivia();
       const terminated = scanner.eat(";");
       if (!terminated && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(token.end, scanner.pos))) scanner.error("NRS078", "Expected a semicolon or newline after import", { start: token.end });
-      return { type: "ImportDeclaration", specifiers, source: { type: "Literal", value: token.value, start: token.start, end: token.end }, start, end: terminated ? scanner.pos : token.end };
+      return { type: "ImportDeclaration", ...(typeOnly ? { typeOnly } : {}), specifiers, source: { type: "Literal", value: token.value, start: token.start, end: token.end }, start, end: terminated ? scanner.pos : token.end };
     }
     if (kind === "export") {
       if (!topLevel) scanner.error("NRS078", "Exports are only valid at top level", { start });
       this.trivia();
       const declarationStart = scanner.pos;
       const declarationKind = scanner.read(IDENTIFIER);
-      if (!["const", "function", "async"].includes(declarationKind)) scanner.error("NRS078", "Only constants and functions can be exported", { start });
+      if (!["const", "function", "async", "type", "interface", "class"].includes(declarationKind)) scanner.error("NRS078", "Only constants, functions, classes and types can be exported", { start });
       scanner.pos = declarationStart;
       const declaration = this.statement(topLevel, depth, names);
-      if (!["VariableDeclaration", "FunctionDeclaration"].includes(declaration.type)) scanner.error("NRS078", "Only constants and functions can be exported", { start });
+      if (!["VariableDeclaration", "FunctionDeclaration", "TypeAliasDeclaration", "InterfaceDeclaration", "ClassDeclaration"].includes(declaration.type)) scanner.error("NRS078", "Only constants, functions, classes and types can be exported", { start });
       return { ...declaration, exported: true, start };
+    }
+    if (kind === "class") return this.classDeclaration(start, depth, names);
+    if (kind === "type") {
+      if (!topLevel) scanner.error("NRS080", "Type aliases are declared at module top level", { start });
+      const id = this.name(new Set(), start);
+      this.trivia();
+      const genericParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const typeParameters = readTypeParameters(genericParser);
+      if (typeParameters) { scanner.pos = typeParameters.end; this.trivia(); }
+      scanner.expect("=", "NRS080", "Expected '=' after type name");
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const annotationStart = scanner.pos;
+      const { value, end } = readType(parser);
+      scanner.pos = end;
+      scanner.eat(";");
+      return { type: "TypeAliasDeclaration", id, ...(typeParameters ? { typeParameters } : {}), value: { type: "TypeAnnotation", value, start: annotationStart, end }, start, end: scanner.pos };
+    }
+    if (kind === "interface") {
+      if (!topLevel) scanner.error("NRS080", "Interfaces are declared at module top level", { start });
+      const id = this.name(new Set(), start);
+      this.trivia();
+      const genericParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const typeParameters = readTypeParameters(genericParser);
+      if (typeParameters) { scanner.pos = typeParameters.end; this.trivia(); }
+      const extendsTypes = [];
+      const afterId = scanner.pos;
+      if (scanner.read(IDENTIFIER) === "extends") {
+        do {
+          this.trivia();
+          const extParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+          const { value: extValue, end: extEnd } = readType(extParser);
+          extendsTypes.push({ type: "TypeAnnotation", value: extValue, start: scanner.pos, end: extEnd });
+          scanner.pos = extEnd;
+          this.trivia();
+        } while (scanner.eat(","));
+      } else scanner.pos = afterId;
+      this.trivia();
+      scanner.expect("{", "NRS080", "Expected '{' for interface body");
+      const bodyParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const properties = {};
+      while (bodyParser.peek().kind !== "}") {
+        const key = bodyParser.expect("identifier");
+        if (Object.hasOwn(properties, key.value)) bodyParser.error(`Duplicate interface property '${key.value}'`, key.start);
+        const optional = !!bodyParser.eat("?");
+        bodyParser.expect(":");
+        const { value: propValue } = readType(bodyParser);
+        Object.defineProperty(properties, key.value, { value: optional ? { kind: "union", members: [propValue, { kind: "undefined" }] } : propValue, enumerable: true });
+        if (!bodyParser.eat(",") && !bodyParser.eat(";")) break;
+      }
+      const closeEnd = bodyParser.expect("}").end;
+      scanner.pos = closeEnd;
+      const bodyAnnotation = { type: "TypeAnnotation", value: { kind: "object", properties }, start: start, end: closeEnd };
+      return { type: "InterfaceDeclaration", id, ...(typeParameters ? { typeParameters } : {}), ...(extendsTypes.length ? { extends: extendsTypes } : {}), value: bodyAnnotation, start, end: scanner.pos };
     }
     if (kind === "input") {
       if (!topLevel) scanner.error("NRS072", "Inputs are only valid at component top level", { start });
@@ -171,40 +336,94 @@ export class StatementParser {
     if (kind === "function") {
       const id = this.name(names, start);
       this.trivia();
+      const genericParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const typeParameters = readTypeParameters(genericParser);
+      if (typeParameters) { scanner.pos = typeParameters.end; this.trivia(); }
       scanner.expect("(", "NRS072", "Expected function parameters");
-      const parameters = new Set();
-      const params = [];
-      this.trivia();
-      while (scanner.peek() !== ")") {
-        const param = this.pattern(parameters);
-        const typeAnnotation = this.annotation();
-        if (typeAnnotation) param.typeAnnotation = typeAnnotation;
-        params.push(param);
-        this.trivia();
-        if (!scanner.eat(",")) break;
-        this.trivia();
+      const parameterParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      let params;
+      try { params = parameterParser.parameters().items; }
+      catch (error) {
+        if (error.message === "Expected unique non-reserved binding names") error.code = "NRS070";
+        throw error;
       }
-      scanner.expect(")", "NRS072", "Expected ')' after function parameters");
+      scanner.pos = parameterParser.scanner.pos;
       const returnType = this.annotation();
-      const body = this.block(depth + 1, parameters);
-      return { type: "FunctionDeclaration", ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), id, params, body, start, end: body.end };
+      const parameterNames = new Set();
+      function collectNames(pattern) {
+        if (!pattern) return;
+        if (pattern.type === "Identifier") parameterNames.add(pattern.name);
+        else if (pattern.type === "AssignmentPattern") collectNames(pattern.left);
+        else if (pattern.type === "RestElement") collectNames(pattern.argument);
+        else for (const item of pattern.elements ?? pattern.properties) collectNames(item?.value ?? item);
+      }
+      params.forEach(collectNames);
+      const outerLoopDepth = this.loopDepth;
+      this.loopDepth = 0;
+      const body = this.block(depth + 1, parameterNames);
+      this.loopDepth = outerLoopDepth;
+      return { type: "FunctionDeclaration", ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), ...(typeParameters ? { typeParameters } : {}), id, params, body, start, end: body.end };
     }
     if (kind === "for") {
       this.trivia();
       scanner.expect("(", "NRS072", "Expected '(' after for");
       this.trivia();
+      const headerStart = scanner.pos;
       const declarationKind = scanner.read(IDENTIFIER);
-      if (!["const", "let"].includes(declarationKind)) scanner.error("NRS072", "For-of requires a const or let binding", { start });
-      const parameters = new Set();
-      const id = this.pattern(parameters);
-      this.trivia();
-      if (scanner.read(IDENTIFIER) !== "of") scanner.error("NRS072", "Only for-of iteration is supported", { start });
-      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
-      const right = parser.expression();
+      let init = null;
+      let parser;
+      if (["const", "let"].includes(declarationKind)) {
+        const id = this.pattern(new Set());
+        const typeAnnotation = this.annotation();
+        if (typeAnnotation) id.typeAnnotation = typeAnnotation;
+        this.trivia();
+        parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+        if (parser.peek().value === "of") {
+          parser.take();
+          const right = parser.expression();
+          parser.expect(")");
+          scanner.pos = parser.scanner.pos;
+          this.loopDepth++;
+          const body = this.block(depth);
+          this.loopDepth--;
+          return { type: "ForOfStatement", kind: declarationKind, id, right, body, start, end: body.end };
+        }
+        parser.expect("=");
+        const value = parser.expression();
+        init = { type: "VariableDeclaration", kind: declarationKind, id, init: value, start: headerStart, end: value.end };
+      } else {
+        parser = new ExpressionParser(scanner.src, scanner.filename, headerStart, scanner.src.length);
+        if (parser.peek().kind !== ";") init = this.simpleStatement(parser);
+      }
+      parser.expect(";");
+      const test = parser.peek().kind === ";" ? null : parser.expression();
+      parser.expect(";");
+      const update = parser.peek().kind === ")" ? null : this.simpleStatement(parser);
       parser.expect(")");
       scanner.pos = parser.scanner.pos;
+      this.loopDepth++;
       const body = this.block(depth);
-      return { type: "ForOfStatement", kind: declarationKind, id, right, body, start, end: body.end };
+      this.loopDepth--;
+      return { type: "ForStatement", init, test, update, body, start, end: body.end };
+    }
+    if (kind === "while") {
+      this.trivia();
+      scanner.expect("(", "NRS072", "Expected '(' after while");
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const test = parser.expression();
+      parser.expect(")");
+      scanner.pos = parser.scanner.pos;
+      this.loopDepth++;
+      const body = this.block(depth);
+      this.loopDepth--;
+      return { type: "WhileStatement", test, body, start, end: body.end };
+    }
+    if (kind === "break" || kind === "continue") {
+      if (!this.loopDepth) scanner.error("NRS072", `${kind} is only valid inside a loop`, { start });
+      const keywordEnd = scanner.pos;
+      this.trivia();
+      if (!scanner.eat(";") && scanner.peek() !== "}" && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(keywordEnd, scanner.pos))) scanner.error("NRS072", "Loop labels are not supported", { start });
+      return { type: kind === "break" ? "BreakStatement" : "ContinueStatement", start, end: scanner.pos };
     }
     if (kind === "if") {
       this.trivia();
@@ -271,22 +490,31 @@ export class StatementParser {
     if (scanner.peek() === "{") return this.block(depth);
     readExpressionStatement(scanner, true);
     const parser = new ExpressionParser(scanner.src, scanner.filename, start, scanner.pos);
-    const expression = parser.expression();
-    const operator = parser.peek();
-    let statement;
-    if (["=", "+=", "-=", "*=", "/=", "%="].includes(operator.kind)) {
-      parser.take();
-      if (!["Identifier", "MemberExpression"].includes(expression.type)) scanner.error("NRS072", "Invalid assignment target", { start });
-      for (let target = expression; target && ["MemberExpression", "CallExpression"].includes(target.type); target = target.object ?? target.callee) if (target.optional) scanner.error("NRS072", "Optional chains cannot be assignment targets", { start });
-      const right = parser.expression();
-      statement = { type: "AssignmentStatement", left: expression, operator: operator.kind, right };
-    } else {
-      if (!["CallExpression", "AwaitExpression"].includes(expression.type)) scanner.error("NRS072", "Only calls, await and assignments are expression statements", { start });
-      statement = { type: "ExpressionStatement", expression };
-    }
+    const statement = this.simpleStatement(parser);
     parser.expect("eof");
     scanner.eat(";");
     return { ...statement, start, end: scanner.pos };
+  }
+
+  simpleStatement(parser) {
+    const scanner = this.scanner;
+    const start = parser.peek().start;
+    const prefix = ["++", "--"].includes(parser.peek().kind) ? parser.take() : null;
+    const expression = parser.expression();
+    const operator = prefix ?? parser.peek();
+    let statement;
+    if (["=", "+=", "-=", "*=", "/=", "%=", "++", "--"].includes(operator.kind)) {
+      if (!prefix) parser.take();
+      if (!["Identifier", "MemberExpression"].includes(expression.type)) scanner.error("NRS072", "Invalid assignment target", { start });
+      for (let target = expression; target && ["MemberExpression", "CallExpression"].includes(target.type); target = target.object ?? target.callee) if (target.optional) scanner.error("NRS072", "Optional chains cannot be assignment targets", { start });
+      const update = ["++", "--"].includes(operator.kind);
+      const right = update ? { type: "Literal", value: 1, start: operator.start, end: operator.end } : parser.expression();
+      statement = { type: "AssignmentStatement", left: expression, operator: update ? operator.kind === "++" ? "+=" : "-=" : operator.kind, ...(update ? { update: true } : {}), right };
+    } else {
+      if (!["CallExpression", "NewExpression", "AwaitExpression"].includes(expression.type)) scanner.error("NRS072", "Only calls, construction, await and assignments are expression statements", { start });
+      statement = { type: "ExpressionStatement", expression };
+    }
+    return { ...statement, start, end: Math.max(expression.end, statement.right?.end ?? expression.end) };
   }
 
   empty(raw) {

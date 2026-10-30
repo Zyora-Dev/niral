@@ -14,22 +14,25 @@ import { renderComponent } from "../src/server/render.js";
 
 const runtime = new URL("../src/runtime/index.js", import.meta.url).href;
 const rounds = 12;
-const warmup = 30;
 const mode = process.argv[2] ?? "compile";
+const warmup = Number(process.env.NIRAL_BENCH_WARMUP ?? (mode === "language" ? 2000 : 30));
+assert.ok(Number.isInteger(warmup) && warmup >= 0 && warmup <= 10000, "Warmup must be an integer from 0 to 10000");
 assert.ok(["compile", "browser", "types", "standalone", "language"].includes(mode), "Mode must be compile, browser, types, standalone or language");
 let sink = 0;
 
 function summarize(values) {
+  const samplesMs = [...values];
   values.sort((left, right) => left - right);
   const middle = Math.floor(values.length / 2);
-  return { median: values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2, p90: values[Math.ceil(values.length * 0.9) - 1] };
+  return { median: values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2, p90: values[Math.ceil(values.length * 0.9) - 1], samplesMs };
 }
 
-function compare(tasks, iterations) {
+function compare(tasks, iterations, warmupCalls = warmup, label = "") {
   const samples = tasks.map(() => []);
-  for (let iteration = 0; iteration < warmup; iteration++) {
+  for (let iteration = 0; iteration < warmupCalls; iteration++) {
     for (const task of tasks) sink += task.run();
   }
+  if (label && process.env.NIRAL_BENCH_FOCUS === "1") console.log(`TIMING START: ${label}`);
   for (let round = 0; round < rounds; round++) {
     const order = tasks.map((_, index) => (round + index) % tasks.length);
     for (const index of order) {
@@ -38,6 +41,7 @@ function compare(tasks, iterations) {
       samples[index].push((performance.now() - start) / iterations);
     }
   }
+  if (label && process.env.NIRAL_BENCH_FOCUS === "1") console.log(`TIMING END: ${label}`);
   return samples.map(summarize);
 }
 
@@ -101,15 +105,42 @@ if (mode === "language") {
     { name: "1000 records: filtered total", type: "{ price: number, quantity: number, active: boolean }[]", body: "let total = 0; for (const value of values) { if (value.active) { total += value.price * value.quantity; } } return total;", input: records, expected: records.filter(value => value.active).reduce((total, value) => total + value.price * value.quantity, 0), edge: [{ price: 3, quantity: 2, active: true }, { price: 50, quantity: 2, active: false }], edgeExpected: 6, iterations: 1000 },
     { name: "1000 strings: uppercase and join", type: "string[]", body: "let result = ''; for (const value of values) { result += value.toUpperCase() + ':'; } return result;", returns: "string", input: words, expected: words.map(value => value.toUpperCase() + ":").join(""), edge: ["ab", "Cd"], edgeExpected: "AB:CD:", iterations: 200 },
     { name: "100 awaits: numeric accumulation", type: "number[]", body: "let total = 0; for (const value of values) { total += await value; } return total;", async: true, input: numbers.slice(0, 100), expected: 4950, edge: [-2, 0, 3], edgeExpected: 1, iterations: 200 },
-  ];
+    {
+      name: "1000 constructions: private counter + accessor", type: "number[]",
+      declarations: typed => `class Counter {
+        #value${typed ? ": number" : ""};
+        constructor(value${typed ? ": number" : ""}) { this.#value = value; }
+        add(amount${typed ? ": number" : ""} = 1)${typed ? ": void" : ""} { this.#value += amount; }
+        get value()${typed ? ": number" : ""} { return this.#value; }
+      }`,
+      body: "let total = 0; for (const value of values) { const counter = new Counter(value); counter.add(2); total += counter.value; } return total;",
+      input: numbers.slice(0, 1000), expected: 51500, edge: [-2, 0, 3], edgeExpected: 7, iterations: 1000,
+    },
+    {
+      name: "1000 constructions: generic inheritance + super", type: "number[]",
+      declarations: typed => `class Box${typed ? "<T>" : ""} {
+        value${typed ? ": T" : ""};
+        constructor(value${typed ? ": T" : ""}) { this.value = value; }
+        read()${typed ? ": T" : ""} { return this.value; }
+      }
+      class Score extends Box${typed ? "<number>" : ""} {
+        #offset${typed ? ": number" : ""} = 2;
+        constructor(value${typed ? ": number" : ""}) { super(value); }
+        read()${typed ? ": number" : ""} { return super.read() + this.#offset; }
+      }`,
+      body: "let total = 0; for (const value of values) { const score = new Score(value); total += score.read(); } return total;",
+      input: numbers.slice(0, 1000), expected: 51500, edge: [-2, 0, 3], edgeExpected: 7, iterations: 1000,
+    },
+  ].filter(fixture => process.env.NIRAL_BENCH_FOCUS !== "1" || fixture.name.startsWith("10000 numbers:") || fixture.async);
   console.log(`JavaScript vs TypeScript ${ts.version} vs NiralScript: identical function bodies and inputs, no component/DOM/reactive operations.`);
   console.log("All execute on the same Node/V8 engine. Imports, instance setup, strict TS validation and assertions are outside runtime timing; function references are extracted once.");
   console.log(`Runtime: ${warmup} warmup calls, ${rounds} rotated rounds, median/p90 batch-average ms per complete function call. Async calls are awaited sequentially.`);
-  console.log("Transforms are reported separately: NRS checking+emission+maps vs TS transpileModule+maps (not strict checking); JS needs no transform. Bundled NRS factory/runtime bytes included even though unused by these functions.");
+  console.log("Transforms use 30 warmup calls and are reported separately: NRS checking+emission+maps vs TS transpileModule+maps (not strict checking); JS needs no transform. Bundled NRS factory/runtime bytes included even though unused by these functions.");
   const results = [];
+  const measurements = [];
   for (const fixture of fixtures) {
     const returnType = fixture.returns ?? "number";
-    const source = typed => `${fixture.async ? "async " : ""}function run(values${typed ? `: ${fixture.type}` : ""})${typed ? `: ${fixture.async ? `Promise<${returnType}>` : returnType}` : ""} { ${fixture.body} }`;
+    const source = typed => `${fixture.declarations ? fixture.declarations(typed) + "\n" : ""}${fixture.async ? "async " : ""}function run(values${typed ? `: ${fixture.type}` : ""})${typed ? `: ${fixture.async ? `Promise<${returnType}>` : returnType}` : ""} { ${fixture.body} }`;
     const scripts = [source(false) + "\nexport { run };", source(true) + "\nexport { run };", source(true)];
     const filename = fileURLToPath(new URL("language-benchmark.ts", import.meta.url));
     const host = ts.createCompilerHost(compilerOptions);
@@ -144,6 +175,7 @@ if (mode === "language") {
       for (let iteration = 0; iteration < warmup; iteration++) {
         for (const variant of variants) sink += consume(await variant.run(fixture.input));
       }
+      if (process.env.NIRAL_BENCH_FOCUS === "1") console.log(`TIMING START: ${fixture.name}`);
       for (let round = 0; round < rounds; round++) {
         for (let offset = 0; offset < variants.length; offset++) {
           const index = (round + offset) % variants.length;
@@ -152,11 +184,12 @@ if (mode === "language") {
           samples[index].push((performance.now() - start) / fixture.iterations);
         }
       }
+      if (process.env.NIRAL_BENCH_FOCUS === "1") console.log(`TIMING END: ${fixture.name}`);
       timing = samples.map(summarize);
     } else {
-      timing = compare(variants.map(variant => ({ run: () => consume(variant.run(fixture.input)) })), fixture.iterations);
+      timing = compare(variants.map(variant => ({ run: () => consume(variant.run(fixture.input)) })), fixture.iterations, warmup, fixture.name);
     }
-    const transforms = compare([{ run: () => transpile().code.length }, { run: () => compile().code.length }], 20);
+    const transforms = compare([{ run: () => transpile().code.length }, { run: () => compile().code.length }], 20, 30);
     console.log(`\n${fixture.name}: main/edge/empty/nonmutation correctness and TS strict check PASS; ${fixture.iterations} calls per timed batch`);
     console.table(variants.map((variant, index) => ({
       language: variant.name,
@@ -169,11 +202,30 @@ if (mode === "language") {
       gzipBytes: gzipSync(variant.code).length,
     })));
     results.push({ workload: fixture.name, ...Object.fromEntries(variants.map((variant, index) => [variant.name, timing[index].median.toFixed(6)])) });
+    measurements.push({
+      workload: fixture.name,
+      iterations: fixture.iterations,
+      correctness: "passed",
+      variants: variants.map((variant, index) => ({
+        language: variant.name,
+        runtime: timing[index],
+        transform: index ? transforms[index - 1] : null,
+        sourceBytes: Buffer.byteLength(scripts[index]),
+        moduleBytes: Buffer.byteLength(variant.code),
+        gzipBytes: gzipSync(variant.code).length,
+      })),
+    });
   }
   assert.ok(sink > 0);
   console.log("\nDirect language execution summary: median milliseconds per complete function call");
   console.table(results);
-  console.log(`PASS: four equivalent workloads in three languages. Output consumed: ${sink}. Warm microbenchmarks, not a general language ranking; TS and NRS compile to JavaScript.`);
+  console.log(`PASS: ${fixtures.length} equivalent workloads in three languages. Output consumed: ${sink}. Warm microbenchmarks, not a general language ranking; TS and NRS compile to JavaScript.`);
+  if (process.env.NIRAL_BENCH_JSON === "1") console.log("NIRAL_BENCH_RESULT=" + JSON.stringify({
+    node: process.version, v8: process.versions.v8, typescript: ts.version,
+    platform: platform(), arch: arch(), cpu: cpus()[0]?.model,
+    rounds, warmup, transformWarmup: 30, sampleOrder: "chronological rounds",
+    units: "milliseconds per complete workload call", measurements,
+  }));
 }
 if (mode === "standalone") {
   const ts = loadTypescript(fileURLToPath(new URL("../", import.meta.url)));

@@ -1,7 +1,7 @@
 {
   "name": "niral-vscode",
   "displayName": "Niral",
-  "description": "Language support for the Niral framework — syntax highlighting, diagnostics, completions and hover docs for .niral components.",
+  "description": "Language support for Niral and NiralScript: highlighting, diagnostics, completions, hover and .nrs definitions.",
   "icon": "icon.png",
   "version": "0.1.1",
   "publisher": "zyoralabs",
@@ -19,9 +19,20 @@
         "aliases": ["Niral", "niral"],
         "extensions": [".niral"],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "niralscript",
+        "aliases": ["NiralScript", "niralscript"],
+        "extensions": [".nrs"],
+        "configuration": "./niralscript-language-configuration.json"
       }
     ],
     "grammars": [
+      {
+        "language": "niralscript",
+        "scopeName": "source.niralscript",
+        "path": "./syntaxes/niralscript.tmLanguage.json"
+      },
       {
         "language": "niral",
         "scopeName": "source.niral",
@@ -39,6 +50,17 @@
     "configuration": {
       "title": "Niral",
       "properties": {
+        "niral.niralscriptStrictTypes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Require narrowing unknown and nullable values in standalone .nrs checking. Reload the window after changes."
+        },
+        "niral.niralscriptGlobals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Explicit host globals for standalone .nrs checking (same contract as nrs --global). Reload the window after changes."
+        },
         "niral.serverPath": {
           "type": "string",
           "default": "",

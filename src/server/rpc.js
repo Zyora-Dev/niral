@@ -248,10 +248,10 @@ export async function callServerFn(mod, fn, args, cookieHeader, secret, alsOverr
       setCookie: store.dirty ? sessionCookie(store, secret) : null,
     };
   } catch (e) {
-    if (e?.__niralValidation) {
+    if (e?.__niralValidation || e?.code === "NRS081" && e?.name === "NiralContractError") {
       return {
         status: 400,
-        body: { ok: false, error: "validation failed", errors: e.errors },
+        body: { ok: false, error: "validation failed", errors: e.__niralValidation ? e.errors : { [e.path]: `Expected ${e.expected}` } },
         setCookie: store.dirty ? sessionCookie(store, secret) : null,
       };
     }

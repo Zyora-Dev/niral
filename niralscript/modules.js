@@ -14,8 +14,8 @@ export function linkNiralScript(program, resolveModule) {
   function visit(owner) {
     visiting.add(owner.filename);
     for (const node of owner.body) {
-      if (owner !== program && node.type !== "ImportDeclaration" && node.type !== "FunctionDeclaration" && !(node.type === "VariableDeclaration" && node.kind === "const")) {
-        fail("Library modules may only contain imports, constants and functions", owner, node);
+      if (owner !== program && !["ImportDeclaration", "FunctionDeclaration", "TypeAliasDeclaration", "InterfaceDeclaration", "ClassDeclaration"].includes(node.type) && !(node.type === "VariableDeclaration" && node.kind === "const")) {
+        fail("Library modules may only contain imports, constants, functions, classes and type aliases", owner, node);
       }
       if (node.type !== "ImportDeclaration") continue;
       if (!resolveModule) fail("Module imports require a module resolver", owner, node);

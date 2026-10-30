@@ -1,6 +1,8 @@
 # build artifacts
 dist/
 .niral/
+apps/docs/playground/compiler/
+apps/docs/lib/playground-sandbox.json
 
 # runtime data — sqlite databases, sessions, jobs (never commit user data)
 data/

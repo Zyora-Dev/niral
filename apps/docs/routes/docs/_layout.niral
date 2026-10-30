@@ -67,7 +67,7 @@ export async function searchDocs(q) {
       <span></span><span></span><span></span>
     </button>
     <a class="brand" href="/">
-      <img class="brand-logo" src="/niral-logo.svg" alt="Niral" />
+      <img class="brand-logo" src="/niral-logo.png" alt="Niral" />
       <span class="docs-tag">Docs</span>
     </a>
     <div class="search">
@@ -139,7 +139,7 @@ export async function searchDocs(q) {
   .skip-link:focus { top: 12px; }
   .topbar { grid-column: 1 / -1; display: grid; grid-template-columns: 220px minmax(200px, 560px) 1fr; align-items: center; gap: 24px; position: sticky; top: 0; z-index: 70; height: 80px; padding: 0 32px; border-bottom: 1px solid var(--line); background: #0b0b0df5; backdrop-filter: blur(16px); }
   .brand { display: flex; align-items: center; gap: 16px; text-decoration: none; width: fit-content; }
-  .brand-logo { display: block; height: 28px; width: auto; filter: grayscale(1) brightness(1.6); }
+  .brand-logo { display: block; height: 28px; width: auto; }
   .docs-tag { color: var(--text); border-left: 1px solid var(--line-strong); padding-left: 16px; font-size: 14px; }
   .toplinks { display: flex; justify-content: flex-end; gap: 24px; white-space: nowrap; }
   .toplinks a { color: var(--text); font-size: 13px; text-decoration: none; }

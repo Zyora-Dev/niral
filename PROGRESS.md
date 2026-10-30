@@ -1,5 +1,481 @@
 # Niral Progress
 
+## 2026-10-31: NiralScript Signal Read Overhead
+
+Reading a derived binding used to cost two or three hops: the `values` accessor, then the
+derive cell's revision-stamped `get()`, then the state cell's `get()`. The 2026-10-29 pass
+had already turned short derives into `{ get: () => (expr) }` cells, which removed the
+revision check but kept the cell hop.
+
+- **Cheap derives are now duplicated at their reference sites.** `niralscript/compile.js`
+  counts how often each binding is read (`analysis.references`), measures what a cheap
+  initializer costs in AST nodes (`derivationCost`, out of the existing 16-node
+  `DERIVATION_BUDGET`), and inlines the initializer at every reference and in the `values`
+  getter when `(copies - 1) * cost <= 48` (`INLINE_BUDGET`). The declaration is then not
+  emitted at all. Above the budget the shared `{ get: () => (expr) }` cell is kept, so a
+  derive read from many places never blows up the module.
+- Soundness rests on the checks that already exist: `NRS075` proves derive initializers are
+  synchronous and pure and `NRS076` statically rejects derive cycles, so duplicating an
+  initializer cannot duplicate a side effect or loop.
+- **Call-receiver guard.** An inlined member expression in callee position (`derive m =
+  host.read` then `m()`) would otherwise pick up `host` as its receiver, which the cell form
+  never did. `CallExpression` now emits `(0, expr)(…)` for that case. Parentheses alone do
+  not fix this — `(host.read)()` still binds the receiver.
+- State cells are never inlined away. `createInstance(inputs, globals, runtime)` lets a host
+  inject `src/runtime/index.js` as the third argument, so every non-inlined read must keep
+  going through `__runtime.signal` / `__runtime.derived`. That contract is covered by the
+  standalone ESM test.
+- **Result** (`bench/niralscript.js standalone`, median of the 1000-read batch): the counter
+  case went from 0.0145 ms to 0.0118 ms against 0.0078 ms for hand-written JavaScript —
+  1.84x down to **1.51x**. The 1000-number map case went from 0.0177 ms to 0.0145 ms against
+  0.0092 ms — 1.95x down to **1.58x**. Module bytes fell from 1557 to 1520 (counter) and 1657
+  to 1618 (map); the `derived` primitive is dropped from the emitted runtime whenever every
+  derive inlines. Compile throughput and SSR parity are unchanged (SSR 0.88–1.10x vs JS).
+- `tests/niralscript.js` gained *NiralScript inlines cheap derives at their reference sites*,
+  covering the inlined read path, the call-receiver guard and the above-budget fallback.
+  75/75 language tests and 258/258 framework tests pass. No commit, push or publication.
+
+## 2026-10-30: Brand Refresh and Sitemap MIME Fix — DEPLOYED
+
+Production release **`c866fa49ef9c`** is live on https://niral.site (previous
+`c462229a6f83` retained for rollback).
+
+- **New logo.** `apps/docs/niral-logo.png` (480x155, 20.5 KB) replaces the old
+  `niral-logo.svg`, which was a 185 KB base64 PNG wrapped in `<svg>` — it had no
+  vector or filesize advantage. Rolled out to the site header, footer, docs sidebar
+  and changelog nav. All `filter: grayscale()/brightness()/invert()` rules were removed
+  so the gradient mark renders in its real colors.
+- **New favicon.** `apps/docs/favicon.png` (256x256, 19.3 KB) built from
+  `assets/fav.png` — the three-layer parallelogram mark alone, with no wordmark, so it
+  stays legible at 16px. All nine `<link rel="icon">` tags point at `/favicon.png`
+  with `type="image/png"`.
+- **Purple homepage.** `routes/index.niral` repainted from near-black to a dark purple
+  palette (base `#15092a`, footer `#0d0520`), with the gold `#f2b544` accent preserved.
+  The shared header and footer are tinted via `.homepage :global(.site-header)`
+  descendant overrides, so only the homepage copy changes.
+- **Sitemap MIME fix.** `.xml` was missing from the MIME tables in `src/server/prod.js`
+  and `src/dev/server.js`, so `/sitemap.xml` was served as `application/octet-stream`.
+  It now serves `application/xml; charset=utf-8`. (`.txt` was also missing from the dev
+  table.) Note: Google Search Console had already read the sitemap successfully despite
+  the wrong type — 28 pages discovered on 2026-10-30 — so this was hygiene, not the
+  cause of the site not appearing in search.
+- **SEO audit.** Verified on the live site: titles, descriptions, `robots: index, follow`,
+  canonicals, OG/Twitter cards and JSON-LD structured data are all server-rendered;
+  `robots.txt` 200; Googlebot user-agent receives 200 (Shield does not block it). The
+  remaining blocker for search visibility is domain age and the absence of backlinks,
+  not on-page SEO.
+
+Deployment: checkpoint at `/root/niral-upgrade-checkpoints/20261030-logo-favicon-seo`
+(env, docs source, framework source, `prod.js` backup, previous release pointer).
+Integrity `ok: true`, 0 tampered, 76 files checked. `app.env` byte-identical before and
+after. nginx / `niral-demo` / `niral-demo-watchdog` all active, `NRestarts=0`, clean
+startup logs with zero warnings. All public pages, assets, `robots.txt` and `sitemap.xml`
+return 200. No commit, push or npm publication.
+
+## 2026-10-29: NiralScript Output Size and Compile Throughput
+
+- **Output size.** `niralscript/compile.js` now emits a runtime factory containing only
+  the primitives a module actually uses, passes `__runtime = null` when the module has no
+  reactive binding, and emits the `__inputCells` map plus a working `updateInputs` body
+  only when an `input` binding exists. Root bindings of kind `const` / `function` / `class`
+  are exposed as plain data descriptors instead of getters, removing an accessor hop.
+- A new `cheapDerivation` helper inlines a derive whose initializer is a short
+  literal/identifier/operator/member expression (16-node budget) as
+  `const x = { get: () => (expr) }` rather than a revision-stamped cell. This is sound
+  because `NRS075` already proves derive purity and `NRS076` already rejects cycles.
+  `derived` is dropped from the emitted runtime entirely when every derive is cheap.
+- Result: `language` mode module bytes fell from 1187–1610 to 403–819 (~66% smaller),
+  gzip from 530 to 243–377 (~54% smaller); the standalone counter case went from
+  1936 B / 706 gz to 1557 B / 574 gz and the map case from 2036 / 735 to 1657 / 601.
+- **Compile throughput.** CPU profiling showed the cost was AST traversal allocation,
+  not the source-map machinery that had previously been assumed. `typeAnnotations` and
+  `walk` in `niralscript/types.js` were rewritten to use `for...in` with a shared
+  `SKIPPED_KEYS` set instead of `Object.entries`, a per-key inline array literal and
+  `forEach` closures. `checkTypes` collects type annotations once and reuses the result
+  instead of walking the program twice. The hot membership tests in
+  `niralscript/analysis.js` were hoisted into module-level sets.
+- The parser now records a `typed` flag on the program by observing whether any type
+  syntax was consumed during the parse, so a module without annotations or casts skips
+  the three full AST walks that previously existed only to discover there were none:
+  the `checkTypes` guard, the annotation-erasure pass in `src/compiler/niralscript.js`
+  and the cast-collection walk in the same file. Because `as` / `satisfies` casts read a
+  type like annotations do, one flag covers both.
+- Result: `compile` mode NiralScript-vs-JS medians improved from 3.34× to 2.47×
+  (counter), 2.81× to 1.69× (100 state/derive pairs) and 6.98× to 2.94× (1000 rows).
+  SSR stayed at parity (0.96–1.01×) and the direct AST backend widened its lead over the
+  legacy via-JS path to 1.24–1.28×.
+- All 74 NiralScript language tests and all 258 framework tests pass.
+
+## 2026-10-28: NiralScript Features — Casts, Interfaces, Generic Constraints/Defaults, Class Expressions
+
+- Implemented `as` / `satisfies` type casts across all three emitters (standalone,
+  direct, legacy). `as` erases to inner expression; `satisfies` checks at compile
+  time and erases. `CastExpression` uses `castType` field to avoid collision with
+  arrow-param annotation check. Walk pass in `checkTypes` drives `satisfies`
+  verification. All three emitters erase casts to plain JS.
+- Implemented `interface X<T> extends Y {}` declarations. Parser produces
+  `InterfaceDeclaration` with optional type parameters, extends list and object body.
+  Type checker registers interfaces in the type scope alongside `TypeAliasDeclaration`
+  and `ClassDeclaration`; `resolveType` merges extends bases left-to-right with own
+  properties. Library modules and the modules linker allow interface declarations.
+  Both emitters erase to empty string. Cross-module `import type` works.
+- Implemented generic constraints (`T extends Constraint`) and defaults (`T = Default`)
+  on type aliases, interfaces, generic functions and class type parameters.
+  `readTypeParameters` now stores `{ name, constraint?, default? }` per parameter.
+  `resolveType` builds `argumentsMap` incrementally so later defaults can reference
+  earlier parameters. Constraint violations are reported at both type-alias
+  instantiation sites and generic function call sites.
+- Implemented class expressions (`const C = class { ... }`, `class Name extends Base
+  { ... }`). `primary()` in `ExpressionParser` delegates to `StatementParser
+  .classDeclaration(..., optional=true)`. Optional name detection peeks ahead,
+  reads the full word, and excludes `extends` and reserved words. `ClassExpression`
+  nodes are handled in analysis `expression()` (inner scope for optional name),
+  all traversal guards, `classType()` (null-safe id), and both emitters (optional
+  id in output). Anonymous class expressions use `"(anonymous)"` as the internal
+  type name.
+- 74 language tests pass, 0 fail. No regressions on prior work.
+- No Playwright, production deployment, Git publication or dependency changes.
+
+## 2026-10-27: Runtime Contracts Verified Locally
+
+- Implemented explicit `contract<Type>(value)` in the standalone, direct Niral and
+  legacy Niral emitters. Shared generated JavaScript validates and copies supported
+  data without coercion or runtime dependencies. Aliases, imported concrete generic
+  aliases, unions, optional fields and inferred result writes are checked.
+- Four focused contract groups pass: all emitters, imports/nesting, data safety and
+  schema bounds, and awaited host/explicit input guards. Candidate evaluation occurs
+  once; failures carry NRS081/path/expected without rejected payload values. Numeric
+  schemas reject nonfinite values and overflowing numeric literals.
+- Real inline/external dev and production-server HTTP tests pass: component SSR,
+  valid RPC200, invalid RPC400 with field errors, no handler counter mutation on
+  rejection, and private generated server module404. Disposable builds only.
+- Full nonbrowser gate: 85 passed, 0 failed, 1 intentional browser skip, including
+  all70 language tests. Framework: 258 passed, 0 failed using the installed real
+  TypeScript compiler through NIRAL_TSC. Editor keyword hover/completion is covered;
+  the actual VS Code extension host was not rerun for this feature.
+- Spec, root/editor READMEs and docs page updated. Prepared standalone playground
+  compiler and rendered docs contract example execute successfully. `prepare:docs`
+  refreshed local generated assets. Changed-file diagnostics and diff checks pass.
+- Ordinary annotations/updateInputs remain unchecked. Contracts are not automatic
+  RPC guards, rollback, business-rule validators or hostile-object sandboxes. The
+  supported finite-data subset, copying behavior, globalThis restriction and
+  depth/node/visit limits are documented in NIRALSCRIPT.md.
+- No Playwright, production deployment, Git publication or dependency changes.
+
+## 2026-10-27: Numeric / Await Measurement Corrected and Retested
+
+- Investigated the two reported slowdowns without changing compiler semantics.
+  A local V8 trace shows async workload functions reaching TurboFan after the
+  original 30-call warmup, inside the timed region. Longer equal warmup narrows
+  the local gaps without changing emitted code; this is a measurement correction,
+  not a claimed production-code optimization.
+- Language runtime warmup now defaults to 2000 calls per variant, configurable
+  with bounded NIRAL_BENCH_WARMUP (30 reproduces the original setting).
+  Transform warmup remains 30. Other benchmark modes retain their defaults.
+  NIRAL_BENCH_FOCUS=1 selects numeric/await diagnostics with timing markers;
+  reports now preserve chronological round samples, verified against median/p90.
+- Focused correctness and trace checks pass. In the final local trace there were
+  no async workload optimization events inside timing; numeric harness events
+  remain possible. No compiler/runtime change or universal speedup is claimed.
+  Modal runner supports alternating baseline/corrected warmup in fresh processes,
+  with runtime warmup bounded to 0-10000 and repetition count bounded to 1-5.
+- Completed four matched pairs on one temporary Modal worker, alternating warmup
+  schedule `[30,2000,2000,30,30,2000,2000,30]`. All eight fresh Node processes
+  passed all six workloads and strict TS checks. Verified 1728 runtime samples,
+  median/p90 calculations, execution schedule and all 104 uploaded source hashes.
+  Linux x64, Node25.6.1, TS5.7.3, requested 2 cores/2048 MiB; CPU model unknown.
+  This was a new worker, not the historical benchmark's machine.
+- Raw report: `bench/niralscript-modal-warmup-2026-10-27.json`. Original report
+  `bench/niralscript-modal-2026-10-27.json` retained unchanged. Completed at
+  2026-10-27T01:17:51Z; temporary app completed/stopped:
+  https://modal.com/apps/admin-66817/main/ap-YDoqdlzr7E0rVfboPEnIFa
+
+Median of four process medians, microseconds per complete workload:
+
+| Workload | Warmup calls | JS us | TS us | NRS us | NRS vs JS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 10,000 numbers | 30 | 11.919 | 11.919 | 11.922 | +0.02% |
+| 10,000 numbers | 2000 | 11.891 | 11.898 | 11.907 | +0.14% |
+| 100 awaits | 30 | 9.469 | 9.414 | 9.424 | -0.47% |
+| 100 awaits | 2000 | 9.094 | 9.048 | 9.057 | -0.41% |
+
+- Corrected-run NRS vs TS: numeric +0.075%, awaits +0.100%. Corrected JS/TS/NRS
+  process median ranges: numeric 11.875-11.942 / 11.893-11.928 / 11.892-11.929 us;
+  awaits 8.864-9.190 / 8.738-9.148 / 8.799-9.160 us. No threshold or statistical
+  significance claim is inferred from these small gaps.
+- Important: the original +2.1% numeric / +23.6% async gaps did not recur even
+  with the old warmup count in the current harness on this worker. Therefore
+  warmup is a demonstrated measurement limitation, NOT a proven sole cause of
+  the historical gaps. Do not claim a compiler speedup or that increasing warmup
+  improves production code. No reproducible compiler overhead was established;
+  emitted numeric/await operations and their semantics remain unchanged.
+- Reproduce the controlled comparison with a new output filename:
+  `PYTHONDONTWRITEBYTECODE=1 modal run --write-result /tmp/niralscript-warmup.json bench/niralscript-modal.py --repeats 4 --warmup 2000 --compare-warmup`.
+  For the historical warmup setting alone, pass `--warmup 30` to the runner or
+  `NIRAL_BENCH_WARMUP=30` to the local harness. Older commands below predate the
+  new default. Diagnostic timings with V8 tracing are not performance results.
+- No compiler/runtime, production, browser, dependency or Git changes for this
+  investigation. Only the benchmark/runner, generated report and records changed.
+
+## 2026-10-27: Modal Language Benchmark Verified
+
+- Ran the existing six-workload JavaScript/TypeScript/NiralScript comparison on
+  an actual temporary Modal worker. Three fresh Node processes ran sequentially
+  in one container, each with 30 warmup calls and 12 rotated timing rounds.
+  All correctness assertions and strict TypeScript checks passed in every run.
+- Remote Linux x64, Node25.6.1, V8 14.1.146.11-node.19, TypeScript5.7.3;
+  image `node:25.6.1-bookworm-slim`, requested 2 CPU cores / 2048 MiB RAM.
+  Processor model was reported as `unknown`; dedicated hardware is not claimed.
+  One container is not three independent hosts. Function timeout 360 seconds,
+  per-process timeout 100 seconds, repetitions bounded to 1-5.
+- Raw report: `bench/niralscript-modal-2026-10-27.json`. Contains all 648 runtime
+  batch-average samples (sorted within each process), per-process median/p90,
+  transform samples, emitted byte counts, metadata and 104 source SHA-256 hashes.
+  Every source hash was verified against local files after execution.
+  Completed at 2026-10-26T20:10:23Z (October 27 local time).
+- Modal run: https://modal.com/apps/admin-66817/main/ap-X7rQO4mjMlwOmO9H7Iyu7H
+  App completed and stopped automatically. No persistent deployment, secrets,
+  volumes, GPU, production changes, Playwright, commits or pushes.
+
+Values below are median of the three process medians, with their min-max range
+in parentheses, in microseconds per complete workload call. These are not
+confidence intervals or individual-operation tail latencies.
+
+| Workload | JavaScript us | TypeScript us | NiralScript us |
+| --- | ---: | ---: | ---: |
+| 10,000 numbers | 7.913 (7.849-8.377) | 8.163 (7.824-8.527) | 8.080 (7.915-8.569) |
+| 1,000 records | 1.541 (1.462-1.636) | 1.514 (1.505-1.559) | 1.517 (1.468-1.641) |
+| 1,000 strings | 51.269 (47.670-53.646) | 50.209 (48.715-50.630) | 49.545 (48.152-52.163) |
+| 100 sequential awaits | 10.493 (9.554-14.678) | 11.415 (10.416-16.697) | 12.969 (9.796-16.818) |
+| 1,000 private counters | 1.417 (1.386-1.469) | 1.409 (1.393-1.433) | 0.949 (0.890-0.978) |
+| 1,000 generic subclasses | 20.447 (20.364-22.484) | 20.324 (20.011-22.159) | 19.949 (19.820-21.638) |
+
+| Workload | TS transform median ms | NRS transform median ms |
+| --- | ---: | ---: |
+| Numbers | 1.4995 | 0.3525 |
+| Records | 1.0120 | 0.3644 |
+| Strings | 0.7055 | 0.3377 |
+| Awaits | 0.6669 | 0.2574 |
+| Private counters | 1.5377 | 0.7653 |
+| Generic subclasses | 1.4236 | 1.0273 |
+
+- Interpretation: numbers/records/strings/inheritance are broadly comparable;
+  private-counter NRS medians are consistently lower in these three processes,
+  but objects do not escape and V8 can eliminate allocations. This is not a
+  materialized-object allocation benchmark or a universal language speedup.
+  Async medians overlap widely; process p90s reach 44.592 us for JS and
+  29.444 us for NRS. Do not turn this noisy result into a general ranking.
+  Compared with the M1 baseline, absolute times differ by workload; this is
+  not a controlled hardware comparison. All variants still execute in V8.
+- Transform numbers are median of process medians; TS transpile timing excludes
+  the separately passed strict check, while NRS compilation includes its own
+  analysis and source maps. They are not equivalent full-checker measurements.
+- Runner: `bench/niralscript-modal.py`, using the existing Modal1.3.2 CLI.
+  Uploads only package metadata, the harness and `.js` files under `src/` and
+  `niralscript/`; excludes app files, databases and environment/credential files.
+  TypeScript is installed only in isolated remote `/opt/bench-tooling`.
+  Framework runtime dependencies remain empty.
+- Reproduction command used:
+  `PYTHONDONTWRITEBYTECODE=1 modal run --write-result bench/niralscript-modal-2026-10-27.json bench/niralscript-modal.py --repeats 3`.
+  Use a new output filename to retain the historical report.
+- Optional `NIRAL_BENCH_JSON=1` emits structured results from language mode.
+  Local JSON/correctness validation, Modal CLI import, actual remote execution,
+  report/source validation and editor diagnostics passed. No browser, cold-start,
+  memory, HTTP throughput or production-load benchmark is implied.
+
+## 2026-10-27: JavaScript / TypeScript / NiralScript Benchmark
+
+- Extended the existing `bench/niralscript.js language` harness with private
+  constructors/accessors and generic inheritance/super workloads. No compiler,
+  runtime, dependencies or production changes. All six workloads pass main,
+  edge, empty and input-nonmutation assertions in all three languages. All
+  TypeScript fixtures pass strict checking with the installed TypeScript 5.7.3.
+- Local Apple M1, macOS arm64, Node25.6.1. Identical function bodies and inputs;
+  typed class declarations differ only by annotations/generic syntax. Each
+  workload uses 30 warmup calls and 12 rotated rounds. Median and p90 below are
+  batch-average microseconds per complete workload call, not per item latency.
+  Synchronous numeric/class batches use 1000 calls; strings/async use 200.
+
+| Workload | JS median / p90 us | TS median / p90 us | NRS median / p90 us |
+| --- | ---: | ---: | ---: |
+| 10,000 numbers, sum of squares | 8.596 / 9.527 | 8.599 / 9.158 | 8.680 / 9.023 |
+| 1,000 records, filtered total | 1.017 / 1.838 | 1.234 / 1.664 | 1.024 / 1.317 |
+| 1,000 strings, uppercase/join | 32.102 / 34.373 | 32.009 / 33.928 | 31.880 / 35.001 |
+| 100 sequential awaits | 5.373 / 10.424 | 5.197 / 5.666 | 5.332 / 5.745 |
+| 1,000 private counters, construction/add/accessor | 1.307 / 2.255 | 1.391 / 3.572 | 0.867 / 2.267 |
+| 1,000 generic subclasses, construction/super/read | 13.993 / 14.146 | 13.765 / 14.257 | 13.421 / 13.693 |
+
+| Workload | TS transform median ms | NRS transform median ms |
+| --- | ---: | ---: |
+| Numbers | 0.3925 | 0.1074 |
+| Records | 0.3594 | 0.1286 |
+| Strings | 0.2370 | 0.1206 |
+| Awaits | 0.2214 | 0.0833 |
+| Private counters | 0.5743 | 0.3558 |
+| Generic subclasses | 0.5592 | 0.3172 |
+
+- Transform timings are NOT equivalent type-checker benchmarks: NRS includes
+  its checking/emission/maps, TS uses transpileModule/emission/maps with full
+  strict checking outside timing. JavaScript needs no transform. Imports,
+  instance creation and correctness assertions are outside runtime timing;
+  class constructors inside each workload are timed. All return values consumed.
+- Runtime is broadly comparable on this warm Node/V8 sample, not a general
+  language ranking. Private-counter p90 variation prevents a reliable speedup
+  claim. Instances do not escape the workload; V8 may optimize their allocation.
+  These numbers are not materialized-object allocation rates, cold startup,
+  browser/DOM/reactivity performance, memory usage or production throughput.
+- Generated NRS modules include factory/runtime glue even for these plain
+  functions: private-counter gzip bytes JS197 / TS242 / NRS630; generic subclass
+  JS214 / TS254 / NRS661. Separate maps excluded; no tree shaking/minification.
+- Reproduce: `NIRAL_TSC="$PWD/.niral/lib/typescript/typescript.js" node bench/niralscript.js language`.
+  Benchmark diagnostics clean. No Playwright, deployment, publication or Git writes.
+
+## 2026-10-26: NiralScript Classes Verified Locally
+
+- Five focused class groups pass: native standalone and both component emitters,
+  typed/generic constructors and members, inheritance/accessors/lexical receivers,
+  private members, literal computed keys and static blocks. Readonly provenance,
+  pure derived construction and invalid super/early-read regressions pass.
+- Inherited constructor specialization and nested generic identity negatives pass.
+  Imported classes pass inline/external dev/prod HTTP, SSR, client syntax and RPC
+  privacy checks. Class/member hover, definitions and incomplete completion pass.
+- Constructor path tracking rejects conditional double/missing super and early
+  super-member access; static-block returns and optional-chain construction are
+  rejected. Private accessor execution and specialized explicit super contracts
+  pass. Reactive class writes pass in all three emitters; type-only class imports,
+  copied CLI original class exception stacks and instanceof/new statements pass.
+- Actual VS Code 1.143.1 / Node24.21.0 passed all nine host groups, including
+  imported generic class diagnostics, navigation and completion. Report:
+  `/tmp/niral-vscode-host-P9KcHs/result.json` (final analyzer revision).
+- The full language run found a cyclic collection-alias stack overflow in class
+  resolution. Passing the recursion guard through member lookup fixed it; the
+  failing regression and neighboring class groups now pass.
+- Final combined nonbrowser gate: 80 passed, zero failures, one intentional
+  browser skip. This includes all 66 language tests. Framework gate: 258 passed,
+  zero failures with the installed TypeScript selected via NIRAL_TSC; real
+  TypeScript checking ran. Actual HTTP fixture servers closed after testing.
+- Specification, framework/editor READMEs and docs page updated. The class
+  documentation example executes, docs page compiles to valid JS, generated
+  playground assets refreshed, editor diagnostics and scoped whitespace checks
+  clean. Class expressions, dynamic computed names, new.target, decorators and
+  TypeScript class modifiers remain unsupported; no full JS/TS parity claim.
+- No Playwright, Windows, optional live Postgres/image acceptance, packaging,
+  deployment, publication, dependency installation or Git writes performed.
+
+## 2026-10-26: NiralScript Expansion Complete Locally
+
+- Added default/rest parameters, nested binding defaults, object/array rest,
+  array binding holes and call spread. Standalone ESM and both component
+  emitters execute the new binding regression; typed defaults/rest reject
+  invalid values. Initialization order, readonly aliases and derived effects
+  remain checked. Spread provenance is deliberately conservative.
+- Added module-scoped aliases/type-only imports, literal contracts, branch
+  narrowing, opt-in strictTypes, function signatures, contextual callbacks,
+  generic aliases/functions and explicit/inferred generic calls. All 55
+  language tests passed before loop changes.
+- Added conventional for/while, break/continue and statement-only ++/-- with
+  lexical loop scopes, reactive writes and finally completion. Focused loop
+  execution and malformed-syntax checks pass across all three emitters.
+- Hardened nested defaults, object rest, typed spread positions, generic rest
+  inference, contextual void callbacks, mutable literal inference and loop flow.
+  Real HTTP testing exposed an inferred destructuring-default bug; fixed pattern
+  projection and verified inline/external scripts in dev and production, SSR,
+  generated client syntax, type erasure, RPC and server-code exclusion.
+- Final current-source verification passes all 59 language tests. Combined
+  language/devtools/contact/SEO suite: 73 passed, 0 failed, one intentional browser
+  test skip. All 258 framework tests pass with the installed TypeScript compiler
+  explicitly selected through NIRAL_TSC; real TypeScript checking ran successfully.
+  Strict mode is available through `nrs check/compile --strict` and the reload-required
+  `niral.niralscriptStrictTypes` editor setting.
+- Actual VS Code1.143.1 / host Node24.21.0 passed eight groups, including generic
+  type navigation, loops and strict-setting diagnostic recovery. Report:
+  `/tmp/niral-vscode-host-tMIMqe/result.json`.
+- Updated specification, root/editor READMEs and local docs page; refreshed
+  playground compiler assets with `npm run prepare:docs`. Docs page compilation,
+  source diagnostics and `git diff --check` pass. Runtime dependencies remain {}.
+- This completes the agreed expansion, not JavaScript/TypeScript parity. Generic
+  constraints/defaults, recursive aliases, generic arrows, interfaces/casts,
+  value-position updates, labels and async iteration remain unsupported.
+- Browser hydration, optional live Postgres/image tooling, Windows and packaging
+  were not rerun for this expansion. Earlier browser/hosted results are historical.
+- No Playwright, production changes, dependencies, commit/push or publication.
+
+## 2026-10-26: Real VS Code Extension Host Verified
+
+- Added dependency-free `tests/vscode-host.cjs` and documented its isolated
+  desktop-host launch in `editors/vscode/README.md`.
+- Actual installed VS Code1.143.1 / Extension Host Node24.21.0 passed all six
+  check groups: activation and language registration, NRS080 diagnostic range
+  and severity, typed hover and completions, imported/local/shadowed definitions,
+  unsaved dependency diagnostics with related locations and recovery,
+  incomplete-source keywords and existing Niral language registration.
+- Temporary workspace/profile `/tmp/niral-vscode-host-DKPbio` contains the
+  success report in `result.json`. No dependencies installed, extension source
+  fixes needed, normal profile settings changed, or production changes made.
+  No Playwright, commit/push, packaging or publication performed in this step.
+
+## 2026-10-26: Playground Production Deployment (Live)
+
+- User authorized production deployment of the website/playground. No Git push,
+  extension publication or production framework upgrade is included.
+- Read-only EC2 preflight confirmed Node22.23.3, release `e7fd55f3a801`, active
+  app/watchdog/nginx, zero automatic app restarts and healthy origin.
+- Private checkpoint `/root/niral-upgrade-checkpoints/20261026-niralscript-playground`
+  preserves source, app.env, release pointer, units, nginx and framework hashes.
+  Production data was excluded from staging and is untouched.
+- Reviewed 15-file payload staged in `/var/tmp/niral-playground-20261026`.
+  Production Node/compiler built `c462229a6f83`; integrity74/74, 28 sitemap pages,
+  nine exact browser compiler assets, sandbox CSP, counter result6 and NRS080
+  rejection verified. A callback assumption in the validation harness caused a
+  shutdown warning after assertions; corrected to the deployed `close()` API
+  and the focused staging check exits cleanly.
+- Content-only final transfer dry run preserves existing directory metadata;
+  production app.env and framework hashes still match the checkpoint.
+- Live build matched staged `c462229a6f83` with integrity74/74 before restart.
+  App restarted cleanly at14:47UTC; origin health reports the new release,
+  seven origin page/asset checks pass, all three services active, NRestarts0.
+  Old release `e7fd55f3a801` retained; app.env byte-identical and framework
+  fingerprints unchanged.
+- Public HTTPS reload shows the new playground and its ready Run control.
+  Automated clicks timed out before execution; live interaction verification
+  is incomplete. User requested stopping Playwright, so no further browser
+  checks were performed. Local browser/release gates above remain passed.
+  No commit, push or extension/package publication performed.
+
+## 2026-10-26: NiralScript Editor and Playground (Local)
+
+- Added `.nrs` language registration, highlighting, compiler diagnostics,
+  declared-signature hover, keyword/top-level completion and compiler-resolved
+  local/imported definitions to the existing zero-dependency extension and LSP.
+  Unsaved existing imports are checked within the project/private-path boundary;
+  host globals are explicit through `niral.niralscriptGlobals`.
+- Three focused editor tests pass, including framed LSP requests, unsaved
+  dependency revalidation, close diagnostics, untitled files and registration.
+  Full standard `npm run test:release` passes, including language/editor/docs,
+  framework, Chromium, form flows and both offline installer smoke tests.
+  Real Extension Host activation, other browsers and Windows were not tested
+  for these changes; optional Postgres/image gates were not configured.
+- Hover requires valid source; completion on incomplete source is keyword-only.
+  Hover reports declared types, not general inferred types. Imported files must
+  already exist on disk. Browser compiler/sandbox regression passes: real
+  reactive output, typed diagnostics and runtime errors. Generated compiler
+  assets come from the original core; an opaque iframe hosts a classic worker
+  that imports generated ES modules. Endpoint-scoped CSP blocks network access
+  without changing framework security defaults. The integrated UI and all four
+  examples pass Chromium checks: Run/Stop/Reset, result tabs and keyboard controls,
+  escaped HTML output, network/IndexedDB/eval denial, infinite-loop timeout and
+  successful recovery. 320/390/1024/1440 layouts have no document overflow;
+  desktop/mobile screenshots reviewed. Three SEO tests pass in browser mode.
+  `npm run prepare:docs` generates required compiler and sandbox assets before
+  docs dev/build. The same three SEO/browser tests also pass with
+  `NIRAL_SEO_PRODUCTION=1`, exercising a disposable production release with
+  real headers and packaged compiler/endpoint dependencies. Editor diagnostics
+  and whitespace checks are clean. Source extension setup and playground
+  contract/limits are documented in the extension README and NIRALSCRIPT.md.
+  Local preview started at `http://localhost:5199/niralscript#playground`;
+  opened and counter output confirmed (`Count: 3`, then `6`).
+  No commit, push, deployment or extension publication for this work.
+
 ## 2026-10-26: NiralScript Website Detail Update
 
 - Updated the existing language page with all six implemented milestones,

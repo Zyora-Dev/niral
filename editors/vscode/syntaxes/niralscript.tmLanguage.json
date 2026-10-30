@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "NiralScript",
+  "scopeName": "source.niralscript",
+  "patterns": [
+    { "name": "keyword.operator.niralscript", "match": "\\bcontract\\b(?=\\s*<)" },
+    { "name": "keyword.declaration.niralscript", "match": "\\b(state|derive|input|type|class|constructor|static|extends)\\b" },
+    { "name": "storage.type.niralscript", "match": "\\b(number|string|boolean|unknown|void|never|Promise)\\b" },
+    { "include": "source.js" }
+  ]
+}

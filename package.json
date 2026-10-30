@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "engines": { "node": ">=22" },
   "scripts": {
+    "prepare:docs": "node apps/docs/prepare.server.js",
     "test": "node tests/run.js",
     "test:release": "node tests/release.js"
   },

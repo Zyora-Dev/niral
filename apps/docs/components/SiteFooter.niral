@@ -6,7 +6,7 @@
   <div class="footer-inner">
     <div class="footer-directory">
       <div class="footer-about">
-        <a class="footer-symbol" href="/" aria-label="Niral home"><img src="/niral-logo.svg" alt="Niral" width="960" height="468" /></a>
+        <a class="footer-symbol" href="/" aria-label="Niral home"><img src="/niral-logo.png" alt="Niral" width="480" height="155" /></a>
         <p>The zero-dependency<br />full-stack framework.<br />Built in India.<br />Made for everyone.</p>
       </div>
       <nav class="footer-links" aria-label="Footer navigation">
@@ -36,8 +36,7 @@
   .footer-inner { width: min(1120px, calc(100% - 96px)); margin-inline: auto; padding-top: 96px; }
   .footer-directory { display: grid; grid-template-columns: 150px minmax(0, 1fr) 220px; gap: 48px; align-items: start; }
   .footer-symbol { display: block; position: relative; width: 120px; max-width: 100%; margin-bottom: 26px; }
-  .footer-symbol img { display: block; width: 100%; height: auto; filter: brightness(0) invert(1); }
-  .footer-symbol::after { content: ""; position: absolute; inset: 0; background: var(--gold); mask: url("/niral-logo.svg") center / 100% 100% no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
+  .footer-symbol img { display: block; width: 100%; height: auto; }
   .footer-about p { font-size: 13px; line-height: 1.8; }
   .footer-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
   .footer-links h3, .footer-contact h3 { font-size: 12px; font-weight: 400; line-height: 1.6; margin-bottom: 24px; }

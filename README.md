@@ -218,7 +218,8 @@ adapter rules; the independent language core has no Niral server or props import
 
 The script supports top-level `input`/`state`/`derive`, ordinary `let`/`const`, named
 functions and concise/block arrows (including `async`), lexical blocks, braced
-`if`/`else`, `for...of`, `try`/`catch`/`finally`, `throw`, calls, assignments and
+`if`/`else`, `for...of`, conventional `for`/`while`, `break`/`continue`,
+`try`/`catch`/`finally`, `throw`, calls, assignments and
 `return`. `await` is supported inside async bodies, not at top level. Native promise
 completion is preserved; async calls and explicit throws are rejected during
 derived evaluation. Initialization remains conservative across await; known
@@ -229,8 +230,10 @@ Nested object/array patterns work in
 ordinary declarations, parameters and loops; arrays/objects support shallow spread.
 Niral checks array callbacks (`map`, `filter`, `find`, `findIndex`, `some`, `every`,
 `forEach`, `reduce`) and helper callback parameters resolving to one known function.
-Patterns have no holes, rest or defaults; call spread, assignment destructuring,
-other loops and loop-control statements remain unsupported.
+Patterns support nested defaults, array holes and final identifier rest bindings;
+functions support default/rest parameters and call spread. Prefix/postfix updates
+are statement-only. Destructuring assignment, labels and async iteration remain
+unsupported.
 Scope checks reject duplicates, unresolved names, direct use before initialization
 and immutable-binding writes. Resolved bindings drive signal reads/writes and
 nested renames without intermediate rune discovery or script token rewriting.
@@ -241,10 +244,18 @@ target-specific; this is not a general purity proof for arbitrary host values.
 External errors retain file/range links in component diagnostics. Gradual type
 annotations, optional chaining, nullish coalescing, `typeof` and independent ESM
 compilation with source maps are implemented locally. The proposed `view` syntax
-and dedicated `.nrs` editor integration are not implemented. Template
+is not implemented. Dedicated `.nrs` source-extension support includes compiler
+diagnostics, signature/type-alias hover, completion and definition navigation. Template
 handlers remain ordinary Niral/JavaScript. The subset is not a full
 JavaScript grammar (regex literals and assignment expressions are rejected). It does
 not establish support for arbitrary frontend languages or frameworks.
+
+Explicit `contract<Type>(value)` expressions generate runtime data checks from
+the same aliases used by the type checker. They return typed, copied data without
+coercion or throw NRS081 with a field path. Ordinary annotations remain erased.
+Standalone and Niral emitters support the same finite-data subset; Niral RPC
+maps server-side contract failures to HTTP 400. See
+[runtime contracts and limits](NIRALSCRIPT.md#compiler-generated-runtime-contracts).
 
 Run `node --test tests/niralscript.js` for compiler/SSR checks and
 `NIRAL_BROWSER_FILTER=NiralScript node tests/browser/run.js` for dev/production
@@ -271,9 +282,20 @@ hosts can inject signal/derived primitives. It does not mount a UI or subscribe.
 Both commands report original file/line
 diagnostics and exits 0 on success, 1 on source/file errors, or 2 on invalid usage.
 It has no implicit host globals; repeat `--global name` to declare them without
-asserting purity. Primitive, union, array, structural record and `Promise<T>`
-annotations check known initializers, assignments, function arguments and returns.
-Unknown host values remain permissive; this is not runtime validation, a fully
+asserting purity. Primitive/literal, union, array, structural record, `Promise<T>`
+and function signatures check known initializers, assignments, arguments and returns.
+Reusable aliases/type-only imports, generic named functions/aliases, contextual
+callbacks and branch narrowing are supported. Unknown host values remain permissive
+by default; opt into stricter unknown/null checks with `--strict`, the API's
+`strictTypes: true`, or VS Code's `niral.niralscriptStrictTypes` (reload required).
+Generic constraints, recursive aliases and generic arrows remain unsupported.
+Named classes support constructors, typed/generic fields and methods, inheritance,
+private members, accessors, static blocks and `instanceof`. They emit native classes
+in standalone and component output, with readonly/effect/initialization safeguards.
+Class fields are ordinary properties, not automatic signals. Class expressions,
+dynamic computed names, decorators and TypeScript class modifiers are not supported;
+see [class contracts and limitations](NIRALSCRIPT.md#classes-and-constructors).
+This is not runtime validation, a fully
 sound type system or Niral client/server security validation. The private package
 exports `niralscript/check` and `niralscript/compile`; neither requires Niral.
 See [standalone checking](NIRALSCRIPT.md#standalone-checking) and

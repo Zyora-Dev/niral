@@ -12,6 +12,7 @@
 import { compileClient } from "../compiler/codegen.js";
 import { NiralError } from "../compiler/errors.js";
 import { pathToFileURL } from "node:url";
+import { validateNiralScript } from "./niralscript.js";
 
 /* ── positions ── */
 
@@ -39,7 +40,9 @@ export function positionToOffset(text, { line, character }) {
 
 /* ── diagnostics ── */
 
-export function validate(text, filename = "file.niral", { root } = {}) {
+export function validate(text, filename = "file.niral", options = {}) {
+  if (filename.endsWith(".nrs")) return validateNiralScript(text, filename, options);
+  const { root } = options;
   try {
     compileClient(text, { filename, root, runtime: "niral/runtime" });
     return [];

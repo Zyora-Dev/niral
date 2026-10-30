@@ -4,6 +4,19 @@ Niral is a **zero-dependency, compiler-first full-stack web framework** (Node â‰
 stdlib only). This file tells AI agents and contributors how the project is
 structured and how to write correct Niral code. Read it before editing.
 
+## Standalone workspace and context
+
+- This repository lives at `/Users/redfoxhotels/niral`, independently of ZyoraByte.
+- Read `PROJECT_CONTEXT.md` for transferred project memory and `PROGRESS.md` for
+  verified progress before assessing status. Treat historical deployment notes as
+  historical, not as proof of the current production state.
+- Keep those documents current after confirmed changes. Preserve unrelated local
+  work, private data, and Git history; do not commit or push unless requested.
+- Local work does not authorize production changes. Obtain explicit approval,
+  checkpoint remote files, preserve environment files and data, validate before
+  restarting, and check service health and logs after any authorized deployment.
+- Do not import unrelated ZyoraByte application rules or dependencies here.
+
 ## Hard rules
 
 - **Zero dependencies.** The framework's `package.json` MUST stay `"dependencies": {}`.

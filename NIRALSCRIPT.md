@@ -57,10 +57,53 @@ integrated compiler. This is source organization, not a published package.
 External `.nrs` instance scripts and named utility-module imports/exports work in
 Niral dev/build/SSR. Standalone checking/compilation APIs and CLI commands, source
 maps and gradual type annotations are implemented locally. Dedicated `.nrs`
-editor integration remains deferred.
+support is implemented in the source VS Code extension and shared LSP.
 Component diagnostics link to imported source errors. Niral is
 the only current framework adapter; independent ESM output is also available.
 React/Next.js and other framework integrations are future work.
+
+### Editor and Browser Playground
+
+The source extension adds `.nrs` highlighting, standalone compiler diagnostics,
+declared-signature hover, keyword/top-level completions and local/imported
+definitions. Existing imported files use unsaved editor contents, with project,
+private-path and symlink guards. Configure explicit host names through
+`niral.niralscriptGlobals`; opt into stricter unknown/null checking with
+`niral.niralscriptStrictTypes` and reload the window. Type aliases, including
+imported generic aliases, have hover, completion and definition support.
+Hover/navigation require valid source; incomplete
+source receives keywords only. An updated extension package is not published.
+See `editors/vscode/README.md` for development-host setup.
+
+The docs application's `/niralscript#playground` contains a single-file playground.
+It compiles the actual language core locally, without submitting source to a
+server. It instantiates the result, calls an exported `main()` when present,
+awaits its result and prints non-undefined results. The explicit `print(...)`
+host function writes text to Output. Inputs, imports, DOM APIs and external host
+services are not exposed by this playground.
+
+Before developing or building the docs application, run from the repository root:
+
+```sh
+npm run prepare:docs
+node bin/niral.js dev apps/docs -p 5199
+```
+
+Preparation copies an allowlisted set of the original compiler modules into
+ignored browser assets and generates the sandbox script JSON used by its endpoint.
+Run preparation again after changing compiler or sandbox source, and before
+`node bin/niral.js build apps/docs`. Generated assets ship in the docs release;
+there is no runtime package dependency or handwritten compiler copy.
+
+Compilation runs in a module worker. Execution runs in a classic worker inside
+an opaque-origin, scripts-only sandbox iframe; generated JavaScript is imported
+as an ES module. Endpoint-specific CSP blocks network access and dynamic eval,
+and the opaque origin prevents access to the site's storage. Framework-wide
+security headers are unchanged. Stop, reruns and unmount dispose active workers
+and frames. Compilation/execution have two-second limits after initialization;
+source/output size limits bound ordinary use. This is browser isolation, not an
+OS process sandbox or a hard memory quota: intentionally memory-exhausting code
+can still destabilize a browser. Chromium is the currently verified browser.
 
 ### Implemented Expression Subset
 
@@ -70,44 +113,162 @@ React/Next.js and other framework integrations are future work.
   hexadecimal and Unicode escapes; legacy numeric escapes are rejected.
 - Arrays without holes; plain objects with identifier/string/number keys,
   explicit values or identifier shorthand. Array/object spreads and trailing
-  commas are accepted; call-argument spread is not.
+  commas are accepted, as is call-argument spread.
 - Concise and braced arrows with lexical parameters: `value => value * 2` or
   `(left, right) => { return left + right }`. Unary/binary arrow operands and
   immediately invoked block arrows require parentheses.
-- Member/index access, positional calls, parentheses, and untagged template
+- Member/index access, positional calls, `new Constructor(args)`, parentheses, and untagged template
   strings with recursively parsed interpolations.
 - Optional member/index/call access uses `?.name`, `?.[key]` and `?.(args)`.
   Native short-circuiting skips keys/arguments and preserves method receivers;
   parentheses end a continuous chain. Optional chains cannot be assignment targets.
 - Precedence, tightest first: member/index/call, unary `! + - await typeof`, `* / %`, `+ -`,
-  `< <= > >=`, `=== !==`, `&&`, `||`/`??`, then conditional `?:`. Binary operators
+  `< <= > >= instanceof`, `=== !==`, `&&`, `||`/`??`, then conditional `?:`. Binary operators
   associate left; unary operators and conditional alternatives associate right.
   Mixing `??` with `&&`/`||` requires parentheses. `typeof` does not bypass name
   resolution: undeclared names remain errors.
 - Unsupported syntax fails with source-spanned NRS071 (mapped to NIRAL071 in
   components). Assignment/update expressions, bitwise/exponent operators,
-  loose equality, regex literals, `new`, nondecimal and legacy leading-zero
+  loose equality, regex literals, nondecimal and legacy leading-zero
   numbers are not accepted.
+
+### Compiler-Generated Runtime Contracts
+
+`contract<Type>(value)` is an explicit checked-data boundary, not a cast. The
+compiler resolves the type and generates ordinary JavaScript checks without a
+schema library or runtime dependency. It evaluates the argument once, returns
+a value statically typed as `Type`, or throws before returning a value.
+
+```niralscript
+type Order = { quantity: number, note?: string }
+
+export function readOrder(candidate: unknown): Order {
+  return contract<Order>(candidate)
+}
+
+const accepted = readOrder({ quantity: 2 })
+```
+
+- Supported: strings, booleans, finite numbers, string/number/boolean literals,
+  null, undefined, arrays, plain records, unions and resolved aliases, including
+  imported aliases and generic aliases with concrete arguments.
+- No coercion or defaults. `"2"` is not a number; NaN and infinities fail.
+- Records and arrays are copied recursively. Record extras, including symbol
+  keys, fail. Only own data properties are accepted; record fields and array indices
+  backed by accessors are
+  rejected without invoking their getters. Records must have the current realm's
+  `Object.prototype` or a null prototype. Returned records have ordinary prototypes.
+- Missing fields validate as undefined. An optional field or a field whose type
+  includes undefined accepts absence; absent fields stay absent. Sparse array
+  slots likewise validate as undefined. Non-index array properties are ignored
+  and are not copied. Copies do not preserve reference identity or shared aliases.
+- Failures are `TypeError` instances named `NiralContractError`, with `code: "NRS081"`,
+  `path` (for example `$.rows[0].quantity`) and `expected`. Rejected values are not
+  included in messages; field names appear in paths. One failure is reported,
+  not an aggregate. Unions try branches in declaration order and retain the longest
+  reported path when none passes.
+- Unknown, void, classes, function signatures, promises, recursive aliases and
+  unresolved generic parameters cannot be runtime schemas. Unsupported contract
+  types fail at compile time with NRS080 (NIRAL080 in components).
+- Generated schemas are limited to 64 nesting levels and 1024 type nodes;
+  evaluation permits 10000 validator visits, including union attempts. Arrays
+  longer than 10000 are rejected before element traversal. These are traversal
+  limits, not a hard memory quota or protection against hostile proxies.
+- Contracts require an unshadowed `globalThis` and trusted standard intrinsics.
+  Local declarations named `Object`, `Number`, etc. cannot replace the helpers.
+  This is data validation, not a sandbox for arbitrary host objects or proxies.
+
+Use a contract before handing external data to business logic, or after awaiting
+a host call. A client-side contract is not a server security boundary. Standalone
+generated ESM can also run on the server: export a guard from a private project
+module and load it with Niral's `projectImport("./lib/guards.server.js")` ambient.
+The Niral RPC dispatcher maps thrown contract failures to HTTP 400 and its existing
+field-error response. Raw `.nrs` imports in JavaScript server blocks are not added.
+
+Ordinary annotations remain erased, including `input` annotations. A contract in
+a `const` initializer runs once; it does not validate subsequent `updateInputs()`
+calls. Validate an entire patch before applying it when atomic host updates are
+required. Catching a failure does not undo argument evaluation or earlier effects.
+Contracts do not guarantee integer ranges, nonempty strings or business rules;
+check those separately after the structural guard. Existing static-checking
+limitations for dynamic methods and escaping aliases still apply.
+
+### Classes and Constructors
+
+Named classes emit native JavaScript classes in standalone ESM and both Niral
+component backends. Classes can be exported/imported, used as annotation types,
+and imported with `import type` without creating a value binding.
+
+```niralscript
+class Box<T> {
+  value: T;
+  constructor(value: T) { this.value = value }
+  read(): T { return this.value }
+}
+class Counter extends Box<number> {
+  #step: number = 1;
+  add(): number { this.value += this.#step; return this.read() }
+}
+const counter = new Counter(2)
+const result: number = counter.add()
+const isBox: boolean = counter instanceof Box
+```
+
+- Public/private fields and methods, getters/setters, async methods, static
+  fields/methods/blocks, literal computed names and generic members are supported.
+  Constructor parameters accept types, defaults, destructuring and final rest.
+  An omitted derived constructor forwards arguments to the specialized base
+  constructor. `extends Base<T>` preserves inherited member/constructor contracts.
+- `this` and `super` use native receivers; arrows retain lexical receivers and
+  ordinary nested functions do not. `super()` initializes a derived instance.
+  Construction is also permitted as a statement, and `instanceof` emits a native
+  prototype-chain check. Optional-chain construction is rejected.
+- Constructor flow checks require exactly one `super()` on each normally
+  completing derived path before `this` or a super-member access. Conditional
+  branches and early returns are tracked; throws terminate a path. Constructors
+  may return `this` or nothing, not replacement objects. `super()` inside loops,
+  try/catch/finally, parameter defaults or nested functions is not supported.
+  Static blocks cannot return or await. Private names remain lexically restricted.
+- Types check known constructor/method arguments, fields, accessor writes and
+  return values, including generic inheritance and nested instance types.
+  Readonly input provenance, derived effects and eager initialization checks
+  follow known constructors, fields and methods. This is gradual checking, not
+  full type soundness, definite-field-initialization or override validation.
+- Methods can read/write top-level reactive state. Class fields themselves are
+  ordinary JavaScript properties, not automatic signals. Native receiver rules
+  still apply to detached methods. Dynamic aliases and unknown host classes are
+  outside the complete static-checking guarantees.
+- Class expressions/anonymous classes, arbitrary computed names, complex base
+  expressions, `new.target`, decorators, abstract classes, `implements`, and
+  TypeScript visibility/readonly/parameter-property modifiers are not supported.
+  Use `#name` for native private members. This is not full JS/TS class parity.
 
 ### Implemented Statements and Scopes
 
 - `let`/`const` require one binding and initializer per declaration. Bindings may
   be identifiers or nested static object/array patterns, including renamed object
-  properties. Initializers run once. Holes, rest, defaults and computed pattern
-  keys are unsupported. `state`
+  properties, nested defaults, array holes and final identifier rest bindings.
+  Initializers and defaults evaluate left-to-right; computed pattern keys remain
+  unsupported. `state`
   and `derive` remain restricted to component top level. `input name` declares a
   read-only, same-name external input at component top level, without an initializer.
 - Named functions and arrows accept identifiers or nested binding patterns and close over lexical bindings.
   Nested functions, recursion and block shadowing are supported; parameters are
-  mutable. Duplicate parameters and same-scope declarations are rejected.
+  mutable. Default parameters and a final identifier rest parameter are supported.
+  Duplicate parameters and same-scope declarations are rejected.
 - `if (expression) { ... }`, optional braced `else` or `else if`, ordinary blocks,
-  call statements, and function-only `return` with an optional expression.
+  call/construction statements, and function-only `return` with an optional expression.
 - `for (const item of items) { ... }` and `let` variants accept the same patterns.
-  Loop bindings are local to each iteration; the body must be braced. Other loops,
-  `break`, `continue` and async iteration are unsupported.
+  Loop bindings are local to each iteration; the body must be braced.
+  Conventional `for (let index = 0; index < limit; index++) { ... }` and
+  `while (condition) { ... }` support `break` and `continue`, preserving finally
+  completion and per-iteration let closure capture. For headers allow omitted
+  parts, one initialized declaration or a simple statement; comma lists are not
+  supported. Labels, do-while and async iteration remain unsupported.
 - Assignment statements accept identifier/member targets and `= += -= *= /= %=`.
-  Updates, assignment expressions, destructuring assignments, default/rest parameters
-  and anonymous `function` expressions remain unsupported.
+  Prefix/postfix `++` and `--` work as statements or for-header statements,
+  including reactive state writes. Assignment/update expressions used as values,
+  destructuring assignments and anonymous `function` expressions remain unsupported.
 - Semicolons, closing blocks or newlines outside expression delimiters end simple
   statements, including newlines in comments. A bare return ends at that newline.
   Emission inserts explicit terminators rather than relying on JavaScript ASI.
@@ -198,7 +359,7 @@ has no implicit array-method policy; these approvals belong to the Niral adapter
   or throw overrides the preceding completion. Returning a rejecting promise
   without awaiting it does not enter the local catch.
 - `throw expression` requires its operand on the same line. Niral exposes
-  `Error(...)`, usable without `new`; constructor syntax remains unsupported.
+  `Error(...)`, usable with or without `new`.
   Awaited server RPC failures use the existing RPC rejection/error sanitization,
   with no change to the server boundary or transport.
 - Derived evaluation must stay synchronous: async calls (including approved
@@ -389,7 +550,7 @@ external source contents, including child-component dependencies; state remains
 per instance. Builds hash external paths/bytes and exclude raw `.nrs` files from
 static assets. Failed source compilation leaves the active release unchanged.
 The component LSP supplies the project root and links external diagnostics to the
-actual file/range. Dedicated `.nrs` document tooling remains deferred.
+actual file/range. Dedicated `.nrs` document tooling uses the same checker.
 
 ### Named Modules
 
@@ -408,7 +569,7 @@ export const initial = 0
 export function twice(value) { return value * 2 }
 ```
 
-Library top levels permit imports, constants and functions only. Local names stay
+Library top levels permit imports, constants, functions and type aliases. Local names stay
 private unless the declaration is exported; aliases do not expose other module
 bindings. Imports are readonly bindings (constant objects are not deeply frozen).
 Default/namespace imports, bare side-effect imports, re-exports, cyclic graphs and
@@ -467,12 +628,43 @@ aliases, record fields, annotated parameters/returns and literal bracket method
 names retain these checks. Array unions must satisfy every array member's
 contract. Unannotated arrays remain dynamic even beside other typed declarations.
 
-This is gradual checking, not a sound replacement for TypeScript or validation
-of incoming data. `unknown` is deliberately permissive, including unannotated
-host globals, server results and complex method calls. Input annotations do not
-validate supplied values. No control-flow narrowing, type aliases, interfaces,
-user generics, function-type syntax, casts, exhaustive callback signatures or
-general collection-method checks are implemented. Dynamic method selection and
+String, number and boolean literal types, reusable `type` aliases and explicit
+`import type { Name } from "./types.nrs"` are supported. Aliases are module-scoped,
+can be exported and are erased from runtime output. Named functions and aliases
+can declare type parameters, with explicit or inferred call arguments:
+
+```text
+type Box<T> = { value: T }
+function identity<T>(value: T): T { return value }
+function apply<T, U>(value: T, callback: (value: T) => U): U {
+  return callback(value)
+}
+const box: Box<number> = { value: identity<number>(2) }
+const label = apply(box.value, value => "Value: " + value)
+```
+
+Function signatures support optional/rest parameters. Known call signatures and
+supported collection methods supply contextual callback parameter/result types.
+Nested binding defaults and object/array rest project their types. Literal array
+spreads are checked positionally; dynamic spreads into typed functions require a
+rest parameter after all fixed arguments. Generic inference covers basic nested
+arrays, records, promises and callbacks, not all union or recursive cases.
+
+Branches narrow `typeof`, equality, null and discriminated unions, including
+early-return guards. Calls/writes invalidate relevant facts; loops conservatively
+discard facts across backedges. Assignment contracts use the declared type, not
+only the current narrowed read type.
+
+Checking remains gradual by default. Use `{ strictTypes: true }` in the checking,
+standalone compile or component adapter API, `--strict` with standalone CLI
+check/compile, or the reload-required `niral.niralscriptStrictTypes` editor setting
+to require narrowing unknown and nullable values before typed use/property access.
+This is not runtime validation or a sound replacement for TypeScript. Unannotated
+host globals, server results and complex methods remain unknown; input annotations
+do not validate supplied values. Interfaces, casts, generic arrows, constrained or
+defaulted type parameters and recursive aliases are unsupported. Function variance,
+generic inference and general collection-method checks remain bounded.
+Dynamic method selection and
 detached methods are not covered by the array checks. Inferred unannotated values
 can change dynamically; escaping aliases and unknown host calls remain outside
 static guarantees. Type annotations do not grant derived-method approval or
@@ -486,6 +678,7 @@ Run the `check` command from this repository; no global installation is needed:
 node niralscript/cli.js --help
 node niralscript/cli.js check counter.nrs --root /path/to/project
 node niralscript/cli.js check counter.nrs math.nrs --root /path/to/project --json
+node niralscript/cli.js check counter.nrs --root /path/to/project --strict
 ```
 
 The private language package also declares an `nrs` executable. It is not a
@@ -517,7 +710,7 @@ Usage errors are written to stderr even when `--json` is supplied.
 `{ program, analysis }` or throwing the existing `NiralScriptError`. The package
 root's parser exports remain unchanged. Options accept the linker's `resolveModule`
 and the analyzer's explicit `globals`, `moduleGlobals`, `reserved`, `pureGlobals`
-and `pureMethods` policies. The API performs no filesystem access or execution;
+and `pureMethods` policies, plus opt-in `strictTypes`. The API performs no filesystem access or execution;
 hosts supply resolution and policy. The CLI is a Node filesystem adapter to this
 same parser/linker/analyzer, not a second implementation of language checks.
 
@@ -676,6 +869,8 @@ boundary handling. Neither target is part of the first milestone.
   Nothing published or deployed.
 
 Watch commands, async iteration/generators, effects,
-classes, regex literals, component-valued modules, a new view syntax and other
-framework targets are deferred. Input defaults/destructuring and dedicated
-editor integration remain future work.
+regex literals, component-valued modules, a new view syntax and other
+framework targets are deferred. Input defaults/destructuring remain future work.
+Dedicated editor support is implemented in the source extension; publication is
+separate. Current expansion verification is recorded in `PROGRESS.md`; older
+browser/hosted results above do not verify subsequent changes.
