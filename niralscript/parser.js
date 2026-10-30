@@ -84,6 +84,48 @@ export class StatementParser {
     return { type: "BlockStatement", body, start, end: scanner.pos };
   }
 
+  // Shared tail of `function f(...)` declarations and `function (...)` expressions.
+  functionRest(start, depth, id, async, type) {
+    const scanner = this.scanner;
+    this.trivia();
+    const genericParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+    const typeParameters = readTypeParameters(genericParser);
+    if (typeParameters) { scanner.pos = typeParameters.end; this.trivia(); }
+    scanner.expect("(", "NRS072", "Expected function parameters");
+    const parameterParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+    let params;
+    try { params = parameterParser.parameters().items; }
+    catch (error) {
+      if (error.message === "Expected unique non-reserved binding names") error.code = "NRS070";
+      throw error;
+    }
+    scanner.pos = parameterParser.scanner.pos;
+    const returnType = this.annotation();
+    const parameterNames = new Set();
+    function collectNames(pattern) {
+      if (!pattern) return;
+      if (pattern.type === "Identifier") parameterNames.add(pattern.name);
+      else if (pattern.type === "AssignmentPattern") collectNames(pattern.left);
+      else if (pattern.type === "RestElement") collectNames(pattern.argument);
+      else for (const item of pattern.elements ?? pattern.properties) collectNames(item?.value ?? item);
+    }
+    params.forEach(collectNames);
+    const outerLoopDepth = this.loopDepth;
+    this.loopDepth = 0;
+    const body = this.block(depth + 1, parameterNames);
+    this.loopDepth = outerLoopDepth;
+    return { type, ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), ...(typeParameters ? { typeParameters } : {}), id, params, body, start, end: body.end };
+  }
+
+  // Named expressions keep their own name in scope so they can recurse.
+  functionExpression(start, async) {
+    const scanner = this.scanner;
+    this.trivia();
+    const nameStart = scanner.pos;
+    const id = scanner.peek() === "(" || scanner.peek() === "<" ? null : this.name(new Set(), nameStart);
+    return this.functionRest(start, 0, id, async, "FunctionExpression");
+  }
+
   classDeclaration(start, depth, names, optional = false) {
     const scanner = this.scanner;
     let id = null;
@@ -349,34 +391,7 @@ export class StatementParser {
     }
     if (kind === "function") {
       const id = this.name(names, start);
-      this.trivia();
-      const genericParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
-      const typeParameters = readTypeParameters(genericParser);
-      if (typeParameters) { scanner.pos = typeParameters.end; this.trivia(); }
-      scanner.expect("(", "NRS072", "Expected function parameters");
-      const parameterParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
-      let params;
-      try { params = parameterParser.parameters().items; }
-      catch (error) {
-        if (error.message === "Expected unique non-reserved binding names") error.code = "NRS070";
-        throw error;
-      }
-      scanner.pos = parameterParser.scanner.pos;
-      const returnType = this.annotation();
-      const parameterNames = new Set();
-      function collectNames(pattern) {
-        if (!pattern) return;
-        if (pattern.type === "Identifier") parameterNames.add(pattern.name);
-        else if (pattern.type === "AssignmentPattern") collectNames(pattern.left);
-        else if (pattern.type === "RestElement") collectNames(pattern.argument);
-        else for (const item of pattern.elements ?? pattern.properties) collectNames(item?.value ?? item);
-      }
-      params.forEach(collectNames);
-      const outerLoopDepth = this.loopDepth;
-      this.loopDepth = 0;
-      const body = this.block(depth + 1, parameterNames);
-      this.loopDepth = outerLoopDepth;
-      return { type: "FunctionDeclaration", ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), ...(typeParameters ? { typeParameters } : {}), id, params, body, start, end: body.end };
+      return this.functionRest(start, depth, id, async, "FunctionDeclaration");
     }
     if (kind === "for") {
       this.trivia();
@@ -392,15 +407,17 @@ export class StatementParser {
         if (typeAnnotation) id.typeAnnotation = typeAnnotation;
         this.trivia();
         parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
-        if (parser.peek().value === "of") {
-          parser.take();
+        if (parser.peek().value === "of" || parser.peek().value === "in") {
+          const iteration = parser.take().value;
+          if (iteration === "in" && id.type !== "Identifier") scanner.error("NRS072", "For-in keys require an identifier binding", { start: id.start });
+          if (iteration === "in" && typeAnnotation) scanner.error("NRS072", "For-in keys are always strings", { start: typeAnnotation.start });
           const right = parser.expression();
           parser.expect(")");
           scanner.pos = parser.scanner.pos;
           this.loopDepth++;
           const body = this.block(depth);
           this.loopDepth--;
-          return { type: "ForOfStatement", kind: declarationKind, id, right, body, start, end: body.end };
+          return { type: iteration === "in" ? "ForInStatement" : "ForOfStatement", kind: declarationKind, id, right, body, start, end: body.end };
         }
         parser.expect("=");
         const value = parser.expression();
@@ -513,6 +530,8 @@ export class StatementParser {
   simpleStatement(parser) {
     const scanner = this.scanner;
     const start = parser.peek().start;
+    const destructured = parser.destructuringAssignment();
+    if (destructured) return destructured;
     const prefix = ["++", "--"].includes(parser.peek().kind) ? parser.take() : null;
     const expression = parser.expression();
     const operator = prefix ?? parser.peek();

@@ -159,6 +159,8 @@ function emitProgram(program, options, direct) {
         return `${node.kind} ${source(node.id)} = (${source(node.init)}\n);`;
       case "FunctionDeclaration":
         return `${node.async ? "async " : ""}function ${source(node.id)}(${node.params.map(source).join(", ")}) ${emit(node.body)}`;
+      case "FunctionExpression":
+        return `(${node.async ? "async " : ""}function${node.id ? " " + source(node.id) : ""}(${node.params.map(source).join(", ")}) ${emit(node.body)})`;
       case "ClassDeclaration":
       case "ClassExpression": {
         const text = `class${node.id ? " " + source(node.id) : ""}${node.superClass ? " extends " + source(node.superClass) : ""} {\n${node.members.map(emit).join("\n")}\n}`;
@@ -178,6 +180,8 @@ function emitProgram(program, options, direct) {
         return `{${body(node, node.start + 1, node.end - 1)}}`;
       case "ForOfStatement":
         return `for (${node.kind} ${source(node.id)} of ${source(node.right)}\n) ${emit(node.body)}`;
+      case "ForInStatement":
+        return `for (${node.kind} ${source(node.id)} in ${source(node.right)}\n) ${emit(node.body)}`;
       case "ForStatement":
         return `for (${node.init ? emit(node.init).replace(/;$/, "") : ""}; ${node.test ? source(node.test) : ""}; ${node.update ? emit(node.update).replace(/;$/, "") : ""}) ${emit(node.body)}`;
       case "WhileStatement":
@@ -203,7 +207,10 @@ function emitProgram(program, options, direct) {
             ? `${target}.set((${right}));`
             : `${target}.set(${target}.get() ${node.operator.slice(0, -1)} (${right}));`;
         }
-        return node.update ? `${source(node.left)}${node.operator === "+=" ? "++" : "--"};` : `${source(node.left)} ${node.operator} (${source(node.right)}\n);`;
+        if (node.update) return `${source(node.left)}${node.operator === "+=" ? "++" : "--"};`;
+        // A statement that opens with `{` would parse as a block, so patterns stay parenthesised.
+        const assignment = `${source(node.left)} ${node.operator} (${source(node.right)}\n)`;
+        return ["ArrayPattern", "ObjectPattern"].includes(node.left.type) ? `(${assignment});` : `${assignment};`;
       case "ExpressionStatement":
         return `${source(node.expression)}\n;`;
       default:
@@ -214,6 +221,8 @@ function emitProgram(program, options, direct) {
     ...analysis.arrows.filter(node => node.body.type === "BlockStatement").map(node => node.body),
     ...(analysis.contracts?.keys() ?? []),
   ];
+  // Function expressions are spliced from source, so their bodies need the same rewrite arrows get.
+  walk(program, node => { if (node.type === "FunctionExpression") replacements.push(node.body); });
   if (typed) walk(program, node => { if (node.type === "CastExpression") replacements.push(node); });
   replacements.sort((left, right) => (left.end - left.start) - (right.end - right.start));
   for (const node of replacements) {

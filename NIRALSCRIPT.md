@@ -275,10 +275,23 @@ const isBox: boolean = counter instanceof Box
   completion and per-iteration let closure capture. For headers allow omitted
   parts, one initialized declaration or a simple statement; comma lists are not
   supported. Labels, do-while and async iteration remain unsupported.
+- `for (const key in record) { ... }` walks own enumerable keys. The binding must
+  be a plain identifier and is always typed `string`, so destructured ids and
+  explicit annotations are rejected with NRS072. `break`/`continue` behave as in
+  the other loops.
 - Assignment statements accept identifier/member targets and `= += -= *= /= %=`.
   Prefix/postfix `++` and `--` work as statements or for-header statements,
-  including reactive state writes. Assignment/update expressions used as values,
-  destructuring assignments and anonymous `function` expressions remain unsupported.
+  including reactive state writes. Destructuring assignments to existing bindings
+  are supported with array, object, renamed, nested and rest targets, including
+  member targets; object patterns must be parenthesised — `({ x } = point)` — just
+  as in JavaScript. Each leaf is checked against its projected type, and reactive
+  `state` cannot be a direct destructuring target. Assignment/update expressions
+  used as values remain unsupported.
+- `function` expressions are supported, named or anonymous, with `async`, type
+  parameters, parameter and return annotations. A name is scoped to the expression
+  itself so it can recurse, and it never leaks to the surrounding scope. `this` is
+  still only valid in a class member, and function expressions cannot be exported
+  directly.
 - Semicolons, closing blocks or newlines outside expression delimiters end simple
   statements, including newlines in comments. A bare return ends at that newline.
   Emission inserts explicit terminators rather than relying on JavaScript ASI.

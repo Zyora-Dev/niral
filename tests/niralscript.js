@@ -40,6 +40,37 @@ test("NiralScript runtime contracts execute across all emitters", async () => {
   assert.throws(() => compileStandalone('const result: string = contract<number>(4)'), /Expected string/);
 });
 
+test("NiralScript supports for-in, destructuring assignment and function expressions", async () => {
+  const source = [
+    'function keys(record: { a: number, b: number }): string { let out = ""; for (const key in record) { out += key } return out }',
+    'function swap(pair: number[]): number[] { let first = 0; let second = 0; [first, second] = pair; return [second, first] }',
+    'function rename(point: { x: number, y: number }): number { let left = 0; let right = 0; ({ x: left, y: right } = point); return left - right }',
+    'function rest(values: number[]): number { let head = 0; let tail: number[] = []; [head, ...tail] = values; return head + tail.length }',
+    'function fact(n: number): number { const run = function step(x: number): number { return x <= 1 ? 1 : x * step(x - 1) }; return run(n) }',
+    'async function twice(n: number): Promise<number> { const run = async function (x: number): Promise<number> { return x * 2 }; return await run(n) }',
+  ].join("\n");
+  const exported = ";return { keys, swap, rename, rest, fact, twice }";
+  const module = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(source, "syntax.nrs", { strictTypes: true }).code).toString("base64"));
+  const variants = [
+    module.createInstance().values,
+    new Function(compileNiralScript(source, "syntax.nrs", { strictTypes: true }).code + exported)(),
+    new Function(lowerNiralScript(source, "syntax.nrs", { strictTypes: true }) + exported)(),
+  ];
+  for (const values of variants) {
+    assert.equal(values.keys({ a: 1, b: 2 }), "ab");
+    assert.deepEqual(values.swap([1, 2]), [2, 1]);
+    assert.equal(values.rename({ x: 5, y: 2 }), 3);
+    assert.equal(values.rest([1, 2, 3]), 3);
+    assert.equal(values.fact(5), 120);
+    assert.equal(await values.twice(4), 8);
+  }
+  assert.throws(() => compileStandalone('function read(record: { a: number }) { for (const key: number in record) { } }'), { code: "NRS072" });
+  assert.throws(() => compileStandalone('function read(record: { a: number }) { for (const [key] in record) { } }'), { code: "NRS072" });
+  assert.throws(() => compileStandalone('function read(pair: number[]) { const first = 0; [first] = pair }'), { code: "NRS074" });
+  assert.throws(() => compileStandalone('function read(pair: string[]) { let first: number = 0; [first] = pair; return first }'), { code: "NRS080" });
+  assert.throws(() => compileStandalone('function read(n: number) { const run = function step(x: number): number { return x }; return step(n) }'), { code: "NRS073" });
+});
+
 test("NiralScript runtime contracts resolve imports and preserve explicit boundaries", async () => {
   const source = 'import { read } from "./reader.nrs"\nconst result = read({ value: 4 })';
   const options = { strictTypes: true, resolveModule(specifier) {
@@ -971,7 +1002,7 @@ test("NiralScript collections preserve execution order, diagnostics and module s
     "state count = 0\nfunction sum() { for (const value of [1]) { count += value } return count }\nderive result = sum()",
     "const items = [1]\nfor (const item of items) { const first = read(); const later = 1; function read() { return later } }",
   ]) assert.throws(() => compileNiralScript(source), /cycle|provably pure|cannot mutate|initialization|unproven method/);
-  for (const source of ["const [...rest, last] = []", "const { ...rest, last } = {}", "const run = (...args, last) => args", "for (let value in {}) {}", "for (let value of []) value = 1", "state [value] = [1]"]) assert.throws(() => parseNiralScript(source), NiralScriptError);
+  for (const source of ["const [...rest, last] = []", "const { ...rest, last } = {}", "const run = (...args, last) => args", "for (let value of []) value = 1", "state [value] = [1]"]) assert.throws(() => parseNiralScript(source), NiralScriptError);
   const source = "const items = [1]\nderive result = items.map(value => missing)";
   assert.throws(() => compileNiralScript(source, "callback.nrs"), error => error.filename === "callback.nrs" && error.line === 2 && source.slice(error.start, error.end) === "missing");
 });
@@ -1637,7 +1668,7 @@ test("NiralScript rejects malformed literals and syntax outside the expression s
     "{true}", "{x:}", "{__proto__: null, '__proto__': null}", "fn(,)", "fn(1 2)",
     "record[]", "record.", "a ? b", "a ? : b", "(1, 2)", "1e+", "01", "0x10",
     '"\\xGG"', '"\\uXYZW"', '"\\u{110000}"', '"\\1"', '"\\08"', "`bad ${1 +}`",
-    "function() {}", "/pattern/", "await", "typeof",
+    "/pattern/", "await", "typeof",
     "1 + () => 2", "!() => 1", "() => {}()", "fn(...)",
   ]) assert.throws(() => parseNiralScript(`state value = ${expression}`, "bad.nrs"), { code: "NRS071" }, expression);
   const source = "// header\r\nstate count = 1\r\nderive value = (\r\n  count + * 2\r\n)";

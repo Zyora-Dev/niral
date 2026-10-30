@@ -1,6 +1,14 @@
 import { NiralScriptError, sourceLocation } from "./errors.js";
 import { emitContractValidator } from "./contracts.js";
 
+// Mirrors analysis.js; duplicated to keep types.js free of a circular import.
+function assignmentTargets(node) {
+  if (node.type === "ArrayPattern") return node.elements.filter(Boolean).flatMap(assignmentTargets);
+  if (node.type === "ObjectPattern") return node.properties.flatMap(property => assignmentTargets(property.value));
+  if (node.type === "RestElement") return assignmentTargets(node.argument);
+  return [node];
+}
+
 // Bumped whenever type syntax is consumed, so a parse can record whether the program
 // contains any annotations or casts without walking the tree afterwards.
 let typeReads = 0;
@@ -353,7 +361,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
   }
   walk(program, node => {
     if (node.typeAnnotation) annotate(node, typeOf(node.typeAnnotation));
-    if (["FunctionDeclaration", "ArrowFunctionExpression", "MethodDefinition"].includes(node.type)) functions.push(node);
+    if (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "MethodDefinition"].includes(node.type)) functions.push(node);
     if (node.type === "AssignmentStatement") assignments.push(node);
     if (["CallExpression", "NewExpression"].includes(node.type)) calls.push(node);
     if (node.init && node.id) variables.push(node);
@@ -492,7 +500,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       if (flows.get(node)?.has(binding)) return flows.get(node).get(binding);
       if (annotated.has(binding)) return annotated.get(binding);
       const declaration = analysis.declarations.get(binding);
-      if (declaration?.type === "FunctionDeclaration") return { kind: "function", node: declaration };
+      if (["FunctionDeclaration", "FunctionExpression"].includes(declaration?.type)) return { kind: "function", node: declaration };
       if (declaration?.type === "ClassDeclaration" || declaration?.type === "ClassExpression") return classType(declaration, "constructor");
       let value = declaration?.init ? infer(declaration.init, seen) : UNKNOWN;
       if (declaration?.id) value = projectPattern(declaration.id, value, binding?.id, seen) ?? UNKNOWN;
@@ -515,7 +523,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       return callee.kind === "constructor" ? constructorSignature(callee, node, seen).result : UNKNOWN;
     }
     if (node.type === "SpreadElement") return infer(node.argument, seen).element ?? UNKNOWN;
-    if (node.type === "ArrowFunctionExpression") return { kind: "function", node };
+    if (node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression") return { kind: "function", node };
     if (node.type === "AwaitExpression") return unwrap(infer(node.argument, seen));
     if (node.type === "TemplateLiteral") return { kind: "string" };
     if (node.type === "UnaryExpression") return { kind: node.operator === "typeof" ? "string" : node.operator === "!" ? "boolean" : "number" };
@@ -579,7 +587,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     return UNKNOWN;
   }
   function returns(node, result = []) {
-    if (!node || ["FunctionDeclaration", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression", "MethodDefinition"].includes(node.type)) return result;
+    if (!node || ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression", "MethodDefinition"].includes(node.type)) return result;
     if (node.type === "ReturnStatement") result.push(node);
     for (const [key, value] of Object.entries(node)) {
       if (key === "argument") continue;
@@ -654,7 +662,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
   function flow(node, environment) {
     if (!node?.type || node.type === "TypeAnnotation") return environment;
     flows.set(node, new Map(environment));
-    if (["FunctionDeclaration", "ArrowFunctionExpression", "MethodDefinition"].includes(node.type)) {
+    if (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "MethodDefinition"].includes(node.type)) {
       for (const param of node.params) flow(param, new Map());
       flow(node.body, new Map());
       return environment;
@@ -677,7 +685,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       flow(node.right, narrowed(node.left, environment, node.operator === "&&"));
       return environment;
     }
-    if (["ForStatement", "WhileStatement", "ForOfStatement"].includes(node.type)) {
+    if (["ForStatement", "WhileStatement", "ForOfStatement", "ForInStatement"].includes(node.type)) {
       flow(node.init, new Map());
       flow(node.test ?? node.right, new Map());
       flow(node.body, node.test ? narrowed(node.test, new Map(), true) : new Map());
@@ -691,8 +699,9 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       else if (child?.type) current = flow(child, current);
     }
     if (node.type === "AssignmentStatement") {
-      const target = node.left.type === "MemberExpression" ? node.left.object : node.left;
-      current.delete(analysis.resolved.get(target));
+      for (const leaf of assignmentTargets(node.left)) {
+        current.delete(analysis.resolved.get(leaf.type === "MemberExpression" ? leaf.object : leaf));
+      }
     }
     if (node.type === "CallExpression") for (const [binding, value] of current) {
       if (["let", "state"].includes(binding.kind) || !["literal", "string", "number", "boolean"].includes(value.kind)) current.delete(binding);
@@ -716,6 +725,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       if (node.id.typeAnnotation) check(typeOf(node.id.typeAnnotation), element, node.right);
       else annotate(node.id, element);
     }
+    if (node.type === "ForInStatement") annotate(node.id, { kind: "string" });
   });
   for (const owner of owners) flow(owner, new Map());
   if (strictTypes) walk(program, node => {
@@ -732,6 +742,22 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     if (node.type === "AssignmentPattern" && node.typeAnnotation) check(typeOf(node.typeAnnotation), infer(node.right), node.right);
     if (node.type === "RestElement" && node.typeAnnotation && typeOf(node.typeAnnotation).kind !== "array") fail("Rest parameters require an array type", node);
   });
+  // Destructuring assignment writes existing bindings, so each leaf is checked against its projection.
+  function checkPatternTargets(pattern, value, origin) {
+    if (pattern.type === "ArrayPattern") {
+      pattern.elements.forEach((item, index) => {
+        if (item) checkPatternTargets(item, item.type === "RestElement" ? value : property(value, index), origin);
+      });
+      return;
+    }
+    if (pattern.type === "ObjectPattern") {
+      pattern.properties.forEach(item => checkPatternTargets(item.value, property(value, item.key.name ?? item.key.value), origin));
+      return;
+    }
+    if (pattern.type === "RestElement") return checkPatternTargets(pattern.argument, value, origin);
+    if (contracted(pattern)) check(assignmentType(pattern), value, origin);
+  }
+
   function assignmentType(node) {
     if (node.type === "Identifier") return annotated.get(analysis.resolved.get(node)) ?? infer(node);
     if (node.type === "MemberExpression") {
@@ -742,6 +768,10 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     return infer(node);
   }
   for (const node of assignments) {
+    if (["ArrayPattern", "ObjectPattern"].includes(node.left.type)) {
+      checkPatternTargets(node.left, infer(node.right), node.right);
+      continue;
+    }
     const expected = assignmentType(node.left);
     let actual = infer(node.right);
     if (node.update) actual = { kind: "number" };

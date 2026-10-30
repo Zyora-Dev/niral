@@ -185,6 +185,10 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
         write(node.kind + " ", node); emit(node.id); write(" = "); emit(node.init); if (terminate) write(";"); break;
       case "FunctionDeclaration":
         write(node.async ? "async function " : "function ", node); emit(node.id); write("("); joined(node.params); write(") "); emit(node.body); break;
+      case "FunctionExpression":
+        write("(" + (node.async ? "async function" : "function"), node);
+        if (node.id) { write(" "); emit(node.id); }
+        write("("); joined(node.params); write(") "); emit(node.body); write(")"); break;
       case "ClassDeclaration":
       case "ClassExpression": {
         write("class", node);
@@ -224,7 +228,8 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
         write(")"); break;
       case "BlockStatement": write("{\n", node); joined(node.body, "\n"); write("\n}"); break;
       case "ForOfStatement":
-        write(`for (${node.kind} `, node); emit(node.id); write(" of "); emit(node.right); write(") "); emit(node.body); break;
+      case "ForInStatement":
+        write(`for (${node.kind} `, node); emit(node.id); write(node.type === "ForInStatement" ? " in " : " of "); emit(node.right); write(") "); emit(node.body); break;
       case "ForStatement":
         write("for (", node); emit(node.init, false); write("; "); emit(node.test); write("; "); emit(node.update, false); write(") "); emit(node.body); break;
       case "WhileStatement":
@@ -251,7 +256,13 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
           if (node.operator !== "=") write((node.update ? "+" : "") + identifier(binding) + ".get() " + node.operator.slice(0, -1) + " (");
           emit(node.right); write(node.operator === "=" ? ")" : "))");
         } else if (node.update) { emit(node.left); write(node.operator === "+=" ? "++" : "--"); }
-        else { emit(node.left); write(" " + node.operator + " "); emit(node.right); }
+        else {
+          // A statement that opens with `{` would parse as a block, so patterns stay parenthesised.
+          const pattern = ["ArrayPattern", "ObjectPattern"].includes(node.left.type);
+          if (pattern) write("(", node);
+          emit(node.left); write(" " + node.operator + " "); emit(node.right);
+          if (pattern) write(")");
+        }
         if (terminate) write(";");
         break;
       }

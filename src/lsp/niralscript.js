@@ -125,7 +125,7 @@ function signature(program, analysis, binding) {
   if (declaration?.type === "MethodDefinition") return program.source.slice(head(declaration), declaration.body.start).trim();
   if (declaration?.type === "PropertyDefinition") return program.source.slice(head(declaration), declaration.end).trim();
   if (binding.kind === "type") return program.source.slice(declaration.start, declaration.end).trim();
-  if (declaration?.type === "FunctionDeclaration") return program.source.slice(declaration.start, declaration.body.start).trim();
+  if (["FunctionDeclaration", "FunctionExpression"].includes(declaration?.type)) return program.source.slice(declaration.start, declaration.body.start).trim();
   const annotation = binding.id.typeAnnotation;
   const label = program.source.slice(binding.id.start, annotation?.end ?? binding.id.end);
   return `${binding.kind} ${label}${annotation ? "" : " (unannotated)"}`;

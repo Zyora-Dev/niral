@@ -131,6 +131,31 @@ if (mode === "language") {
       body: "let total = 0; for (const value of values) { const score = new Score(value); total += score.read(); } return total;",
       input: numbers.slice(0, 1000), expected: 51500, edge: [-2, 0, 3], edgeExpected: 7, iterations: 1000,
     },
+    {
+      name: "1000 constructions: four decorators applied once", type: "number[]",
+      declarations: (typed, index) => `let tally${typed ? ": number" : ""} = 0;
+      const record = (value${typed ? ": unknown" : ""}, context${typed ? ": unknown" : ""})${typed ? ": void" : ""} => { tally += 1; };
+      ${index === 0 ? "" : "@record"}
+      class Tracked {
+        ${index === 0 ? "" : "@record"} static origin${typed ? ": number" : ""} = 2;
+        #value${typed ? ": number" : ""};
+        constructor(value${typed ? ": number" : ""}) { this.#value = value; }
+        ${index === 0 ? "" : "@record"} add(amount${typed ? ": number" : ""})${typed ? ": void" : ""} { this.#value += amount; }
+        ${index === 0 ? "" : "@record"} get value()${typed ? ": number" : ""} { return this.#value; }
+      }${index === 0 ? `
+      record(Object.getOwnPropertyDescriptor(Tracked.prototype, "add").value, { kind: "method", name: "add", static: false });
+      record(Object.getOwnPropertyDescriptor(Tracked.prototype, "value").get, { kind: "get", name: "value", static: false });
+      record(Tracked.origin, { kind: "field", name: "origin", static: true });
+      record(Tracked, { kind: "class", name: "Tracked", static: false });` : ""}`,
+      body: "let total = 0; for (const value of values) { const item = new Tracked(value); item.add(Tracked.origin); total += item.value; } return total + tally;",
+      input: numbers.slice(0, 1000), expected: 51504, edge: [-2, 0, 3], edgeExpected: 11, emptyExpected: 4, iterations: 1000,
+    },
+    {
+      name: "10000 numbers: top-level await constant", type: "number[]",
+      declarations: typed => `const scale${typed ? ": number" : ""} = await 3;`,
+      body: "let total = 0; for (const value of values) { total += value * scale; } return total;",
+      input: numbers, expected: numbers.reduce((total, value) => total + value * 3, 0), edge: [-2, 0, 3], edgeExpected: 3, iterations: 1000,
+    },
   ].filter(fixture => process.env.NIRAL_BENCH_FOCUS !== "1" || fixture.name.startsWith("10000 numbers:") || fixture.async);
   console.log(`JavaScript vs TypeScript ${ts.version} vs NiralScript: identical function bodies and inputs, no component/DOM/reactive operations.`);
   console.log("All execute on the same Node/V8 engine. Imports, instance setup, strict TS validation and assertions are outside runtime timing; function references are extracted once.");
@@ -140,8 +165,8 @@ if (mode === "language") {
   const measurements = [];
   for (const fixture of fixtures) {
     const returnType = fixture.returns ?? "number";
-    const source = typed => `${fixture.declarations ? fixture.declarations(typed) + "\n" : ""}${fixture.async ? "async " : ""}function run(values${typed ? `: ${fixture.type}` : ""})${typed ? `: ${fixture.async ? `Promise<${returnType}>` : returnType}` : ""} { ${fixture.body} }`;
-    const scripts = [source(false) + "\nexport { run };", source(true) + "\nexport { run };", source(true)];
+    const source = (typed, index) => `${fixture.declarations ? fixture.declarations(typed, index) + "\n" : ""}${fixture.async ? "async " : ""}function run(values${typed ? `: ${fixture.type}` : ""})${typed ? `: ${fixture.async ? `Promise<${returnType}>` : returnType}` : ""} { ${fixture.body} }`;
+    const scripts = [source(false, 0) + "\nexport { run };", source(true, 1) + "\nexport { run };", source(true, 2)];
     const filename = fileURLToPath(new URL("language-benchmark.ts", import.meta.url));
     const host = ts.createCompilerHost(compilerOptions);
     const getSourceFile = host.getSourceFile.bind(host);
@@ -159,13 +184,13 @@ if (mode === "language") {
     const output = [{ code: scripts[0] }, transpile(), compile()];
     const variants = await Promise.all(output.map(async (result, index) => {
       const module = await import("data:text/javascript;base64," + Buffer.from(result.code).toString("base64"));
-      return { name: ["JavaScript", "TypeScript", "NiralScript"][index], ...result, run: index === 2 ? module.createInstance().values.run : module.run };
+      return { name: ["JavaScript", "TypeScript", "NiralScript"][index], ...result, run: index === 2 ? (await module.createInstance()).values.run : module.run };
     }));
     const snapshot = structuredClone(fixture.input);
     for (const variant of variants) {
       assert.equal(await variant.run(fixture.input), fixture.expected, `${variant.name}: main output`);
       assert.equal(await variant.run(fixture.edge), fixture.edgeExpected, `${variant.name}: edge output`);
-      assert.equal(await variant.run([]), returnType === "string" ? "" : 0, `${variant.name}: empty output`);
+      assert.equal(await variant.run([]), fixture.emptyExpected ?? (returnType === "string" ? "" : 0), `${variant.name}: empty output`);
       assert.deepEqual(fixture.input, snapshot, `${variant.name}: no input mutation`);
     }
     const consume = value => typeof value === "string" ? value.length : value;

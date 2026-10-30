@@ -5,11 +5,19 @@ import { checkTypes } from "./types.js";
 const EMPTY_CHILDREN = Object.freeze([]);
 const CALLBACK_METHODS = new Set(["map", "filter", "find", "findIndex", "some", "every", "forEach", "reduce"]);
 // Hoisted so the hot traversals test membership without allocating a literal per node.
-const FUNCTION_LIKE = new Set(["FunctionDeclaration", "ArrowFunctionExpression", "MethodDefinition"]);
-const SCOPE_LIKE = new Set(["FunctionDeclaration", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression", "MethodDefinition"]);
+const FUNCTION_LIKE = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "MethodDefinition"]);
+const SCOPE_LIKE = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression", "MethodDefinition"]);
 const INVOCATIONS = new Set(["CallExpression", "NewExpression"]);
 const EFFECT_NODES = new Set(["CallExpression", "NewExpression", "MemberExpression", "AssignmentStatement"]);
 const RECEIVERS = new Set(["ThisExpression", "Super"]);
+
+// Leaf identifier/member targets written by an assignment, flattening destructuring patterns.
+export function assignmentTargets(node) {
+  if (node.type === "ArrayPattern") return node.elements.filter(Boolean).flatMap(assignmentTargets);
+  if (node.type === "ObjectPattern") return node.properties.flatMap(property => assignmentTargets(property.value));
+  if (node.type === "RestElement") return assignmentTargets(node.argument);
+  return [node];
+}
 
 // Class and member decorators both evaluate in the scope that encloses the class.
 export function decoratorExpressions(node) {
@@ -96,6 +104,13 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       return;
     }
     if (node.type === "CallExpression" && node.callee.type === "Super" && (scope.receiver?.member.kind !== "constructor" || scope.receiver.member.static)) fail("NRS072", "super() is only valid in a derived constructor", node);
+    if (node.type === "FunctionExpression") {
+      // optional name is scoped inside the function expression only, so it can recurse
+      const outer = { parent: scope, bindings: new Map(), depth: scope.depth, owner: scope.owner, async: scope.async, receiver: scope.receiver };
+      if (node.id) declareName(node.id, "function", outer, node.end, node);
+      block(node.body, outer, true, node.params, !!node.async);
+      return;
+    }
     if (node.type === "ClassExpression") {
       // optional name is scoped inside the class expression only
       const inner = { parent: scope, bindings: new Map(), depth: scope.depth, owner: scope.owner, async: scope.async, receiver: scope.receiver };
@@ -129,7 +144,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
 
   function body(nodes, scope) {
     for (const node of nodes) {
-      if (node.id && !["ForOfStatement", "TypeAliasDeclaration", "InterfaceDeclaration"].includes(node.type)) declare(node.id, node.kind ?? ({ InputDeclaration: "input", StateDeclaration: "state", DerivedDeclaration: "derive", FunctionDeclaration: "function", ClassDeclaration: "class" })[node.type], scope, node.end, node);
+      if (node.id && !["ForOfStatement", "ForInStatement", "TypeAliasDeclaration", "InterfaceDeclaration"].includes(node.type)) declare(node.id, node.kind ?? ({ InputDeclaration: "input", StateDeclaration: "state", DerivedDeclaration: "derive", FunctionDeclaration: "function", ClassDeclaration: "class" })[node.type], scope, node.end, node);
     }
     for (const node of nodes) {
       if (node.type !== "ImportDeclaration" || node.typeOnly) continue;
@@ -208,7 +223,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
           if (member.kind === "constructor") {
             function construction(node, states, nested = false) {
               if (!node || !states.size) return states;
-              if (["FunctionDeclaration", "ClassDeclaration", "ClassExpression"].includes(node.type)) return states;
+              if (["FunctionDeclaration", "FunctionExpression", "ClassDeclaration", "ClassExpression"].includes(node.type)) return states;
               if (node.type === "ArrowFunctionExpression") { construction(node.body, states, true); return states; }
               if ((node.type === "ThisExpression" || node.type === "MemberExpression" && node.object.type === "Super") && states.has(false)) fail("NRS074", "Cannot use this or a super member before super()", node);
               if (node.type === "ReturnStatement" && node.argument && node.argument.type !== "ThisExpression") fail("NRS072", "Class constructors initialize this; return replacement objects from a factory method", node);
@@ -226,7 +241,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
                 states = construction(node.left, states, nested);
                 return new Set([...states, ...construction(node.right, states, nested)]);
               }
-              if (["ForStatement", "ForOfStatement", "WhileStatement", "TryStatement"].includes(node.type)) {
+              if (["ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "TryStatement"].includes(node.type)) {
                 for (const child of children(node)) construction(child, states, true);
                 return states;
               }
@@ -243,7 +258,8 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "BlockStatement":
         block(node, scope);
         break;
-      case "ForOfStatement": {
+      case "ForOfStatement":
+      case "ForInStatement": {
         loops.push(node);
         const inner = { parent: scope, bindings: new Map(), depth: scope.depth, owner: scope.owner, async: scope.async, receiver: scope.receiver };
         declare(node.id, node.kind, inner, node.right.end, node);
@@ -293,13 +309,18 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "AssignmentStatement": {
         assignments.push(node);
         expression(node.left, scope, false);
-        let target = node.left;
-        while (target.type === "MemberExpression" || target.type === "ParenthesizedExpression") target = target.object ?? target.expression;
-        if (target.type === "Identifier") {
+        const destructured = ["ArrayPattern", "ObjectPattern"].includes(node.left.type);
+        for (const leaf of assignmentTargets(node.left)) {
+          let target = leaf;
+          while (target.type === "MemberExpression" || target.type === "ParenthesizedExpression") target = target.object ?? target.expression;
+          if (target.type !== "Identifier") continue;
           const binding = references.findLast(entry => entry.node.start === target.start)?.binding;
-          if (binding && (binding.kind === "derive" || (node.left.type === "Identifier" && !["state", "let", "parameter"].includes(binding.kind)))) {
+          if (!binding) continue;
+          const direct = leaf.type === "Identifier";
+          if (binding.kind === "derive" || (direct && !["state", "let", "parameter"].includes(binding.kind))) {
             fail("NRS074", `Cannot assign to read-only binding '${target.name}'`, target);
           }
+          if (destructured && direct && binding.kind === "state") fail("NRS074", `Reactive state '${target.name}' cannot be a destructuring target`, target);
         }
         expression(node.right, scope, false);
         break;
@@ -335,6 +356,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "BlockStatement":
         return node.body;
       case "FunctionDeclaration":
+      case "FunctionExpression":
       case "MethodDefinition":
       case "ArrowFunctionExpression":
         return [...node.params.flatMap(patternExpressions), node.body];
@@ -372,6 +394,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "CastExpression":
         return [node.expression];
       case "ForOfStatement":
+      case "ForInStatement":
         return [node.right, ...patternExpressions(node.id), node.body];
       case "ForStatement":
         return [node.init, node.test, node.body, node.update].filter(Boolean);
@@ -383,9 +406,13 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "NewExpression":
         return [node.callee, ...node.arguments];
       case "ArrayExpression":
-        return node.elements;
+      case "ArrayPattern":
+        return node.elements.filter(Boolean);
       case "ObjectExpression":
+      case "ObjectPattern":
         return node.properties;
+      case "RestElement":
+        return [node.argument];
       case "Property":
         return [node.value];
       case "TemplateLiteral":
@@ -578,7 +605,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       }
       const values = [];
       function collect(node) {
-        if (["FunctionDeclaration", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression", "MethodDefinition"].includes(node.type)) return;
+        if (SCOPE_LIKE.has(node.type)) return;
         if (node.type === "ReturnStatement") {
           if (node.argument) values.push(node.argument);
           return;
@@ -855,7 +882,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       for (const child of node.body) initialized(child, child.start, seen, active);
       return;
     }
-    if (node.type === "ForOfStatement" && !owner) {
+    if (["ForOfStatement", "ForInStatement"].includes(node.type) && !owner) {
       initialized(node.right, position, seen, active);
       initialized(node.body, node.body.start, seen, active);
       return;

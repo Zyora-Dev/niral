@@ -217,8 +217,9 @@ are not supported. Only return browser-safe values from loaders. These are
 adapter rules; the independent language core has no Niral server or props imports.
 
 The script supports top-level `input`/`state`/`derive`, ordinary `let`/`const`, named
-functions and concise/block arrows (including `async`), lexical blocks, braced
-`if`/`else`, `for...of`, conventional `for`/`while`, `break`/`continue`,
+functions, named/anonymous `function` expressions and concise/block arrows (including
+`async`), lexical blocks, braced
+`if`/`else`, `for...of`, `for...in`, conventional `for`/`while`, `break`/`continue`,
 `try`/`catch`/`finally`, `throw`, calls, assignments and
 `return`. `await` is supported inside async bodies, not at top level. Native promise
 completion is preserved; async calls and explicit throws are rejected during
@@ -232,8 +233,10 @@ Niral checks array callbacks (`map`, `filter`, `find`, `findIndex`, `some`, `eve
 `forEach`, `reduce`) and helper callback parameters resolving to one known function.
 Patterns support nested defaults, array holes and final identifier rest bindings;
 functions support default/rest parameters and call spread. Prefix/postfix updates
-are statement-only. Destructuring assignment, labels and async iteration remain
-unsupported.
+are statement-only. Destructuring assignment to existing bindings is supported with
+array, object, renamed, nested, member and rest targets; object patterns must be
+parenthesised and reactive `state` cannot be a destructuring target. Labels and
+async iteration remain unsupported.
 Scope checks reject duplicates, unresolved names, direct use before initialization
 and immutable-binding writes. Resolved bindings drive signal reads/writes and
 nested renames without intermediate rune discovery or script token rewriting.

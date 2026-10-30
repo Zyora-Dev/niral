@@ -344,6 +344,7 @@ export class ExpressionParser {
         this.current = null;
         return { ...node, type: "ClassExpression" };
       }
+      if (value === "function") return this.functionExpression(start, false);
       if (value === "async") {
         try {
         const next = this.peek();
@@ -366,6 +367,11 @@ export class ExpressionParser {
         } catch (error) { if (error.name !== "NiralScriptError") throw error; }
         this.scanner.pos = end;
         this.current = null;
+        if (this.peek().value === "function") {
+          if (/[\r\n]/.test(this.scanner.src.slice(end, this.peek().start))) this.error("Async function headers require the same line", start);
+          this.take();
+          return this.functionExpression(start, true);
+        }
       }
       if (["true", "false", "null"].includes(value)) {
         return { type: "Literal", value: value === "null" ? null : value === "true", start, end };
@@ -449,6 +455,67 @@ export class ExpressionParser {
       return { ...property, value: this.pattern(property.value, names) };
     }) };
     this.error("Expected an identifier or object/array binding pattern", node.start);
+  }
+
+  // `[a, b] = pair` or the parenthesised `({ a } = point)` JavaScript requires at statement start.
+  destructuringAssignment() {
+    const first = this.peek();
+    if (!["[", "("].includes(first.kind)) return null;
+    const position = this.scanner.pos;
+    const current = this.current;
+    try {
+      const wrapped = first.kind === "(" ? !!this.take() : false;
+      const target = this.expression();
+      if (!["ArrayExpression", "ObjectExpression"].includes(target.type)) this.error("Expected a destructuring target", first.start);
+      this.expect("=");
+      const left = this.assignmentTarget(target);
+      const right = this.expression();
+      if (wrapped) this.expect(")");
+      return { type: "AssignmentStatement", left, operator: "=", right, start: first.start, end: this.scanner.pos };
+    } catch (error) {
+      if (error.name !== "NiralScriptError") throw error;
+      this.scanner.pos = position;
+      this.current = current;
+      return null;
+    }
+  }
+
+  assignmentTarget(node) {
+    if (node.type === "Identifier") {
+      if (RESERVED_WORDS.has(node.name)) this.error("Expected an assignable target", node.start);
+      return node;
+    }
+    if (node.type === "MemberExpression") {
+      for (let target = node; target && ["MemberExpression", "CallExpression"].includes(target.type); target = target.object ?? target.callee) {
+        if (target.optional) this.error("Optional chains cannot be assignment targets", node.start);
+      }
+      return node;
+    }
+    if (node.type === "ArrayExpression") {
+      return { ...node, type: "ArrayPattern", elements: node.elements.map((item, index) => {
+        if (item.type !== "SpreadElement") return this.assignmentTarget(item);
+        if (index !== node.elements.length - 1) this.error("A rest target must come last", item.start);
+        return { ...item, type: "RestElement", argument: this.assignmentTarget(item.argument) };
+      }) };
+    }
+    if (node.type === "ObjectExpression") {
+      return { ...node, type: "ObjectPattern", properties: node.properties.map(property => {
+        if (property.type !== "Property") this.error("Rest targets are not supported in object patterns", property.start);
+        if (property.computed) this.error("Computed keys are not supported in destructuring targets", property.start);
+        return { ...property, value: this.assignmentTarget(property.value) };
+      }) };
+    }
+    this.error("Expected an assignable destructuring target", node.start);
+  }
+
+  functionExpression(start, async) {
+    const parser = new StatementParser(this.scanner.src, this.scanner.filename);
+    parser.scanner.pos = this.scanner.pos;
+    const node = parser.functionExpression(start, async);
+    if (node.end > this.end) this.error("Function expression exceeds its enclosing expression", start);
+    this.scanner.pos = node.end;
+    this.current = null;
+    return node;
   }
 
   spread() {

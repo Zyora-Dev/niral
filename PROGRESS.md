@@ -1,5 +1,47 @@
 # Niral Progress
 
+## 2026-11-03: NiralScript for-in, destructuring assignment, function expressions
+
+The benchmark write-up listed four missing constructs. Three of the four turned out
+to already work; these are the three that genuinely did not.
+
+- **`for (const key in record)`** — `niralscript/parser.js` branches the `for` header on
+  `of` vs `in` instead of assuming `of`. The key must be a plain identifier and is always
+  typed `string`, so a destructured id or an explicit annotation fails with `NRS072`.
+  `break`/`continue` and the loop-depth guard behave as in the other loops.
+  `analysis.js` treats `ForInStatement` alongside `ForOfStatement` in the declare-skip
+  list, loop guard, walker, `children()` and `initialized()`; `types.js` annotates the key
+  as `string`.
+- **Destructuring assignment** — `expressions.js` gains `destructuringAssignment()` and
+  `assignmentTarget()`. The statement parser tries it first and backtracks cleanly on a
+  `NiralScriptError`, so `(n + 1);` and `[1, 2].forEach(...)` are untouched. Targets
+  cover array, object, renamed (`{ x: n }`), nested, rest and member forms. Object
+  patterns must be parenthesised — `({ x } = point)` — exactly as in JavaScript, because
+  a leading `{` is a block. Optional chains and reserved words are rejected.
+  `analysis.js` exports `assignmentTargets()` to flatten a pattern to its leaves, checks
+  each one for read-only writes (`NRS074`), and rejects reactive `state` as a direct
+  destructuring target. `types.js` carries a 6-line private copy of the same helper to
+  avoid a circular import, kills flow narrowing for every written leaf, and
+  `checkPatternTargets()` checks each annotated leaf against its projected type.
+- **Function expressions** — `parser.js` splits the shared tail of a function header into
+  `functionRest()` and adds `functionExpression()`, which only consumes a name when the
+  next token is not `(` or `<`. `expressions.js` bridges back into the statement parser
+  from `primary()` for both `function` and `async function`, with the usual same-line
+  rule for the `async` keyword. The optional name is declared in a wrapper scope owned by
+  the expression, mirroring `ClassExpression`, so it can recurse but never leaks.
+  `types.js` infers a `FunctionExpression` as a function type in both `infer()` and the
+  declaration lookup. `FunctionExpression` is deliberately *not* added to the exportable
+  declaration list.
+- **Emitters** — `compile.js` writes `(function name(...) { ... })` and wraps pattern
+  assignment targets in parentheses. `src/compiler/niralscript.js` does the same, and
+  pushes every function-expression body onto `replacements` so the text-splicing backend
+  rewrites it the way it already rewrites arrow bodies.
+- Two obsolete negative assertions in `tests/niralscript.js` were removed and one
+  positive test added, exercising all six forms across all three emitters.
+- Docs updated in `NIRALSCRIPT.md`, `README.md` and `apps/docs/routes/niralscript.niral`.
+
+78 language tests, 258 framework tests and the release gate all pass.
+
 ## 2026-11-02: NiralScript Decorators
 
 Decorators now work on class declarations, methods, getters, setters and static fields in
