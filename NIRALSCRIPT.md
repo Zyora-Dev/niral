@@ -238,10 +238,20 @@ const isBox: boolean = counter instanceof Box
   ordinary JavaScript properties, not automatic signals. Native receiver rules
   still apply to detached methods. Dynamic aliases and unknown host classes are
   outside the complete static-checking guarantees.
-- Class expressions/anonymous classes, arbitrary computed names, complex base
-  expressions, `new.target`, decorators, abstract classes, `implements`, and
-  TypeScript visibility/readonly/parameter-property modifiers are not supported.
-  Use `#name` for native private members. This is not full JS/TS class parity.
+- Decorators are supported on class declarations, methods, getters, setters and
+  static fields. A decorator is `@name`, `@name.path` or one call `@name(args)`;
+  arbitrary expressions are rejected. They receive `(value, { kind, name, static })`
+  where `kind` is `"class" | "method" | "get" | "set" | "field"`, and returning a
+  value replaces the target. Member decorators apply before class decorators and
+  each list applies bottom-up. Decorators on class expressions, `#private` members,
+  constructors, static blocks and instance fields are rejected, as are the
+  `accessor` keyword and `addInitializer`. A decorated class is typed as its
+  undecorated form, so a replacing decorator is not type-checked, and the class
+  cannot be referenced from its own static initializers.
+- Arbitrary computed names, complex base expressions, `new.target`, abstract
+  classes, `implements`, and TypeScript visibility/readonly/parameter-property
+  modifiers are not supported. Use `#name` for native private members. This is
+  not full JS/TS class parity.
 
 ### Implemented Statements and Scopes
 
@@ -349,7 +359,11 @@ has no implicit array-method policy; these approvals belong to the Niral adapter
 - Named `async function` declarations and concise/block async arrows use native
   promise semantics in the Niral target. Both can be exported from utility modules.
   `await` is an expression or statement inside an async body; nested synchronous
-  functions reset that context. No top-level await, generators or async iteration.
+  functions reset that context. Standalone modules may also `await` at the top
+  level of an entry or a linked utility, which makes `createInstance` asynchronous;
+  component `<script lang="niralscript">` blocks keep synchronous setup and reject
+  it with NIRAL072. Derived initializers stay synchronous everywhere (NRS075).
+  No generators or async iteration.
   Async headers cannot split `async` from `function`/parameters across a newline;
   arrow parameters and `=>` must also share a line. `async` remains a contextual
   identifier, not a globally reserved name.
@@ -757,7 +771,9 @@ no DOM rendering. A host may inject `signal(initial) -> { get, set }` and
 system; immediate reads, isolation and cycle handling are then the host's duty.
 
 `niralscript/compile` exports `compileNiralScript(source, filename, options)` and
-returns `{ code, map }`. It shares checking/resolution policies; `options.file`
+returns `{ code, map, topLevelAwait }`. When `topLevelAwait` is true the generated
+`createInstance` is an async function and must be awaited before `values` is read.
+It shares checking/resolution policies; `options.file`
 names the generated file in the map (default `entry.mjs`). The API neither reads
 nor writes files. Its version-3 source map includes every original source and
 `sourcesContent`, with token/statement mappings and UTF-16 columns. The CLI makes

@@ -9,7 +9,7 @@ const PRECEDENCE = new Map([
 ]);
 const IDENTIFIER = /[A-Za-z_$][\w$]*/y;
 const NUMBER = /(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
-const SYMBOL = /===|!==|==|!=|<=|>=|&&|\|\||\+\+|--|\*\*|=>|\?\?|\?\.|[+\-*/%!=<>]=?|[()[\]{},.;:?`|#]/y;
+const SYMBOL = /===|!==|==|!=|<=|>=|&&|\|\||\+\+|--|\*\*|=>|\?\?|\?\.|[+\-*/%!=<>]=?|[()[\]{},.;:?`|#@]/y;
 
 export function parseExpression(source, filename, start, end) {
   const parser = new ExpressionParser(source, filename, start, end);
@@ -115,6 +115,30 @@ export class ExpressionParser {
     if (!colon) return null;
     const { value, end } = readType(this);
     return { type: "TypeAnnotation", value, start: colon.start, end };
+  }
+
+  decorators(allowed) {
+    if (this.peek().kind !== "@") return [];
+    const list = [];
+    while (this.peek().kind === "@") {
+      const at = this.take();
+      if (!allowed) this.error("Decorators require a class declaration", at.start);
+      const token = this.peek();
+      if (token.kind !== "identifier" || RESERVED_WORDS.has(token.value)) this.error("Expected a decorator name", token.start);
+      this.take();
+      let expression = { type: "Identifier", name: token.value, start: token.start, end: token.end };
+      while (this.peek().kind === ".") {
+        this.take();
+        const property = this.expect("identifier");
+        expression = { type: "MemberExpression", object: expression, property: { type: "Identifier", name: property.value, start: property.start, end: property.end }, computed: false, start: expression.start, end: property.end };
+      }
+      if (this.eat("(")) {
+        const args = this.list(")", true);
+        expression = { type: "CallExpression", callee: expression, arguments: args.items, start: expression.start, end: args.end };
+      }
+      list.push({ type: "Decorator", expression, start: at.start, end: expression.end });
+    }
+    return list;
   }
 
   parameter() {

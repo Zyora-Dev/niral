@@ -8,6 +8,8 @@ Full history (all entries, unchanged): PROGRESS.md.
 
 ## Latest verified work
 
+- 2026-11-02: Decorators — `@name`, `@name.path`, `@name(args)` on class declarations, methods, getters, setters and static fields, in all three emitters. Desugars to `X = __decorate([...], [...], X, "X")` (`__nrsDecorate` in components); members apply before class decorators, each list bottom-up, descriptors preserved, helper only emitted when used. Rejected on class expressions, `#private`, constructors, static blocks and instance fields (NRS071); derives cannot touch a decorated class (NRS075); a decorated class cannot be read from its own static initializers (NRS074). 77 language + 258 framework tests pass, release gate green.
+- 2026-11-01: Top-level await — standalone NiralScript modules may `await` in an entry or linked utility body. `analyzeNiralScript` takes `topLevelAwait` (default off), `checkNiralScript` defaults it on, and `compileNiralScript` returns `topLevelAwait` plus an `export async function createInstance` when it fires. Component `<script lang="niralscript">` keeps synchronous setup and rejects it with NIRAL072; derives still reject await (NRS075). 76 language + 258 framework tests pass, release gate green.
 - 2026-10-31: Signal read overhead — cheap derives are now duplicated at their reference sites instead of living in a cell, bounded by `(copies - 1) * cost <= 48`; `CallExpression` emits `(0, expr)(…)` so an inlined member expression in callee position does not gain a receiver. `standalone` read-batch NiralScript-vs-JS: 1.84×→1.51× counter, 1.95×→1.58× 1000-number map. `derived` drops out of the emitted runtime when every derive inlines. 75 language + 258 framework tests pass.
 - 2026-10-30: Brand refresh (PNG logo + favicon, purple homepage) and `.xml` MIME fix deployed to production as release `c866fa49ef9c`.
 - 2026-10-29: Compile throughput — AST traversal allocation removed from `types.js` (`typeAnnotations`, `walk`) and `analysis.js` (hoisted membership sets); parser records a `typed` flag so untyped modules skip three whole-AST walks (checkTypes guard, annotation erasure, cast collection). `compile` benchmark NiralScript-vs-JS: 3.34×→2.47× counter, 2.81×→1.69× 100 pairs, 6.98×→2.94× 1000 rows. SSR parity held; direct AST backend 1.24–1.28× ahead of legacy. 74 language + 258 framework tests pass.
@@ -24,8 +26,6 @@ Full history (all entries, unchanged): PROGRESS.md.
 ## Next (requested, not started)
 
 NiralScript features, in order:
-5. Top-level await
-6. Decorators
 7. Broader coverage (`new.target`, recursive aliases, re-exports)
 
 Keep all three emitters in parity (niralscript/compile.js, src/compiler/niralscript.js direct + legacy). Add tests to tests/niralscript.js; update LSP/grammar, NIRALSCRIPT.md and the docs page.

@@ -119,6 +119,7 @@ export class StatementParser {
     while (parser.peek().kind !== "}") {
       if (parser.eat(";")) continue;
       const memberStart = parser.peek().start;
+      const decorators = parser.decorators(!optional);
       let key = parser.take();
       let isStatic = false;
       let async = false;
@@ -126,6 +127,7 @@ export class StatementParser {
       if (key.value === "static" && !["(", ":", "=", ";", "}"].includes(parser.peek().kind)) {
         isStatic = true;
         if (parser.peek().kind === "{") {
+          if (decorators.length) parser.error("Static initialization blocks cannot be decorated", memberStart);
           scanner.pos = parser.peek().start;
           const outerLoopDepth = this.loopDepth;
           this.loopDepth = 0;
@@ -151,6 +153,7 @@ export class StatementParser {
       const memberKey = { type: "Identifier", name, start: key.start, end: key.end };
       const identity = `${isStatic}:${name}`;
       const previous = keys.get(identity);
+      if (decorators.length && name.startsWith("#")) parser.error("Private class members cannot be decorated", memberStart);
       if (name === "#constructor") parser.error("Private constructors are not allowed", key.start);
       if (name.startsWith("#") && keys.has(`${!isStatic}:${name}`)) parser.error("Private names cannot be shared by static and instance members", key.start);
       if (previous && !(previous === "get" && kind === "set" || previous === "set" && kind === "get")) parser.error(`Duplicate class member '${name}'`, key.start);
@@ -159,6 +162,7 @@ export class StatementParser {
       if (parser.eat("(")) {
         if (name === "constructor" && !isStatic) {
           if (async || kind !== "method" || methodTypes) parser.error("A constructor cannot be async, generic or an accessor", key.start);
+          if (decorators.length) parser.error("Class constructors cannot be decorated", memberStart);
           kind = "constructor";
         }
         const params = parser.parameters().items;
@@ -170,15 +174,16 @@ export class StatementParser {
         this.loopDepth = 0;
         const body = this.block(depth + 1, new Set(params.flatMap(patternBindings).map(binding => binding.id.name)));
         this.loopDepth = outerLoopDepth;
-        members.push({ type: "MethodDefinition", key: memberKey, static: isStatic, kind, async, params, returnType, typeParameters: methodTypes, body, start: memberStart, end: body.end });
+        members.push({ type: "MethodDefinition", key: memberKey, static: isStatic, kind, async, params, returnType, typeParameters: methodTypes, ...(decorators.length ? { decorators } : {}), body, start: memberStart, end: body.end });
         parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
       } else {
         if (async || kind !== "method" || methodTypes || name === "constructor") parser.error("Invalid class field", key.start);
+        if (decorators.length && !isStatic) parser.error("Only static fields can be decorated", memberStart);
         const typeAnnotation = parser.annotation();
         const value = parser.eat("=") ? parser.expression() : null;
         const end = value?.end ?? typeAnnotation?.end ?? key.end;
         if (!parser.eat(";") && parser.peek().kind !== "}" && !/[\r\n]/.test(scanner.src.slice(end, parser.peek().start))) parser.error("Expected a semicolon or newline after field", end);
-        members.push({ type: "PropertyDefinition", key: memberKey, static: isStatic, typeAnnotation, value, start: memberStart, end });
+        members.push({ type: "PropertyDefinition", key: memberKey, static: isStatic, typeAnnotation, ...(decorators.length ? { decorators } : {}), value, start: memberStart, end });
         kind = "field";
       }
       keys.set(identity, previous ? "accessors" : kind);
@@ -191,6 +196,15 @@ export class StatementParser {
   statement(topLevel, depth, names) {
     const scanner = this.scanner;
     const start = scanner.pos;
+    if (scanner.peek() === "@") {
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const decorators = parser.decorators(true);
+      scanner.pos = decorators[decorators.length - 1].end;
+      this.trivia();
+      const declaration = this.statement(topLevel, depth, names);
+      if (declaration.type !== "ClassDeclaration") scanner.error("NRS071", "Decorators require a class declaration", { start });
+      return { ...declaration, decorators, start };
+    }
     let kind = scanner.read(IDENTIFIER);
     let async = false;
     if (kind === "async") {

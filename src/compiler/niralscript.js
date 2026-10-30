@@ -5,7 +5,29 @@ import { parseNiralScript as parseLanguage, analyzeNiralScript, NiralScriptError
 import { linkNiralScript } from "../../niralscript/modules.js";
 import { sourceLocation } from "../../niralscript/errors.js";
 import { typeAnnotations, walk, hasTypeSyntax } from "../../niralscript/types.js";
+import { decoratorExpressions } from "../../niralscript/analysis.js";
 import { NiralError } from "./errors.js";
+
+// Only inlined when the component actually declares a decorator.
+const DECORATE = `const __nrsDecorate = (decorators, members, value, name) => {
+for (const [name, kind, isStatic, list] of members) {
+const target = isStatic ? value : value.prototype;
+const descriptor = Object.getOwnPropertyDescriptor(target, name);
+const slot = kind === "get" || kind === "set" ? kind : "value";
+let current = descriptor[slot];
+for (let index = list.length - 1; index >= 0; index--) {
+const replacement = list[index](current, { kind, name, static: isStatic });
+if (replacement !== undefined) current = replacement;
+}
+descriptor[slot] = current;
+Object.defineProperty(target, name, descriptor);
+}
+for (let index = decorators.length - 1; index >= 0; index--) {
+const replacement = decorators[index](value, { kind: "class", name, static: false });
+if (replacement !== undefined) value = replacement;
+}
+return value;
+};`;
 
 export function loadNiralScriptSource(script, componentSource, options) {
   if (!Object.hasOwn(script.attrs, "src")) return null;
@@ -138,8 +160,15 @@ function emitProgram(program, options, direct) {
       case "FunctionDeclaration":
         return `${node.async ? "async " : ""}function ${source(node.id)}(${node.params.map(source).join(", ")}) ${emit(node.body)}`;
       case "ClassDeclaration":
-      case "ClassExpression":
-        return `class${node.id ? " " + source(node.id) : ""}${node.superClass ? " extends " + source(node.superClass) : ""} {\n${node.members.map(emit).join("\n")}\n}`;
+      case "ClassExpression": {
+        const text = `class${node.id ? " " + source(node.id) : ""}${node.superClass ? " extends " + source(node.superClass) : ""} {\n${node.members.map(emit).join("\n")}\n}`;
+        const classDecorators = node.decorators ?? [];
+        const decoratedMembers = node.members.filter(member => member.decorators?.length);
+        if (!classDecorators.length && !decoratedMembers.length) return text;
+        const entries = decoratedMembers.map(member => `[${JSON.stringify(member.key.name)}, ${JSON.stringify(member.type === "PropertyDefinition" ? "field" : member.kind)}, ${member.static}, [${member.decorators.map(decorator => source(decorator.expression)).join(", ")}]]`);
+        const target = source(node.id);
+        return `${text};\n${classDecorators.length ? target + " = " : ""}__nrsDecorate([${classDecorators.map(decorator => source(decorator.expression)).join(", ")}], [${entries.join(", ")}], ${target}, ${JSON.stringify(node.id.name)});`;
+      }
       case "MethodDefinition":
         return `${node.static ? "static " : ""}${node.async ? "async " : ""}${["get", "set"].includes(node.kind) ? node.kind + " " : ""}${node.key.name.startsWith("#") ? node.key.name : JSON.stringify(node.key.name)}(${node.params.map(source).join(", ")}) ${emit(node.body)}`;
       case "PropertyDefinition":
@@ -195,7 +224,8 @@ function emitProgram(program, options, direct) {
     edits.push({ start: node.start, end: node.end, text });
     edits.sort((left, right) => left.start - right.start || right.end - left.end);
   }
-  return { code: [...(program.modules ?? []).map(emit), body(program, program.start, program.end)].join("\n"), signals, writable, props };
+  const decorated = analysis.classes.some(node => decoratorExpressions(node).length);
+  return { code: [...(decorated ? [DECORATE] : []), ...(program.modules ?? []).map(emit), body(program, program.start, program.end)].join("\n"), signals, writable, props };
 }
 
 export function compileNiralScript(code, filename = "<anonymous>", options = {}) {

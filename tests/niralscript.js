@@ -783,10 +783,41 @@ test("NiralScript async functions await results without weakening semantics", as
     resolveModule: () => ({ filename: "async.nrs", source: "export async function value() { return await 7 }" }),
   });
   assert.equal(await new Function("__n", linked.code + "\nreturn result;")(runtime), 7);
-  for (const source of ["const value = await 1", "function read() { return await 1 }", "async function outer() { function inner() { return await 1 } }", "async function outer() { const inner = () => await 1 }"]) assert.throws(() => checkNiralScript(source), { code: "NRS072" });
+  for (const source of ["function read() { return await 1 }", "async function outer() { function inner() { return await 1 } }", "async function outer() { const inner = () => await 1 }"]) assert.throws(() => checkNiralScript(source), { code: "NRS072" });
   for (const source of ["async function read() { return 1 }\nderive result = read()", "async function read(value) { return value }\nderive result = [1].map(read)"]) assert.throws(() => compileNiralScript(source), { code: "NIRAL075" });
   assert.throws(() => checkNiralScript("input item\nasync function identity(value) { return await value }\nasync function run() { const alias = await identity(item); alias.name = 1 }"), { code: "NRS074" });
   assert.throws(() => checkNiralScript("async function read() { await 0; return later }\nconst pending = read()\nconst later = 1"), { code: "NRS074" });
+});
+
+test("NiralScript modules await at the top level", async () => {
+  const source = "state total = await load()\nconst extra = await load()\nderive doubled = total * 2\nfunction read() { return total + extra }";
+  const compiled = compileStandalone(source, "toplevel.nrs", { globals: ["load"] });
+  assert.equal(compiled.topLevelAwait, true);
+  assert.match(compiled.code, /export async function createInstance/);
+  const module = await import("data:text/javascript;base64," + Buffer.from(compiled.code).toString("base64"));
+  const instance = await module.createInstance({}, { load: async () => 5 });
+  assert.equal(instance.values.total, 5);
+  assert.equal(instance.values.doubled, 10);
+  assert.equal(instance.values.read(), 10);
+
+  // An await in an imported module body suspends the same instance setup.
+  const linked = compileStandalone('import { ready } from "./warm.nrs"\nconst result = ready + 1', "toplevel-entry.nrs", {
+    globals: ["warm"],
+    resolveModule: () => ({ filename: "warm.nrs", source: "export const ready = await warm()" }),
+  });
+  assert.equal(linked.topLevelAwait, true);
+  const linkedModule = await import("data:text/javascript;base64," + Buffer.from(linked.code).toString("base64"));
+  assert.equal((await linkedModule.createInstance({}, { warm: async () => 41 })).values.result, 42);
+
+  // Without a top-level await the instance stays synchronous.
+  const plain = compileStandalone("state count = 1\nfunction bump() { count += 1 }");
+  assert.equal(plain.topLevelAwait, false);
+  assert.doesNotMatch(plain.code, /async function createInstance/);
+
+  // Component setup stays synchronous, and derives stay synchronous everywhere.
+  assert.throws(() => compileNiralScript("const value = await 1"), { code: "NIRAL072" });
+  assert.throws(() => checkNiralScript("derive result = await 1"), { code: "NRS075" });
+  assert.throws(() => checkNiralScript("class Box { field = await 1 }"), { code: "NRS072" });
 });
 
 test("NiralScript async arrows and error handling preserve completion and scope", async () => {
@@ -1207,7 +1238,7 @@ test("NiralScript parses named module imports and exported declarations", () => 
 });
 
 test("NiralScript token dispatch preserves values, maximal operators and source spans", () => {
-  const punctuation = "( ) [ ] { } , . : ` ? === !== == != <= >= && || ++ -- ** => ?? ?. += -= *= /= %= + - * / % ! = < >".split(" ");
+  const punctuation = "( ) [ ] { } , . : ` ? @ === !== == != <= >= && || ++ -- ** => ?? ?. += -= *= /= %= + - * / % ! = < >".split(" ");
   const fixtures = [
     { source: punctuation.join(" "), expected: punctuation.map(token => [token, token, token]) },
     { source: "0 12 10. .5 2.5e-3 1E+2", expected: [["0", "number", 0], ["12", "number", 12], ["10.", "number", 10], [".5", "number", 0.5], ["2.5e-3", "number", 0.0025], ["1E+2", "number", 100]] },
@@ -1227,7 +1258,7 @@ test("NiralScript token dispatch preserves values, maximal operators and source 
     }
     assert.equal(parser.take().kind, "eof");
   }
-  for (const source of [" \u200b", " @"]) {
+  for (const source of [" \u200b", " \u0000"]) {
     const parser = new ExpressionParser(source, "tokens.nrs", 0, source.length);
     assert.throws(() => parser.take(), error => error.code === "NRS071" && error.start === 1 && error.end === 2 && error.filename === "tokens.nrs");
   }
@@ -1948,4 +1979,77 @@ test("NiralScript class expressions", async () => {
   // class expression passed as argument
   const inline = `const items = [class { val() { return 7 } }]\nconst r = new items[0]().val()`;
   assert.doesNotThrow(() => compileNiralScript(inline, "inline.nrs"));
+});
+
+test("NiralScript decorators lower to runtime wrappers in both emitters", async () => {
+  const prelude = [
+    'const order = []',
+    'const trace = (label) => (value, context) => { order.push(label + ":" + context.kind + ":" + context.name) }',
+    'const replace = (value, context) => (amount) => amount + 10',
+    'const brand = (value, context) => { value.brand = context.name }',
+  ].join("\n");
+
+  const source = `${prelude}
+@brand
+@trace("outer")
+class Counter {
+  @replace
+  add(amount) { return amount + 1 }
+  @trace("getter")
+  get label() { return "counter" }
+  @trace("field")
+  static origin = 0
+}
+const instance = new Counter()
+const doubled = instance.add(2)
+const label = instance.label
+const brandName = Counter.brand
+const applied = order.join("|")`;
+
+  // members apply before class decorators, and each list runs bottom-up
+  const expected = "getter:get:label|field:field:origin|outer:class:Counter";
+
+  // standalone emitter
+  const standalone = compileStandalone(source, "decorators.nrs");
+  assert.match(standalone.code, /__decorate\(\[/, "standalone output must inline the decorator helper call");
+  const module = await import("data:text/javascript;base64," + Buffer.from(standalone.code).toString("base64"));
+  const values = module.createInstance().values;
+  assert.equal(values.doubled, 12, "method decorator must replace the method");
+  assert.equal(values.label, "counter");
+  assert.equal(values.brandName, "Counter");
+  assert.equal(values.applied, expected);
+
+  // component emitter
+  const lowered = lowerNiralScript(source, "decorators-component.nrs");
+  assert.match(lowered, /__nrsDecorate\(\[/, "component output must inline its own helper");
+  assert.deepEqual(new Function(lowered + ";return [doubled, brandName, applied]")(), [12, "Counter", expected]);
+
+  // decorators must preserve non-enumerable prototype methods
+  assert.equal(Object.getOwnPropertyDescriptor(values.Counter.prototype, "add").enumerable, false);
+
+  // undecorated modules must not carry the helper
+  assert.doesNotMatch(compileStandalone("class Plain { run() { return 1 } }", "plain.nrs").code, /__decorate/);
+  assert.doesNotMatch(lowerNiralScript("class Plain { run() { return 1 } }", "plain-component.nrs"), /__nrsDecorate/);
+
+  // member-expression decorator form
+  assert.doesNotThrow(() => compileStandalone(`${prelude}\nconst registry = { seal: brand }\n@registry.seal\nclass Sealed { run() { return 1 } }`, "member.nrs"));
+
+  // rejected placements
+  const invalid = [
+    ['const mark = (value) => value\n@mark\nconst value = 1', "decorators require a class declaration"],
+    [`${prelude}\nclass Private { @replace #hidden() { return 1 } }`, "private members"],
+    [`${prelude}\nclass Ctor { @replace constructor() {} }`, "constructors"],
+    [`${prelude}\nclass Field { @trace("x") count = 1 }`, "instance fields"],
+    [`${prelude}\nclass Block { @trace("x") static { } }`, "static blocks"],
+    [`${prelude}\nconst Anon = class { @replace run() { return 1 } }`, "class expressions"],
+    [`${prelude}\n@class\nclass Reserved { run() { return 1 } }`, "reserved decorator names"],
+  ];
+  for (const [bad, reason] of invalid) assert.throws(() => compileStandalone(bad, "invalid.nrs"), error => error.code === "NRS071", reason);
+
+  // derives cannot depend on decorated classes
+  assert.throws(() => compileStandalone(`${prelude}\n@brand\nclass Tracked { run() { return 1 } }\nstate seed = 1\nderive total = new Tracked().run() + seed`, "derive.nrs"), { code: "NRS075" });
+
+  // a class decorator replaces the binding, so static initializers cannot read it back
+  assert.throws(() => compileStandalone(`${prelude}\n@brand\nclass Cyclic {\n  static self = Cyclic\n}`, "cyclic.nrs"), { code: "NRS074" });
+  assert.doesNotThrow(() => compileStandalone(`${prelude}\nclass Fine {\n  static self = Fine\n}`, "fine.nrs"));
 });

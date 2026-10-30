@@ -1,5 +1,73 @@
 # Niral Progress
 
+## 2026-11-02: NiralScript Decorators
+
+Decorators now work on class declarations, methods, getters, setters and static fields in
+all three emitters. Node has no native decorator support, so everything desugars.
+
+- **`niralscript/expressions.js`** adds `@` to the `SYMBOL` token regex and a
+  `decorators(allowed)` method. The grammar matches TC39's `DecoratorMemberExpression` /
+  `DecoratorCallExpression`: `@name`, `@name.path` and optionally one call `@name(args)`.
+  Arbitrary expressions are rejected with `NRS071`.
+- **`niralscript/parser.js`** parses a decorator run as a statement prefix (so
+  `@log class X {}` and `@log export class X {}` both work) and before each class member.
+  Decorators on class expressions, `#private` members, `constructor`, static blocks and
+  instance fields all fail with `NRS071`. Parsed decorators attach to the class and member
+  nodes as a `decorators` array.
+- **`niralscript/analysis.js`** exports `decoratorExpressions(node)`, which collects a
+  class's own decorators plus every member decorator. They all resolve in the scope that
+  encloses the class, so the walker, `children()` and `initialized()` route through that
+  single helper. Derive purity now rejects constructing or calling into a decorated class
+  (`NRS075`), and a decorated class cannot be read from its own static initializers
+  (`NRS074`) because the decorator may replace the binding.
+- **`niralscript/compile.js`** and **`src/compiler/niralscript.js`** emit an ordinary class
+  declaration followed by `X = __decorate([classDecorators], [memberEntries], X, "X")`
+  (`__nrsDecorate` in the component emitter). Members apply before class decorators and each
+  list applies bottom-up. Prototype methods keep their non-enumerability because the helper
+  reads, mutates and redefines the property descriptor. The helper is only serialized when a
+  module actually uses a decorator, so decorator-free output is byte-identical.
+- A decorator receives `(value, { kind, name, static })` with `kind` of
+  `"class" | "method" | "get" | "set" | "field"`. Returning a value replaces the target;
+  returning `undefined` keeps it. The class name is passed explicitly so a renamed internal
+  binding does not leak into the context object.
+- **Typing** follows TypeScript: a decorated class is typed as its undecorated form, so a
+  replacing decorator is not type-checked. `types.js` needed no change — `walk()` already
+  traverses the new arrays.
+- **`src/lsp/niralscript.js`** starts hover text after the last decorator so a decorated
+  class or member still renders a clean signature.
+- Docs updated in `NIRALSCRIPT.md`, `README.md` and `apps/docs/routes/niralscript.niral`.
+
+77 language tests, 258 framework tests and the release gate all pass.
+
+## 2026-11-01: NiralScript Top-Level Await
+
+Standalone NiralScript modules can now `await` in an entry or linked utility body. The
+language already parsed `await` everywhere; the restriction was a single scope check.
+
+- **`niralscript/analysis.js`** takes a new `topLevelAwait` option (default `false`). It
+  seeds `root` and each module scope with `async: topLevelAwait`, records whether an await
+  actually fired at `scope.depth === 0`, and exposes that as `analysis.topLevelAwait`. The
+  `NRS072` message is now context-aware: at depth 0 it reads "Top-level await is not
+  available here; move the await into an async function".
+- **`niralscript/check.js`** defaults the option on, so every standalone consumer — the CLI,
+  `compileNiralScript`, the LSP — accepts it. **`src/compiler/niralscript.js`** passes its own
+  option bag and therefore leaves it off, so component `<script lang="niralscript">` setup
+  stays synchronous and still rejects a top-level await with `NIRAL072`. SSR and hydration
+  need `createInstance` to complete in one turn.
+- **`niralscript/compile.js`** emits `export async function createInstance(...)` when the
+  flag is set and returns `topLevelAwait` alongside `{ code, map }`. A module without a
+  top-level await is byte-identical to before. An await inside a *linked* utility body also
+  suspends the shared instance setup, because utility and entry initializers are emitted
+  into the same function.
+- No weakening elsewhere. Derive initializers still reject await (`NRS075`), class property
+  initializers still force a synchronous scope, and an await inside a nested non-async
+  function or arrow is still `NRS072`. `block()` already propagated `async` through non-
+  function blocks, so top-level `if`/`for`/`while` bodies inherit the permission for free.
+- `apps/docs/lib/playground-sandbox.js` now awaits `createInstance`. The LSP hover text for
+  `await` and the NIRALSCRIPT.md async and standalone-compilation sections were updated.
+
+76 language tests and 258 framework tests pass; `npm run test:release` is green.
+
 ## 2026-10-31: NiralScript Signal Read Overhead
 
 Reading a derived binding used to cost two or three hops: the `values` accessor, then the

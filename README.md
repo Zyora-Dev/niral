@@ -292,8 +292,9 @@ Generic constraints, recursive aliases and generic arrows remain unsupported.
 Named classes support constructors, typed/generic fields and methods, inheritance,
 private members, accessors, static blocks and `instanceof`. They emit native classes
 in standalone and component output, with readonly/effect/initialization safeguards.
-Class fields are ordinary properties, not automatic signals. Class expressions,
-dynamic computed names, decorators and TypeScript class modifiers are not supported;
+Class fields are ordinary properties, not automatic signals. Decorators work on
+class declarations, methods, accessors and static fields. Class expressions,
+dynamic computed names and TypeScript class modifiers are not supported;
 see [class contracts and limitations](NIRALSCRIPT.md#classes-and-constructors).
 This is not runtime validation, a fully
 sound type system or Niral client/server security validation. The private package

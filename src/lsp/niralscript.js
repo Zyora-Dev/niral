@@ -68,7 +68,7 @@ const KEYWORDS = {
   super: "Access a base member or initialize a derived instance.",
   static: "Declare a class-level field, method or initialization block.",
   async: "An asynchronous function returning a promise.",
-  await: "Wait for a promise inside an async function.",
+  await: "Wait for a promise inside an async function, or at the top level of a module, where it makes createInstance asynchronous.",
   import: "Import named exports from an explicit relative .nrs path.",
   export: "Export a constant, function, class or type alias.",
   type: "A compile-time type alias, optionally generic; import it with import type.",
@@ -119,9 +119,11 @@ function symbolAt(text, offset, filename, options) {
 
 function signature(program, analysis, binding) {
   const declaration = binding.declaration ?? analysis.declarations.get(binding);
-  if (declaration?.type === "ClassDeclaration") return program.source.slice(declaration.start, declaration.members[0]?.start ?? declaration.end - 1).trim().replace(/\s*\{$/, "");
-  if (declaration?.type === "MethodDefinition") return program.source.slice(declaration.start, declaration.body.start).trim();
-  if (declaration?.type === "PropertyDefinition") return program.source.slice(declaration.start, declaration.end).trim();
+  // Decorators widen a declaration's span, so hover text starts after them.
+  const head = node => node.decorators?.length ? node.decorators[node.decorators.length - 1].end : node.start;
+  if (declaration?.type === "ClassDeclaration") return program.source.slice(head(declaration), declaration.members[0]?.start ?? declaration.end - 1).trim().replace(/\s*\{$/, "");
+  if (declaration?.type === "MethodDefinition") return program.source.slice(head(declaration), declaration.body.start).trim();
+  if (declaration?.type === "PropertyDefinition") return program.source.slice(head(declaration), declaration.end).trim();
   if (binding.kind === "type") return program.source.slice(declaration.start, declaration.end).trim();
   if (declaration?.type === "FunctionDeclaration") return program.source.slice(declaration.start, declaration.body.start).trim();
   const annotation = binding.id.typeAnnotation;

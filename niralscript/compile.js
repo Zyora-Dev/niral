@@ -1,5 +1,28 @@
 import { checkNiralScript } from "./check.js";
+import { decoratorExpressions } from "./analysis.js";
 import { sourceLocation } from "./errors.js";
+
+// Serialized into the module only when a decorator is present, so undecorated output is unchanged.
+const DECORATE = `const __decorate = (decorators, members, value, name) => {
+for (const [name, kind, isStatic, list] of members) {
+const target = isStatic ? value : value.prototype;
+const descriptor = Object.getOwnPropertyDescriptor(target, name);
+const slot = kind === "get" || kind === "set" ? kind : "value";
+let current = descriptor[slot];
+for (let index = list.length - 1; index >= 0; index--) {
+const replacement = list[index](current, { kind, name, static: isStatic });
+if (replacement !== undefined) current = replacement;
+}
+descriptor[slot] = current;
+Object.defineProperty(target, name, descriptor);
+}
+for (let index = decorators.length - 1; index >= 0; index--) {
+const replacement = decorators[index](value, { kind: "class", name, static: false });
+if (replacement !== undefined) value = replacement;
+}
+return value;
+};
+`;
 
 function createRuntime() {
   let revision = 0;
@@ -163,10 +186,28 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
       case "FunctionDeclaration":
         write(node.async ? "async function " : "function ", node); emit(node.id); write("("); joined(node.params); write(") "); emit(node.body); break;
       case "ClassDeclaration":
-      case "ClassExpression":
-        write("class ", node); if (node.id) emit(node.id);
+      case "ClassExpression": {
+        write("class", node);
+        if (node.id) { write(" "); emit(node.id); }
         if (node.superClass) { write(" extends "); emit(node.superClass); }
-        write(" {\n"); joined(node.members, "\n"); write("\n}"); break;
+        write(" {\n"); joined(node.members, "\n"); write("\n}");
+        const classDecorators = node.decorators ?? [];
+        const decoratedMembers = node.members.filter(member => member.decorators?.length);
+        if (!classDecorators.length && !decoratedMembers.length) break;
+        write(";\n");
+        if (classDecorators.length) { emit(node.id); write(" = "); }
+        write("__decorate([");
+        joined(classDecorators.map(decorator => decorator.expression));
+        write("], [");
+        decoratedMembers.forEach((member, index) => {
+          if (index) write(", ");
+          write(`[${JSON.stringify(member.key.name)}, ${JSON.stringify(member.type === "PropertyDefinition" ? "field" : member.kind)}, ${member.static}, [`);
+          joined(member.decorators.map(decorator => decorator.expression));
+          write("]]");
+        });
+        write("], "); emit(node.id); write(`, ${JSON.stringify(node.id.name)});`);
+        break;
+      }
       case "MethodDefinition":
         write((node.static ? "static " : "") + (node.async ? "async " : "") + (["get", "set"].includes(node.kind) ? node.kind + " " : "") + (node.key.name.startsWith("#") ? node.key.name : JSON.stringify(node.key.name)), node);
         write("("); joined(node.params); write(") "); emit(node.body); break;
@@ -261,7 +302,8 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
   if (analysis.bindings.some(binding => binding.kind === "derive" && !cheap.has(analysis.declarations.get(binding)))) members.push("derived");
   const hasInputs = kinds.has("input");
   if (members.length) write(`const __createRuntime = () => { let revision = 0; return {\n${members.map(name => RUNTIME[name].toString()).join(",\n")}\n}; };\n`);
-  write(`export function createInstance(__inputs = {}, __globals = {}, __runtime = ${members.length ? "__createRuntime()" : "null"}) {\n`);
+  if (analysis.classes.some(node => decoratorExpressions(node).length)) write(DECORATE);
+  write(`export ${analysis.topLevelAwait ? "async " : ""}function createInstance(__inputs = {}, __globals = {}, __runtime = ${members.length ? "__createRuntime()" : "null"}) {\n`);
   if (hasInputs) write("const __inputCells = Object.create(null);\n");
   for (const module of program.modules ?? []) { emit(module); write("\n"); }
   emit(program);
@@ -284,5 +326,5 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
     write(" }");
   });
   write(`\n});\nreturn { values, updateInputs(${hasInputs ? "patch" : ""}) {${hasInputs ? " for (const name of Object.keys(patch)) { if (Object.hasOwn(__inputCells, name)) __inputCells[name].set(patch[name]); } " : ""}} };\n}\n`);
-  return { code, map: { version: 3, file: options.file ?? "entry.mjs", sources: sources.map(input => input.filename), sourcesContent: sources.map(input => input.source), names: [], mappings: mappings.map(line => line.join(",")).join(";") } };
+  return { code, topLevelAwait: analysis.topLevelAwait, map: { version: 3, file: options.file ?? "entry.mjs", sources: sources.map(input => input.filename), sourcesContent: sources.map(input => input.source), names: [], mappings: mappings.map(line => line.join(",")).join(";") } };
 }

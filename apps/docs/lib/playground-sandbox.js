@@ -15,7 +15,7 @@ function playgroundSandbox() {
       const url = URL.createObjectURL(new Blob([data], { type: "text/javascript" }));
       try {
         const { createInstance } = await import(url);
-        const instance = createInstance({}, { print });
+        const instance = await createInstance({}, { print });
         if (typeof instance.values.main === "function") {
           const result = await instance.values.main();
           if (result !== undefined) print(result);

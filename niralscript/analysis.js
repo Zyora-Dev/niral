@@ -11,7 +11,14 @@ const INVOCATIONS = new Set(["CallExpression", "NewExpression"]);
 const EFFECT_NODES = new Set(["CallExpression", "NewExpression", "MemberExpression", "AssignmentStatement"]);
 const RECEIVERS = new Set(["ThisExpression", "Super"]);
 
-export function analyzeNiralScript(program, { globals = [], moduleGlobals = globals, reserved = [], pureGlobals = [], pureMethods = {}, strictTypes = false } = {}) {
+// Class and member decorators both evaluate in the scope that encloses the class.
+export function decoratorExpressions(node) {
+  const own = node.decorators ?? EMPTY_CHILDREN;
+  const members = node.members.flatMap(member => member.decorators ?? EMPTY_CHILDREN);
+  return own.length || members.length ? [...own, ...members].map(decorator => decorator.expression) : EMPTY_CHILDREN;
+}
+
+export function analyzeNiralScript(program, { globals = [], moduleGlobals = globals, reserved = [], pureGlobals = [], pureMethods = {}, strictTypes = false, topLevelAwait = false } = {}) {
   const bindings = [];
   const references = [];
   const resolved = new WeakMap();
@@ -25,7 +32,8 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   const throws = [];
   const defaultSources = [];
   const ambient = new Map([...globals].map(name => [name, { name, kind: "global" }]));
-  const root = { parent: { bindings: ambient }, bindings: new Map(), depth: 0 };
+  const root = { parent: { bindings: ambient }, bindings: new Map(), depth: 0, async: topLevelAwait };
+  let awaited = false;
   const reservedNames = new Set(reserved);
   const modules = new Map();
   const imports = new Map();
@@ -77,7 +85,10 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       else expression(node.body, inner, false);
       return;
     }
-    if (node.type === "AwaitExpression" && !scope.async) fail("NRS072", "Await is only valid inside an async function", node);
+    if (node.type === "AwaitExpression") {
+      if (!scope.async) fail("NRS072", scope.depth === 0 ? "Top-level await is not available here; move the await into an async function" : "Await is only valid inside an async function", node);
+      if (scope.depth === 0) awaited = true;
+    }
     if (RECEIVERS.has(node.type)) {
       if (!scope.receiver) fail("NRS072", `${node.type === "Super" ? "super" : "this"} is only valid in a class member`, node);
       if (node.type === "Super" && !scope.receiver.declaration.superClass) fail("NRS072", "super requires a base class", node);
@@ -186,6 +197,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "ClassDeclaration":
       case "ClassExpression": {
         classes.push(node);
+        for (const decorator of decoratorExpressions(node)) expression(decorator, scope, false);
         expression(node.superClass, scope, false);
         for (const member of node.members) {
           const receiver = { declaration: node, member };
@@ -298,7 +310,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   }
 
   for (const module of program.modules ?? []) {
-    const scope = { parent: { bindings: new Map([...moduleGlobals].map(name => [name, { name, kind: "global" }])) }, bindings: new Map(), depth: 0, module: true };
+    const scope = { parent: { bindings: new Map([...moduleGlobals].map(name => [name, { name, kind: "global" }])) }, bindings: new Map(), depth: 0, module: true, async: topLevelAwait };
     body(module.body, scope);
     modules.set(module.filename, scope);
   }
@@ -327,7 +339,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "ArrowFunctionExpression":
         return [...node.params.flatMap(patternExpressions), node.body];
       case "ClassDeclaration":
-      case "ClassExpression": return [node.superClass, ...node.members].filter(Boolean);
+      case "ClassExpression": return [node.superClass, ...decoratorExpressions(node), ...node.members].filter(Boolean);
       case "StaticBlock": return [node.body];
       case "PropertyDefinition": return node.value ? [node.value] : EMPTY_CHILDREN;
       case "StateDeclaration":
@@ -541,6 +553,22 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   }
   for (const call of calls) {
     if (resolved.get(unwrap(call.callee))?.kind === "parameter" && !callable(call.callee)) fail("NRS075", "Invoked callback parameters require one statically known function", call.callee);
+  }
+  // A class decorator may replace the class, so the binding only holds the decorated value
+  // after the declaration finishes. Static initializers run before that and would hit the TDZ.
+  for (const node of classes) {
+    if (!node.decorators?.length) continue;
+    const selfReference = child => {
+      if (!child || FUNCTION_LIKE.has(child.type)) return;
+      if (child.type === "Identifier" && declarations.get(resolved.get(child)) === node) {
+        fail("NRS074", `A decorated class cannot be referenced by its own static initializers`, child);
+      }
+      for (const nested of children(child)) selfReference(nested);
+    };
+    for (const member of node.members) {
+      if (!member.static) continue;
+      selfReference(member.type === "StaticBlock" ? member.body : member.value);
+    }
   }
   function returnValues(fn) {
     if (!returns.has(fn)) {
@@ -785,8 +813,12 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       }
       if (EFFECT_NODES.has(node.type)) {
         const targets = invoked(node);
-        if (INVOCATIONS.has(node.type) && !targets.length && !(node.type === "NewExpression" && classOf(node.callee)) && !intrinsic(node.callee)) fail("NRS075", "Derived evaluation requires a provably pure function call", node.callee);
+        const constructed = node.type === "NewExpression" ? classOf(node.callee) : null;
+        if (constructed && decoratorExpressions(constructed).length) fail("NRS075", "Derived evaluation cannot construct a decorated class", node.callee);
+        if (INVOCATIONS.has(node.type) && !targets.length && !constructed && !intrinsic(node.callee)) fail("NRS075", "Derived evaluation requires a provably pure function call", node.callee);
         for (const fn of targets) if (!visited.has(fn)) {
+          const host = classContexts.get(fn)?.declaration;
+          if (host && decoratorExpressions(host).length) fail("NRS075", "Derived evaluation cannot call a member of a decorated class", node.callee);
           if (fn.async) fail("NRS075", "Derived evaluation cannot invoke async functions", node.callee);
           visited.add(fn);
           for (const value of fn.params.flatMap(patternExpressions)) inspect(value, fn.body);
@@ -810,6 +842,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   function initialized(node, position, seen = new Set(), active = new Map(), owner = null) {
     if (!node || FUNCTION_LIKE.has(node.type)) return;
     if (node.type === "ClassDeclaration" || node.type === "ClassExpression") {
+      for (const decorator of decoratorExpressions(node)) initialized(decorator, position, seen, active, owner);
       initialized(node.superClass, position, seen, active, owner);
       for (const member of node.members) if (member.static) {
         if (member.type === "PropertyDefinition") initialized(member.value, node.end, seen, active, owner);
@@ -856,7 +889,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
   for (const module of [...(program.modules ?? []), program]) {
     for (const node of module.body) initialized(node, node.start);
   }
-  const analysis = { bindings, references, root, imports, arrows, resolved, declarations, classes, classContexts, classOf, memberOf, constructorOf, baseOf, isStaticReceiver };
+  const analysis = { bindings, references, root, imports, arrows, resolved, declarations, classes, classContexts, classOf, memberOf, constructorOf, baseOf, isStaticReceiver, topLevelAwait: awaited };
   checkTypes(program, analysis, { strictTypes });
   return analysis;
 }
