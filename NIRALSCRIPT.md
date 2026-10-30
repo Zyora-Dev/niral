@@ -167,7 +167,7 @@ const accepted = readOrder({ quantity: 2 })
   included in messages; field names appear in paths. One failure is reported,
   not an aggregate. Unions try branches in declaration order and retain the longest
   reported path when none passes.
-- Unknown, void, classes, function signatures, promises, recursive aliases and
+- Unknown, void, classes, function signatures, promises, recursive types and
   unresolved generic parameters cannot be runtime schemas. Unsupported contract
   types fail at compile time with NRS080 (NIRAL080 in components).
 - Generated schemas are limited to 64 nesting levels and 1024 type nodes;
@@ -670,6 +670,29 @@ const box: Box<number> = { value: identity<number>(2) }
 const label = apply(box.value, value => "Value: " + value)
 ```
 
+Arrow functions take type parameters too, with or without `async`:
+
+```text
+const first = <T extends { id: number }>(value: T): number => value.id
+const load = async <T>(value: T): Promise<T> => value
+```
+
+A constrained parameter stands in for its constraint inside the body, so
+`value.id` above resolves to `number`. Type parameters that are not followed by
+an arrow are rejected with NRS071.
+
+Aliases and interfaces may refer to themselves through an object, array or union,
+which makes linked lists and trees expressible:
+
+```text
+type Tree = { value: number, next: Tree | null }
+interface Node { value: number, next: Node | null }
+```
+
+Cycles with no value boundary — `type Loop = Loop` or `type A = B` with
+`type B = A` — are still rejected as circular aliases, and recursive types cannot
+become runtime contracts.
+
 Function signatures support optional/rest parameters. Known call signatures and
 supported collection methods supply contextual callback parameter/result types.
 Nested binding defaults and object/array rest project their types. Literal array
@@ -688,8 +711,7 @@ check/compile, or the reload-required `niral.niralscriptStrictTypes` editor sett
 to require narrowing unknown and nullable values before typed use/property access.
 This is not runtime validation or a sound replacement for TypeScript. Unannotated
 host globals, server results and complex methods remain unknown; input annotations
-do not validate supplied values. Interfaces, casts, generic arrows, constrained or
-defaulted type parameters and recursive aliases are unsupported. Function variance,
+do not validate supplied values. Function variance,
 generic inference and general collection-method checks remain bounded.
 Dynamic method selection and
 detached methods are not covered by the array checks. Inferred unannotated values

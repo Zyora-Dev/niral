@@ -1,6 +1,6 @@
 import { Scanner, RESERVED_WORDS } from "./scanner.js";
 import { StatementParser } from "./parser.js";
-import { readType } from "./types.js";
+import { readType, readTypeParameters } from "./types.js";
 
 const PRECEDENCE = new Map([
   ["??", 1], ["||", 1], ["&&", 2], ["===", 3], ["!==", 3],
@@ -350,6 +350,10 @@ export class ExpressionParser {
         const next = this.peek();
         let params;
         let parameterEnd;
+        if (next.kind === "<") {
+          if (/[\r\n]/.test(this.scanner.src.slice(end, next.start))) this.error("Async arrow headers require the same line", start);
+          return this.genericArrow(next.start, true);
+        }
         if (next.kind === "identifier") {
           const param = this.take();
           params = [{ type: "Identifier", name: param.value, start: param.start, end: param.end }];
@@ -379,6 +383,8 @@ export class ExpressionParser {
       if (RESERVED_WORDS.has(value)) this.error(`Unsupported expression keyword '${value}'`, start);
       return { type: "Identifier", name: value, start, end };
     }
+    // nothing else can open an expression with '<', so a generic arrow needs no backtracking
+    if (token.kind === "<") return this.genericArrow(start, false);
     if (token.kind === "(") {
       const savedPosition = this.scanner.pos;
       const savedCurrent = this.current;
@@ -421,6 +427,17 @@ export class ExpressionParser {
       if (!this.eat(",")) break;
     }
     return { items, end: this.expect(close).end };
+  }
+
+  genericArrow(start, async) {
+    this.scanner.pos = start;
+    this.current = null;
+    const typeParameters = readTypeParameters(this);
+    this.expect("(");
+    const parameters = this.parameters();
+    const returnType = this.arrowReturn();
+    if (!this.eat("=>")) this.error("Type parameters require an arrow function", start);
+    return { ...this.arrow(parameters.items, start, async, parameters.end, returnType), typeParameters };
   }
 
   arrow(params, start, async = false, parameterEnd, returnType = null) {

@@ -126,20 +126,48 @@ export function typeAnnotations(node, result = []) {
 
 const UNKNOWN = { kind: "unknown" };
 const UNDEFINED = { kind: "undefined" };
+// recursive aliases make type values cyclic, so identity keys stand in for a repeat visit
+function identify(value, seen = new Map()) {
+  if (!value || typeof value !== "object") return JSON.stringify(value);
+  if (seen.has(value)) return `#${seen.get(value)}`;
+  seen.set(value, seen.size);
+  if (Array.isArray(value)) return `[${value.map(member => identify(member, seen)).join(",")}]`;
+  return `{${Object.keys(value).sort().map(key => `${key}:${identify(value[key], seen)}`).join(",")}}`;
+}
+
 function merge(members) {
   const flattened = members.flatMap(value => value.kind === "union" ? value.members : [value]);
-  const unique = [...new Map(flattened.map(value => [JSON.stringify(value), value])).values()];
+  const unique = [...new Map(flattened.map(value => [identify(value), value])).values()];
   return unique.length === 1 ? unique[0] : unique.length ? { kind: "union", members: unique } : { kind: "never" };
 }
 
-function accepts(expected, actual, strict = false, base = () => null) {
+let typeSerial = 0;
+const typeIds = new WeakMap();
+function idOf(value) {
+  if (!typeIds.has(value)) typeIds.set(value, ++typeSerial);
+  return typeIds.get(value);
+}
+
+function accepts(expected, actual, strict = false, base = () => null, pending = new Set()) {
+  if (expected === actual) return true;
+  // a pair already under comparison is assumed to hold, which terminates recursive aliases
+  const pair = `${idOf(expected)}<${idOf(actual)}`;
+  if (pending.has(pair)) return true;
+  pending.add(pair);
+  try { return compare(expected, actual, strict, base, pending); }
+  finally { pending.delete(pair); }
+}
+
+function compare(expected, actual, strict, base, pending) {
   if (expected.kind === "unknown" || actual.kind === "never") return true;
   if (actual.kind === "unknown") return !strict;
-  if (actual.kind === "union") return actual.members.every(value => accepts(expected, value, strict, base));
-  if (expected.kind === "union") return expected.members.some(value => accepts(value, actual, strict, base));
+  if (actual.kind === "union") return actual.members.every(value => accepts(expected, value, strict, base, pending));
+  if (expected.kind === "union") return expected.members.some(value => accepts(value, actual, strict, base, pending));
   if (expected.kind === "void") return actual.kind === "undefined" || actual.kind === "void";
   if (expected.kind === "literal") return actual.kind === "literal" && expected.value === actual.value;
   if (actual.kind === "literal") return expected.kind === typeof actual.value;
+  // a constrained parameter stands in for its constraint everywhere except against another parameter
+  if (actual.kind === "parameter" && actual.constraint && expected.kind !== "parameter") return accepts(expected, actual.constraint, strict, base);
   if (expected.kind !== actual.kind) return false;
   if (["instance", "constructor"].includes(expected.kind)) {
     while (actual && expected.classId !== actual.classId) actual = base(actual);
@@ -148,23 +176,25 @@ function accepts(expected, actual, strict = false, base = () => null) {
   if (expected.kind === "parameter") return expected.name === actual.name && expected.owner === actual.owner;
   if (expected.kind === "signature") {
     if (actual.params.filter(param => !param.optional && !param.rest).length > expected.params.filter(param => !param.optional && !param.rest).length) return false;
-    return actual.params.every((param, index) => !expected.params[index] || accepts(param.value, expected.params[index].value, strict, base)) && (expected.result.kind === "void" || accepts(expected.result, actual.result, strict, base));
+    return actual.params.every((param, index) => !expected.params[index] || accepts(param.value, expected.params[index].value, strict, base, pending)) && (expected.result.kind === "void" || accepts(expected.result, actual.result, strict, base, pending));
   }
-  if (expected.kind === "array") return accepts(expected.element, actual.element, strict, base);
-  if (expected.kind === "promise") return accepts(expected.result, actual.result, strict, base);
-  if (expected.kind === "object") return Object.entries(expected.properties).every(([name, value]) => accepts(value, Object.hasOwn(actual.properties, name) ? actual.properties[name] : UNDEFINED, strict, base));
+  if (expected.kind === "array") return accepts(expected.element, actual.element, strict, base, pending);
+  if (expected.kind === "promise") return accepts(expected.result, actual.result, strict, base, pending);
+  if (expected.kind === "object") return Object.entries(expected.properties).every(([name, value]) => accepts(value, Object.hasOwn(actual.properties, name) ? actual.properties[name] : UNDEFINED, strict, base, pending));
   return true;
 }
 
-function describe(value) {
+function describe(value, seen = new Set()) {
+  if (seen.has(value)) return value.name ?? "...";
+  seen = new Set(seen).add(value);
   if (["instance", "constructor"].includes(value.kind)) return `${value.kind} ${value.name}`;
   if (value.kind === "parameter") return value.name;
-  if (value.kind === "signature") return `(${value.params.map(param => `${param.name}: ${describe(param.value)}`).join(", ")}) => ${describe(value.result)}`;
+  if (value.kind === "signature") return `(${value.params.map(param => `${param.name}: ${describe(param.value, seen)}`).join(", ")}) => ${describe(value.result, seen)}`;
   if (value.kind === "literal") return `${typeof value.value} literal ${JSON.stringify(value.value)}`;
-  if (value.kind === "union") return value.members.map(describe).join(" | ");
-  if (value.kind === "array") return `(${describe(value.element)})[]`;
-  if (value.kind === "promise") return `Promise<${describe(value.result)}>`;
-  if (value.kind === "object") return `{ ${Object.entries(value.properties).map(([name, type]) => `${name}: ${describe(type)}`).join(", ")} }`;
+  if (value.kind === "union") return value.members.map(member => describe(member, seen)).join(" | ");
+  if (value.kind === "array") return `(${describe(value.element, seen)})[]`;
+  if (value.kind === "promise") return `Promise<${describe(value.result, seen)}>`;
+  if (value.kind === "object") return `{ ${Object.entries(value.properties).map(([name, type]) => `${name}: ${describe(type, seen)}`).join(", ")} }`;
   return value.kind;
 }
 
@@ -241,19 +271,26 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       }
     }
   }
+  // aliases still being resolved, so a reference back to one ties the knot instead of looping
+  const resolving = new Map();
   function resolveType(value, location, seen = new Set(), substitutions = new Map()) {
     if (value.kind === "reference") {
       if (substitutions.has(value.name)) return substitutions.get(value.name);
       const generic = genericOwners.find(owner => location.start >= owner.start && location.start < owner.end && owner.typeParameters.value.names.includes(value.name));
       if (generic) {
         if (value.args.length) fail("Type parameters cannot take type arguments", value);
-        return { kind: "parameter", name: value.name, owner: generic.start };
+        const definition = generic.typeParameters.value.params?.find(param => param.name === value.name);
+        const guard = `${generic.start}:${value.name}`;
+        if (!definition?.constraint || seen.has(guard)) return { kind: "parameter", name: value.name, owner: generic.start };
+        const constraint = resolveType(definition.constraint, generic, new Set(seen).add(guard), substitutions);
+        return { kind: "parameter", name: value.name, owner: generic.start, constraint };
       }
       const lexicalClass = analysis.classes.filter(node => node.id.name === value.name && node.start <= location.start && location.end <= node.end).sort((left, right) => left.end - left.start - (right.end - right.start))[0];
       const alias = lexicalClass ?? typeScopes.get(ownerOf(location)).get(value.name);
       if (!alias) fail(`Unknown type '${value.name}'`, value);
       analysis.typeReferences.set(value, { kind: "type", id: alias.id, declaration: alias });
       if (seen.has(alias)) fail(`Circular type alias '${value.name}'`, value);
+      if (resolving.has(alias)) return resolving.get(alias);
       const names = alias.typeParameters?.value.names ?? [];
       const paramDefs = alias.typeParameters?.value.params ?? names.map(n => ({ name: n }));
       const requiredCount = paramDefs.filter(p => !p.default).length;
@@ -272,21 +309,24 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
         if (!accepts(constraint, arg, false)) fail(`Type argument '${describe(arg)}' does not satisfy constraint '${describe(constraint)}'`, value);
       }
       if (alias.type === "ClassDeclaration") return classType(alias, "instance", [...argumentsMap.values()]);
-      if (alias.type === "InterfaceDeclaration") {
-        const own = resolveType(alias.value.value, alias, new Set(seen).add(alias), argumentsMap);
-        if (!alias.extends?.length) return own;
-        const bases = alias.extends.map(ext => resolveType(ext.value, alias, new Set(seen).add(alias), argumentsMap));
+      const shell = {};
+      resolving.set(alias, shell);
+      try {
+        const nested = new Set(seen).add(alias);
+        const own = resolveType(alias.value.value, alias, nested, argumentsMap);
+        if (alias.type !== "InterfaceDeclaration" || !alias.extends?.length) return Object.assign(shell, own);
+        const bases = alias.extends.map(ext => resolveType(ext.value, alias, nested, argumentsMap));
         const merged = Object.assign(Object.create(null), ...bases.map(b => b.kind === "object" ? b.properties : {}), own.kind === "object" ? own.properties : {});
-        return { kind: "object", properties: merged };
-      }
-      return resolveType(alias.value.value, alias, new Set(seen).add(alias), argumentsMap);
+        return Object.assign(shell, { kind: "object", properties: merged });
+      } finally { resolving.delete(alias); }
     }
-    if (value.kind === "array") return { ...value, element: resolveType(value.element, location, seen, substitutions) };
+    // a reference under an array or object is a value boundary, so recursion through it is legal
+    if (value.kind === "array") return { ...value, element: resolveType(value.element, location, new Set(), substitutions) };
     if (value.kind === "promise") return { ...value, result: resolveType(value.result, location, seen, substitutions) };
     if (value.kind === "signature") return { ...value, params: value.params.map(param => ({ ...param, value: resolveType(param.value, location, seen, substitutions) })), result: resolveType(value.result, location, seen, substitutions) };
     if (value.kind === "arguments") return { ...value, values: value.values.map(member => resolveType(member, location, seen, substitutions)) };
     if (value.kind === "union") return merge(value.members.map(member => resolveType(member, location, seen, substitutions)));
-    if (value.kind === "object") return { ...value, properties: Object.fromEntries(Object.entries(value.properties).map(([key, member]) => [key, resolveType(member, location, seen, substitutions)])) };
+    if (value.kind === "object") return { ...value, properties: Object.fromEntries(Object.entries(value.properties).map(([key, member]) => [key, resolveType(member, location, new Set(), substitutions)])) };
     return value;
   }
   const typeOf = annotation => resolveType(annotation.value, annotation);
@@ -342,6 +382,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     if ((value.kind === "array" || value.kind === "string") && key === "length") return { kind: "number" };
     if (value.kind === "array" && /^(0|[1-9]\d*)$/.test(key)) return value.element;
     if (["null", "undefined"].includes(value.kind)) return UNDEFINED;
+    if (value.kind === "parameter" && value.constraint) return property(value.constraint, key, seen);
     return UNKNOWN;
   }
   function annotate(pattern, value) {
@@ -374,14 +415,20 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
   function unwrap(value) {
     return value.kind === "promise" ? unwrap(value.result) : value.kind === "union" ? merge(value.members.map(unwrap)) : value;
   }
-  function substitute(value, bindings) {
-    if (["instance", "constructor"].includes(value.kind)) return { ...value, args: value.args.map(argument => substitute(argument, bindings)) };
+  function substitute(value, bindings, shells = new Map()) {
+    if (shells.has(value)) return shells.get(value);
+    if (["instance", "constructor"].includes(value.kind)) return { ...value, args: value.args.map(argument => substitute(argument, bindings, shells)) };
     if (value.kind === "parameter") return bindings.get(`${value.owner}:${value.name}`) ?? value;
-    if (value.kind === "array") return { ...value, element: substitute(value.element, bindings) };
-    if (value.kind === "promise") return { ...value, result: substitute(value.result, bindings) };
-    if (value.kind === "union") return merge(value.members.map(member => substitute(member, bindings)));
-    if (value.kind === "object") return { ...value, properties: Object.fromEntries(Object.entries(value.properties).map(([key, member]) => [key, substitute(member, bindings)])) };
-    if (value.kind === "signature") return { ...value, params: value.params.map(param => ({ ...param, value: substitute(param.value, bindings) })), result: substitute(value.result, bindings) };
+    if (value.kind === "array") return { ...value, element: substitute(value.element, bindings, shells) };
+    if (value.kind === "promise") return { ...value, result: substitute(value.result, bindings, shells) };
+    if (value.kind === "union") return merge(value.members.map(member => substitute(member, bindings, shells)));
+    if (value.kind === "object") {
+      // a recursive type reaches itself again, so the shell keeps the rewritten copy cyclic too
+      const shell = {};
+      shells.set(value, shell);
+      return Object.assign(shell, { ...value, properties: Object.fromEntries(Object.entries(value.properties).map(([key, member]) => [key, substitute(member, bindings, shells)])) });
+    }
+    if (value.kind === "signature") return { ...value, params: value.params.map(param => ({ ...param, value: substitute(param.value, bindings, shells) })), result: substitute(value.result, bindings, shells) };
     return value;
   }
   function signature(fn, seen = new Set()) {

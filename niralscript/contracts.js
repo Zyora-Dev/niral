@@ -1,9 +1,12 @@
 export function emitContractValidator(type) {
   const functions = [];
+  const open = new Set();
   function generate(value, depth = 0) {
+    if (open.has(value)) throw new TypeError("Recursive types cannot be runtime contracts");
     if (depth > 64 || functions.length >= 1024) throw new TypeError("Runtime contracts are limited to 64 levels and 1024 type nodes");
     const name = `__check${functions.length}`;
     const index = functions.push("") - 1;
+    open.add(value);
     let body;
     const fail = expected => `throw new __ContractError(__path, ${JSON.stringify(expected)});`;
     if (["string", "boolean", "number"].includes(value.kind)) {
@@ -33,6 +36,7 @@ export function emitContractValidator(type) {
     } else {
       throw new TypeError(`Unsupported runtime contract type '${value.kind}'`);
     }
+    open.delete(value);
     functions[index] = `function ${name}(__value, __path) { if (++__visited > 10000) throw new __ContractError(__path, "at most 10000 values"); ${body} }`;
     return name;
   }

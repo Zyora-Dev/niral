@@ -1,5 +1,47 @@
 # Niral Progress
 
+## 2026-11-04: NiralScript generic constraints in bodies, generic arrows, recursive types
+
+For the second time the documented list of missing type features was stale. A probe
+against the compiler showed interfaces, `extends`, generic interfaces, exported
+interfaces, `as`, `satisfies` and type-parameter defaults all already worked. These are
+the three that genuinely did not.
+
+- **Constraints inside function bodies** — `resolveType()` returned a bare
+  `{ kind: "parameter", name, owner }` and dropped the constraint, so `v.id` on a
+  `T extends { id: number }` parameter typed as `unknown`. The constraint is now resolved
+  and carried on the parameter, behind a `${owner}:${name}` recursion guard so a
+  self-referential constraint cannot loop. `accepts()` lets a constrained parameter stand
+  in for its constraint against any non-parameter expectation, and `property()` falls
+  through to the constraint for member lookups.
+- **Generic arrow functions** — `expressions.js` gains `genericArrow()`. Nothing else can
+  open an expression with `<`, so the dispatch in `primary()` needs no backtracking. The
+  `async` branch handles `async <T>(...) => ...` with the usual same-line rule. A type
+  parameter list not followed by `=>` fails with `NRS071`. No emitter change was needed:
+  `readTypeParameters()` returns a node of type `TypeAnnotation`, which `typeAnnotations()`
+  already erases in all three backends.
+- **Recursive aliases and interfaces** — `resolveType()` failed hard on any cycle. It now
+  keeps a `resolving` map of aliases under expansion; a reference back to one returns the
+  in-progress shell, which is filled in via `Object.assign` once the body resolves. Array
+  element and object property positions reset the `seen` set because they are value
+  boundaries, so `type Tree = { value: number, next: Tree | null }` and the equivalent
+  interface resolve while `type Loop = Loop` and `type A = B; type B = A` still fail with
+  `Circular type alias`. Mutually recursive aliases work.
+- **Cycle-safe helpers** — cyclic type values broke three places. `merge()` used
+  `JSON.stringify` for dedup, replaced with an `identify()` walker that emits back
+  references. `accepts()` memoises the pair under comparison and assumes it holds, the
+  usual coinductive rule. `substitute()` keeps a shell map so a rewritten recursive type
+  stays cyclic instead of overflowing the stack. `describe()` prints the alias name on a
+  repeat visit.
+- **Contracts** — a recursive type reaching `emitContractValidator()` used to exhaust the
+  64-level guard and report a misleading limit error. It now fails immediately with
+  `Recursive types cannot be runtime contracts`.
+- Three new tests in `tests/niralscript.js` cover constraints in bodies, generic arrows
+  across all three emitters, and recursive types including the rejections.
+- Docs corrected in `NIRALSCRIPT.md`, `README.md` and `apps/docs/routes/niralscript.niral`.
+
+81 language tests, 258 framework tests and the release gate all pass.
+
 ## 2026-11-03: NiralScript for-in, destructuring assignment, function expressions
 
 The benchmark write-up listed four missing constructs. Three of the four turned out

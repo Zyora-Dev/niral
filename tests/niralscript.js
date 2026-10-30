@@ -1977,6 +1977,112 @@ test("NiralScript generic constraints and defaults", () => {
   ));
 });
 
+test("NiralScript constraints apply inside function bodies", () => {
+  // a constrained parameter exposes the constraint's properties
+  assert.doesNotThrow(() => compileNiralScript(
+    `function first<T extends { id: number }>(v: T): number { return v.id }\nconst ok = first({ id: 7, extra: "x" })`,
+    "b.nrs", { strictTypes: true }
+  ));
+
+  // nested constraint members resolve too
+  assert.doesNotThrow(() => compileNiralScript(
+    `function deep<T extends { inner: { n: number } }>(v: T): number { return v.inner.n }`,
+    "n.nrs", { strictTypes: true }
+  ));
+
+  // a constrained value is assignable wherever the constraint is expected
+  assert.doesNotThrow(() => compileNiralScript(
+    `function show(x: { id: number }): string { return "" }\nfunction tag<T extends { id: number }>(v: T): string { return show(v) }`,
+    "p.nrs", { strictTypes: true }
+  ));
+
+  // the constraint's member type is still enforced
+  assert.throws(() => compileNiralScript(
+    `function first<T extends { id: number }>(v: T): string { return v.id }`,
+    "w.nrs", { strictTypes: true }
+  ));
+
+  // a property outside the constraint is unknown, so strict mode rejects it
+  assert.throws(() => compileNiralScript(
+    `function first<T extends { id: number }>(v: T): number { return v.missing }`,
+    "m.nrs", { strictTypes: true }
+  ));
+});
+
+test("NiralScript generic arrow functions", () => {
+  // single type parameter
+  assert.equal(new Function(compileNiralScript(`const id = <T>(v: T): T => v\nconst r = id(5)`, "a.nrs", { strictTypes: true }).code + ";return r")(), 5);
+
+  // constrained type parameter, used in the body
+  assert.equal(new Function(compileNiralScript(
+    `const pick = <T extends { id: number }>(v: T): number => v.id\nconst r = pick({ id: 9 })`,
+    "c.nrs", { strictTypes: true }
+  ).code + ";return r")(), 9);
+
+  // two type parameters
+  assert.equal(new Function(compileNiralScript(`const pair = <A, B>(a: A, b: B): A => a\nconst r = pair("x", 1)`, "t.nrs", { strictTypes: true }).code + ";return r")(), "x");
+
+  // async generic arrow
+  assert.doesNotThrow(() => compileNiralScript(`const load = async <T>(v: T): Promise<T> => v`, "y.nrs", { strictTypes: true }));
+
+  // type parameters erase in every emitter
+  const source = `const id = <T>(v: T): T => v`;
+  for (const code of [compileNiralScript(source, "e.nrs", { strictTypes: true }).code, compileStandalone(source, "e.nrs").code, lowerNiralScript(source, "e.nrs", { strictTypes: true })]) {
+    assert.ok(!code.includes("<T>"), "type parameters must be erased");
+  }
+
+  // type parameters without an arrow are rejected
+  assert.throws(() => compileNiralScript(`const x = <T>(v: T)`, "bad.nrs", { strictTypes: true }), /arrow function/);
+
+  // inferred argument still has to satisfy the constraint
+  assert.throws(() => compileNiralScript(
+    `const pick = <T extends { id: number }>(v: T): number => v.id\nconst r = pick({ nope: 1 })`,
+    "bc.nrs", { strictTypes: true }
+  ));
+});
+
+test("NiralScript recursive type aliases and interfaces", () => {
+  // self-referential alias behind an object boundary
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Tree = { value: number, next: Tree | null }\nfunction head(t: Tree): number { return t.value }`,
+    "t.nrs", { strictTypes: true }
+  ));
+
+  // self-referential interface
+  assert.doesNotThrow(() => compileNiralScript(
+    `interface Node { value: number, next: Node | null }\nfunction head(n: Node): number { return n.value }`,
+    "i.nrs", { strictTypes: true }
+  ));
+
+  // recursion through an array element
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Json = { items: Json[] }\nfunction count(j: Json): number { return j.items.length }`,
+    "j.nrs", { strictTypes: true }
+  ));
+
+  // mutually recursive aliases
+  assert.doesNotThrow(() => compileNiralScript(
+    `type A = { b: B | null }\ntype B = { a: A | null }\nfunction f(a: A): number { return 1 }`,
+    "m.nrs", { strictTypes: true }
+  ));
+
+  // a recursive function walking a recursive type
+  assert.doesNotThrow(() => compileNiralScript(
+    `type Tree = { value: number, next: Tree | null }\nfunction sum(t: Tree | null): number { return t ? t.value + sum(t.next) : 0 }`,
+    "s.nrs", { strictTypes: true }
+  ));
+
+  // members are still checked through the cycle
+  assert.throws(() => compileNiralScript(
+    `type Tree = { value: number, next: Tree | null }\nconst t: Tree = { value: 1, next: { value: "x", next: null } }`,
+    "bad.nrs", { strictTypes: true }
+  ));
+
+  // a cycle with no value boundary is still an error
+  assert.throws(() => compileNiralScript(`type Loop = Loop\nfunction f(l: Loop): number { return 1 }`, "l.nrs", { strictTypes: true }), /Circular type alias/);
+  assert.throws(() => compileNiralScript(`type A = B\ntype B = A\nfunction f(a: A): number { return 1 }`, "mf.nrs", { strictTypes: true }), /Circular type alias/);
+});
+
 test("NiralScript class expressions", async () => {
   // anonymous class expression assigned to const
   const anon = `const Animal = class {\n  greet() { return "hi" }\n}\nconst a = new Animal()\nconst r = a.greet()`;

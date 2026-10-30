@@ -291,7 +291,8 @@ Reusable aliases/type-only imports, generic named functions/aliases, contextual
 callbacks and branch narrowing are supported. Unknown host values remain permissive
 by default; opt into stricter unknown/null checks with `--strict`, the API's
 `strictTypes: true`, or VS Code's `niral.niralscriptStrictTypes` (reload required).
-Generic constraints, recursive aliases and generic arrows remain unsupported.
+Generic constraints, recursive aliases and generic arrows are supported; recursive
+types cannot become runtime contracts.
 Named classes support constructors, typed/generic fields and methods, inheritance,
 private members, accessors, static blocks and `instanceof`. They emit native classes
 in standalone and component output, with readonly/effect/initialization safeguards.
