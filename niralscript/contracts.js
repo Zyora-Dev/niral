@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 export function emitContractValidator(type) {
   const functions = [];
   const open = new Set();

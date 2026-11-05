@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { checkNiralScript } from "./check.js";
 import { decoratorExpressions } from "./analysis.js";
 import { sourceLocation } from "./errors.js";

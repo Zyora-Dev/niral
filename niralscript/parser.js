@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { Scanner, readExpressionStatement, RESERVED_WORDS } from "./scanner.js";
 import { parseExpression, ExpressionParser, patternBindings } from "./expressions.js";
 import { readType, readTypeParameters, typeReadCount } from "./types.js";

@@ -1,6 +1,10 @@
 {
   "name": "niralscript",
-  "private": true,
+  "version": "0.1.0",
+  "description": "NiralScript — the zero-dependency reactive language compiler by ZyoraLabs.",
+  "author": "ZyoraLabs",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/Zyora-Dev/niralscript.git" },
   "type": "module",
   "exports": {
     ".": "./parser.js",
