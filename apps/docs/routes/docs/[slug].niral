@@ -102,7 +102,7 @@ VERIFY AND HAND OFF
   <title>{seoTitle}</title>
   <meta name="description" content="{description}" />
   <meta name="robots" content="{robots}" />
-  <meta name="theme-color" content="#090909" />
+  <meta name="theme-color" content="#15092a" />
   <link rel="canonical" href="https://niral.site/docs/{slug}" />
   <link rel="icon" href="/favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="/n.png" />
@@ -196,7 +196,7 @@ VERIFY AND HAND OFF
   .agent-kit-title { display: flex; gap: 10px; align-items: center; }
   .agent-kit-title h2 { margin: 0; color: #fff; font-size: 15px; font-weight: 600; line-height: 24px; }
   .agent-kit-mark { color: var(--accent); font: 16px/24px "Geist Mono", monospace; }
-  .copy-prompt { display: inline-flex; gap: 8px; align-items: center; justify-content: center; height: 36px; padding: 0 12px; background: var(--accent); color: #080809; border: 1px solid var(--accent); border-radius: 6px; font: 550 12px "Geist", sans-serif; cursor: pointer; }
+  .copy-prompt { display: inline-flex; gap: 8px; align-items: center; justify-content: center; height: 36px; padding: 0 12px; background: var(--accent); color: #15092a; border: 1px solid var(--accent); border-radius: 6px; font: 550 12px "Geist", sans-serif; cursor: pointer; }
   .copy-prompt:hover { background: var(--accent-hover); }
   .copy-prompt img { display: block; width: 16px; height: 16px; flex: none; }
   .agent-tools { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-top: 18px; }
@@ -205,7 +205,7 @@ VERIFY AND HAND OFF
   .mono-logo { filter: invert(1); }
   .agent-preview { margin-top: 16px; }
   .agent-preview summary { width: fit-content; color: var(--text); cursor: pointer; font-size: 12px; line-height: 20px; }
-  .agent-preview textarea { display: block; box-sizing: border-box; width: 100%; height: 260px; min-height: 160px; resize: vertical; margin-top: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: #0b0b0d; color: var(--text); font: 12px/1.8 "Geist Mono", monospace; }
+  .agent-preview textarea { display: block; box-sizing: border-box; width: 100%; height: 260px; min-height: 160px; resize: vertical; margin-top: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: #130826; color: var(--text); font: 12px/1.8 "Geist Mono", monospace; }
   .prompt-status { margin: 10px 0 0; color: var(--text); font-size: 12px; line-height: 20px; }
   .prompt-status:empty { display: none; }
   @media (max-width: 480px) { .agent-kit { padding: 16px; } .agent-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
@@ -223,7 +223,7 @@ VERIFY AND HAND OFF
   .prose :global(blockquote) { margin: 28px 0; padding: 4px 24px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; }
   .prose :global(hr) { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
   .prose :global(code) { background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 5px; font-size: .85em; color: var(--text); font-family: "Geist Mono", monospace; box-decoration-break: clone; }
-  .prose :global(pre) { position: relative; background: #101012; border: 1px solid var(--line-strong); border-radius: 8px; padding: 66px 24px 24px; overflow-x: auto; line-height: 1.8; margin: 24px 0; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .prose :global(pre) { position: relative; background: #1a0d33; border: 1px solid var(--line-strong); border-radius: 8px; padding: 66px 24px 24px; overflow-x: auto; line-height: 1.8; margin: 24px 0; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   .prose :global(pre::before) { content: attr(data-lang); box-sizing: border-box; position: absolute; left: 0; top: 0; width: 100%; height: 46px; border-bottom: 1px solid var(--line); padding: 12px 24px; background: var(--surface-raised); font: 12px/22px "Geist Mono", monospace; color: var(--text); }
   .prose :global(pre code) { display: block; width: max-content; min-width: 100%; background: none; border: 0; padding: 0; color: var(--text); font-size: 13px; font-family: "Geist Mono", monospace; }
   .prose :global(.copy) { position: absolute; top: 7px; right: 12px; width: 32px; height: 32px; padding: 0; border-radius: 5px; background: var(--surface-raised); border: 1px solid var(--line-strong); cursor: pointer; font-size: 0; color: var(--text); }

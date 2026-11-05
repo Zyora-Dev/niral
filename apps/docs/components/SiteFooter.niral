@@ -32,7 +32,7 @@
   a { color: inherit; text-decoration: none; }
   a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
   h3, p { margin: 0; }
-  .site-footer { --gold: #f2b544; background: #000; color: #fafafa; scroll-margin-top: 76px; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; }
+  .site-footer { --gold: #f2b544; background: #0d0520; color: #fafafa; scroll-margin-top: 76px; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; }
   .footer-inner { width: min(1120px, calc(100% - 96px)); margin-inline: auto; padding-top: 96px; }
   .footer-directory { display: grid; grid-template-columns: 150px minmax(0, 1fr) 220px; gap: 48px; align-items: start; }
   .footer-symbol { display: block; position: relative; width: 120px; max-width: 100%; margin-bottom: 26px; }
@@ -46,13 +46,13 @@
   .footer-contact address { display: grid; gap: 10px; font-style: normal; }
   .footer-contact address a { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
   .footer-contact img { flex: 0 0 15px; }
-  .footer-email { background: #1c1c1c; border: 1px solid #414141; }
+  .footer-email { background: #241739; border: 1px solid #4a3570; }
   .footer-email img { filter: invert(1); }
   .footer-email:hover { border-color: var(--gold); }
-  .footer-whatsapp { background: var(--gold); color: #080808; border: 1px solid var(--gold); }
+  .footer-whatsapp { background: var(--gold); color: #15092a; border: 1px solid var(--gold); }
   .footer-whatsapp img:last-child { margin-left: auto; }
   .footer-whatsapp:hover { background: #ffd17a; }
-  .footer-copyright { border-top: 1px solid #343434; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
+  .footer-copyright { border-top: 1px solid #3a2a55; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
   @media (max-width: 1100px) {
     .footer-directory { grid-template-columns: 1fr 220px; gap: 40px; }
     .footer-links { grid-column: 1 / -1; grid-row: 2; gap: 24px; }

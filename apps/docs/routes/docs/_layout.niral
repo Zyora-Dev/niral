@@ -129,15 +129,15 @@ export async function searchDocs(q) {
 </div>
 
 <style>
-  :global(body) { margin: 0; background: #080809; color: #fafafa; }
-  :global(::selection) { background: #f2b544; color: #080809; }
-  .wrap { --surface: #18181b; --surface-raised: #232326; --line: #363639; --line-strong: #505054; --text: #fafafa; --accent: #f2b544; --accent-hover: #ffd17b; --accent-soft: #f2b54414; display: grid; grid-template-columns: 244px minmax(0, 1fr); max-width: 1520px; margin: auto; min-height: 100vh; font-family: "Geist", sans-serif; letter-spacing: 0; }
+  :global(body) { margin: 0; background: #15092a; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #15092a; }
+  .wrap { --surface: #241444; --surface-raised: #2e1a55; --line: #3a2a55; --line-strong: #60478f; --text: #fafafa; --accent: #f2b544; --accent-hover: #ffd17b; --accent-soft: #f2b54414; display: grid; grid-template-columns: 244px minmax(0, 1fr); max-width: 1520px; margin: auto; min-height: 100vh; font-family: "Geist", sans-serif; letter-spacing: 0; }
   .wrap :global(*) { box-sizing: border-box; }
   .wrap :global(button), .wrap :global(input), .wrap :global(select) { font-family: "Geist", sans-serif; }
   .wrap :global(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
-  .skip-link { position: fixed; top: -80px; left: 24px; z-index: 100; padding: 12px 20px; background: var(--accent); color: #080809; border-radius: 6px; }
+  .skip-link { position: fixed; top: -80px; left: 24px; z-index: 100; padding: 12px 20px; background: var(--accent); color: #15092a; border-radius: 6px; }
   .skip-link:focus { top: 12px; }
-  .topbar { grid-column: 1 / -1; display: grid; grid-template-columns: 220px minmax(200px, 560px) 1fr; align-items: center; gap: 24px; position: sticky; top: 0; z-index: 70; height: 80px; padding: 0 32px; border-bottom: 1px solid var(--line); background: #0b0b0df5; backdrop-filter: blur(16px); }
+  .topbar { grid-column: 1 / -1; display: grid; grid-template-columns: 220px minmax(200px, 560px) 1fr; align-items: center; gap: 24px; position: sticky; top: 0; z-index: 70; height: 80px; padding: 0 32px; border-bottom: 1px solid var(--line); background: #15092af5; backdrop-filter: blur(16px); }
   .brand { display: flex; align-items: center; gap: 16px; text-decoration: none; width: fit-content; }
   .brand-logo { display: block; height: 28px; width: auto; }
   .docs-tag { color: var(--text); border-left: 1px solid var(--line-strong); padding-left: 16px; font-size: 14px; }
@@ -159,7 +159,7 @@ export async function searchDocs(q) {
   .result b { color: var(--text); font-size: 14px; font-weight: 600; }
   .result .sec { color: var(--accent); font-size: 13px; }
   .result .snippet { display: block; color: var(--text); font-size: 13px; margin-top: 8px; line-height: 1.65; overflow-wrap: anywhere; }
-  .sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 24px 16px; position: sticky; top: 80px; align-self: start; height: calc(100dvh - 80px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; background: linear-gradient(160deg, #171719, #0b0b0c); }
+  .sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 24px 16px; position: sticky; top: 80px; align-self: start; height: calc(100dvh - 80px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; background: linear-gradient(160deg, #1d0f38, #120726); }
   .sidebar nav { display: flex; flex-direction: column; gap: 20px; }
   .sidebar-heading { display: flex; gap: 10px; align-items: center; padding: 0 12px 20px; margin-bottom: 20px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; font-weight: 600; }
   .book-icon { display: block; width: 20px; height: 20px; flex: none; color: var(--text); }
@@ -173,7 +173,7 @@ export async function searchDocs(q) {
   .aside-foot { display: flex; justify-content: space-between; gap: 12px; margin: 24px 12px 0; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; }
   .aside-foot a { color: var(--text); text-decoration: none; }
   .aside-foot a:hover { color: var(--accent); }
-  .content { padding: 48px 48px 80px; min-width: 0; background: linear-gradient(135deg, #232326 0, #101012 600px, #080809 1400px); }
+  .content { padding: 48px 48px 80px; min-width: 0; background: linear-gradient(135deg, #2e1a55 0, #1a0d33 600px, #15092a 1400px); }
   .hamburger, .scrim { display: none; }
   @media (max-width: 1200px) {
     .topbar { grid-template-columns: 188px minmax(180px, 1fr) auto; gap: 24px; padding: 0 24px; }

@@ -357,7 +357,7 @@
   .footer-email { background: #241739; border: 1px solid #4a3570; }
   .footer-email img { filter: invert(1); }
   .footer-email:hover { border-color: var(--gold); }
-  .footer-whatsapp { background: var(--gold); color: #080808; border: 1px solid var(--gold); }
+  .footer-whatsapp { background: var(--gold); color: #15092a; border: 1px solid var(--gold); }
   .footer-whatsapp img:last-child { margin-left: auto; }
   .footer-whatsapp:hover { background: #ffd17a; }
   .footer-copyright { border-top: 1px solid #3a2a55; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
@@ -490,7 +490,7 @@
     .terminal-foot { padding-inline: 16px; font-size: 11px; }
     .terminal-foot img { flex-shrink: 0; }
     .growth-path { grid-template-columns: 1fr; gap: 24px; margin-top: 36px; }
-    .growth-path a + a { padding-top: 24px; border-top: 1px solid #343436; }
+    .growth-path a + a { padding-top: 24px; border-top: 1px solid #3a2a55; }
     .resource-card { padding: 24px; grid-template-columns: 28px 1fr; gap: 0 16px; }
     .resource-card h3 { font-size: 20px; }
     .resource-card p { font-size: 13px; }

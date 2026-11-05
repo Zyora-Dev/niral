@@ -24,7 +24,7 @@
   <title>Contact Niral | Questions, Feedback and Partnerships</title>
   <meta name="description" content="Contact the Niral team about the web framework, technical questions, feedback or partnerships. Send a message, email us or connect through WhatsApp." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
-  <meta name="theme-color" content="#090909" />
+  <meta name="theme-color" content="#15092a" />
   <link rel="canonical" href="https://niral.site/contact" />
   <link rel="icon" href="/favicon.png" type="image/png" />
   <meta property="og:type" content="website" />
@@ -80,35 +80,35 @@
 
 <style>
   :global(html) { color-scheme: dark; }
-  :global(body) { margin: 0; background: #090909; color: #fafafa; }
-  :global(::selection) { background: #f2b544; color: #090909; }
+  :global(body) { margin: 0; background: #15092a; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #15092a; }
   * { box-sizing: border-box; }
-  .contact-page { --gold: #f2b544; min-height: 100vh; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; background: linear-gradient(120deg, #202023, #0d0d0f 65%, #090909); }
+  .contact-page { --gold: #f2b544; min-height: 100vh; font: 15px/1.6 "Geist", sans-serif; letter-spacing: 0; background: linear-gradient(120deg, #2e1a55, #1a0d33 65%, #15092a); }
   h1, h2, p { margin: 0; }
   a { color: inherit; text-decoration: none; }
   a:hover { color: var(--gold); }
   a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
   .frame { width: min(1160px, calc(100% - 80px)); margin-inline: auto; }
-  .site-header { background: #090909; border-bottom: 1px solid #373739; }
+  .site-header { background: #15092a; border-bottom: 1px solid #3a2a55; }
   .navigation { display: flex; align-items: center; gap: 44px; width: min(1360px, calc(100% - 64px)); min-height: 76px; margin: auto; }
   .brand { display: block; position: relative; width: 110px; flex: 0 0 110px; }
   .brand img { display: block; width: 100%; height: auto; filter: brightness(0) invert(1); }
   .brand::after { content: ""; position: absolute; inset: 0; background: var(--gold); mask: url("/niral-logo.svg") center / 100% 100% no-repeat; clip-path: inset(0 65% 0 0); pointer-events: none; }
   .nav-links { display: flex; gap: 28px; font-size: 13px; }
   [aria-current="page"] { color: var(--gold); }
-  .get-started { display: inline-flex; gap: 20px; align-items: center; margin-left: auto; padding: 8px 16px; background: #fafafa; color: #090909; border-radius: 5px; font-size: 12px; }
-  .get-started:hover { color: #090909; background: var(--gold); }
+  .get-started { display: inline-flex; gap: 20px; align-items: center; margin-left: auto; padding: 8px 16px; background: #fafafa; color: #15092a; border-radius: 5px; font-size: 12px; }
+  .get-started:hover { color: #15092a; background: var(--gold); }
   .mobile-nav { display: none; }
-  .skip-link { position: absolute; left: 16px; top: -60px; z-index: 50; background: var(--gold); color: #090909; padding: 10px 16px; }
+  .skip-link { position: absolute; left: 16px; top: -60px; z-index: 50; background: var(--gold); color: #15092a; padding: 10px 16px; }
   .skip-link:focus { top: 12px; }
-  .page-heading { padding: 72px 0 48px; border-bottom: 1px solid #414144; }
+  .page-heading { padding: 72px 0 48px; border-bottom: 1px solid #4a3570; }
   .eyebrow { color: var(--gold); font: 12px/1.6 "Geist Mono", monospace; margin-bottom: 20px; }
   h1 { font-size: 60px; line-height: 1.1; font-weight: 550; margin-bottom: 24px; }
   h1 span { color: var(--gold); }
   .page-heading > p:last-child { font-size: 16px; line-height: 1.8; }
   .contact-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 80px; padding-block: 52px 80px; }
   .contact-details { padding-top: 8px; }
-  .direct-contact { display: flex; align-items: flex-start; gap: 18px; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid #414144; }
+  .direct-contact { display: flex; align-items: flex-start; gap: 18px; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid #4a3570; }
   .direct-contact > img { margin-top: 3px; flex-shrink: 0; }
   .direct-contact img, .docs-link img, .page-footer > a:last-child img, .success-message img, .mobile-nav img { filter: invert(1); }
   .direct-contact h2 { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
@@ -123,7 +123,7 @@
   .field { margin-bottom: 22px; min-width: 0; }
   label { display: block; margin-bottom: 10px; font-size: 13px; }
   input, select, textarea, button { font: inherit; }
-  input, select, textarea { width: 100%; min-width: 0; border: 1px solid #555559; border-radius: 5px; background: #141416; color: #fafafa; padding: 13px 14px; font-size: 14px; }
+  input, select, textarea { width: 100%; min-width: 0; border: 1px solid #60478f; border-radius: 5px; background: #1d0f38; color: #fafafa; padding: 13px 14px; font-size: 14px; }
   input, select { min-height: 48px; }
   textarea { display: block; resize: vertical; min-height: 160px; max-height: 500px; }
   input::placeholder, textarea::placeholder { color: #b4b4bb; }
@@ -134,14 +134,14 @@
   .website-field { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .submit-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .submit-row p { font-size: 12px; line-height: 1.8; }
-  button { display: inline-flex; align-items: center; justify-content: center; gap: 18px; min-height: 48px; flex-shrink: 0; padding: 12px 20px; border: 1px solid var(--gold); border-radius: 5px; background: var(--gold); color: #090909; font-size: 14px; font-weight: 500; cursor: pointer; }
+  button { display: inline-flex; align-items: center; justify-content: center; gap: 18px; min-height: 48px; flex-shrink: 0; padding: 12px 20px; border: 1px solid var(--gold); border-radius: 5px; background: var(--gold); color: #15092a; font-size: 14px; font-weight: 500; cursor: pointer; }
   button:hover { background: #ffd17a; }
   button:disabled { opacity: .7; cursor: wait; }
   .success-message { padding: 48px 0; }
   .success-message h2 { margin: 24px 0 16px; font-size: 30px; font-weight: 500; }
   .success-message p { line-height: 1.9; }
   .success-message a { display: inline-flex; align-items: center; gap: 14px; margin-top: 32px; font-size: 14px; }
-  .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid #414144; padding-block: 24px; font-size: 12px; }
+  .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid #4a3570; padding-block: 24px; font-size: 12px; }
   .page-footer > a:last-child { display: inline-flex; align-items: center; gap: 12px; }
   @media (max-width: 1000px) {
     .contact-layout { grid-template-columns: 260px minmax(0, 1fr); gap: 40px; }
@@ -154,16 +154,16 @@
     .navigation { min-height: 68px; gap: 16px; }
     .nav-links { display: none; }
     .mobile-nav { display: block; }
-    .mobile-nav summary { display: grid; place-items: center; width: 40px; height: 40px; list-style: none; border: 1px solid #555559; border-radius: 5px; cursor: pointer; }
+    .mobile-nav summary { display: grid; place-items: center; width: 40px; height: 40px; list-style: none; border: 1px solid #60478f; border-radius: 5px; cursor: pointer; }
     .mobile-nav summary::-webkit-details-marker { display: none; }
-    .mobile-nav > div { position: absolute; top: 67px; right: 20px; left: 20px; z-index: 10; padding: 8px; background: #19191c; border: 1px solid #555559; border-radius: 5px; }
+    .mobile-nav > div { position: absolute; top: 67px; right: 20px; left: 20px; z-index: 10; padding: 8px; background: #241444; border: 1px solid #60478f; border-radius: 5px; }
     .mobile-nav > div a { display: block; padding: 12px 16px; }
     .page-heading { padding-block: 48px 32px; }
     h1 { font-size: 44px; }
     .page-heading > p:last-child { font-size: 14px; }
     .contact-layout { grid-template-columns: 1fr; gap: 40px; padding-block: 36px 56px; }
     .form-section { grid-row: 1; }
-    .contact-details { border-top: 1px solid #414144; padding-top: 36px; }
+    .contact-details { border-top: 1px solid #4a3570; padding-top: 36px; }
     .field-row { grid-template-columns: 1fr 1fr; gap: 20px; }
     .submit-row { flex-direction: row; align-items: center; }
     .page-footer { flex-wrap: wrap; }

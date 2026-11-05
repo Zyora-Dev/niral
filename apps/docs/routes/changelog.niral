@@ -72,7 +72,7 @@ export async function load() {
   <title>Niral Changelog | Framework Updates and Fixes</title>
   <meta name="description" content="Follow Niral framework updates, new capabilities and fixes from the repository's commit history. Browse changes by month and open the source on GitHub." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
-  <meta name="theme-color" content="#090909" />
+  <meta name="theme-color" content="#15092a" />
   <link rel="canonical" href="https://niral.site/changelog" />
   <link rel="icon" href="/favicon.png" type="image/png" />
   <meta property="og:type" content="website" />
@@ -152,29 +152,29 @@ export async function load() {
 
 <style>
   :global(html) { color-scheme: dark; }
-  :global(body) { margin: 0; background: #080809; color: #fafafa; }
-  :global(::selection) { background: #f2b544; color: #080809; }
+  :global(body) { margin: 0; background: #15092a; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #15092a; }
   * { box-sizing: border-box; }
-  main { --gold: #f2b544; --line: #363639; min-height: 100vh; font-family: "Geist", sans-serif; letter-spacing: 0; line-height: 1.6; background: linear-gradient(125deg, #232326, #101012 1000px, #080809 2000px); }
+  main { --gold: #f2b544; --line: #3a2a55; min-height: 100vh; font-family: "Geist", sans-serif; letter-spacing: 0; line-height: 1.6; background: linear-gradient(125deg, #2e1a55, #1a0d33 1000px, #15092a 2000px); }
   a { color: inherit; text-decoration: none; }
   a:hover { color: var(--gold); }
   a:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
-  .nav { position: sticky; top: 0; z-index: 50; background: #0b0b0df5; border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
+  .nav { position: sticky; top: 0; z-index: 50; background: #15092af5; border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
   .nav-inner { max-width: 1184px; min-height: 80px; margin: auto; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; position: relative; gap: 24px; }
   .mark { display: flex; }
   .brand-logo { display: block; height: 30px; width: auto; }
   .nav-links { display: flex; align-items: center; gap: 30px; }
   .nav-links a { font-size: 14px; }
   a[aria-current="page"] { color: var(--gold); }
-  .nav-cta { background: #232326; border: 1px solid #505054; border-radius: 6px; padding: 10px 18px; font-weight: 500; }
+  .nav-cta { background: #2e1a55; border: 1px solid #60478f; border-radius: 6px; padding: 10px 18px; font-weight: 500; }
   .nav-cta:hover { border-color: var(--gold); }
   .mobile-nav { display: none; }
   .mobile-nav summary { list-style: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
   .mobile-nav summary::-webkit-details-marker { display: none; }
   .mobile-nav img, .eyebrow img, .release-meta img { filter: invert(1); }
-  .mobile-links { position: absolute; top: calc(100% - 1px); left: 16px; right: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px; background: #18181b; border: 1px solid #505054; border-radius: 8px; box-shadow: 0 20px 40px #0008; }
+  .mobile-links { position: absolute; top: calc(100% - 1px); left: 16px; right: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px; background: #241444; border: 1px solid #60478f; border-radius: 8px; box-shadow: 0 20px 40px #0008; }
   .mobile-links a { padding: 12px 16px; font-size: 15px; border-radius: 4px; }
-  .mobile-links a:hover { background: #303033; }
+  .mobile-links a:hover { background: #3d2a60; }
   .hero { max-width: 1184px; margin: auto; padding: 72px 32px 0; }
   .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--gold); font-size: 13px; font-weight: 500; margin: 0 0 22px; }
   h1 { font-size: 64px; font-weight: 500; line-height: 1.12; margin: 0 0 24px; }
@@ -191,14 +191,14 @@ export async function load() {
   .month-heading { align-self: start; position: sticky; top: 112px; padding-top: 4px; }
   .month h2 { font-size: 20px; font-weight: 500; line-height: 1.3; margin: 0 0 12px; }
   .month-heading p { margin: 0; font-size: 13px; }
-  .month ul { margin: 0; padding: 0 0 0 28px; list-style: none; border-left: 1px solid #505054; }
+  .month ul { margin: 0; padding: 0 0 0 28px; list-style: none; border-left: 1px solid #60478f; }
   .month li { position: relative; display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px 20px; align-items: center; padding: 24px 0; border-bottom: 1px solid var(--line); }
   .month li:first-child { padding-top: 0; }
   .month li:last-child { border-bottom: 0; }
   .month li::before { content: ""; position: absolute; left: -33px; top: 35px; width: 7px; height: 7px; background: var(--gold); border: 1px solid var(--gold); border-radius: 50%; }
   .month li:first-child::before { top: 11px; }
   .day { font: 12px "Geist Mono", monospace; white-space: nowrap; }
-  .area { justify-self: start; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 4px; background: #232326; border: 1px solid #505054; overflow-wrap: anywhere; max-width: 100%; }
+  .area { justify-self: start; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 4px; background: #2e1a55; border: 1px solid #60478f; overflow-wrap: anywhere; max-width: 100%; }
   .text { grid-column: 1 / -1; grid-row: 2; line-height: 1.75; font-size: 16px; min-width: 0; overflow-wrap: anywhere; max-width: 720px; }
   .hash { display: inline-flex; align-items: center; gap: 8px; grid-column: 3; grid-row: 1; font: 12px "Geist Mono", monospace; }
   .hash span { color: var(--gold); }
