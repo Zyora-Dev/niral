@@ -1,0 +1,100 @@
+{
+  "State declaration": {
+    "prefix": "state",
+    "description": "Top-level reactive state.",
+    "body": ["state ${1:count} = ${2:0}$0"]
+  },
+  "Derived declaration": {
+    "prefix": "derive",
+    "description": "A value recomputed from state.",
+    "body": ["derive ${1:doubled} = ${2:count * 2}$0"]
+  },
+  "Input declaration": {
+    "prefix": "input",
+    "description": "A value supplied by the host.",
+    "body": ["input ${1:label}: ${2:string}$0"]
+  },
+  "Function": {
+    "prefix": "fn",
+    "description": "A named function with annotated parameters.",
+    "body": [
+      "function ${1:name}(${2:value}: ${3:number}): ${4:number} {",
+      "  $0",
+      "}"
+    ]
+  },
+  "Exported function": {
+    "prefix": "exfn",
+    "description": "An exported function.",
+    "body": [
+      "export function ${1:name}(${2:value}: ${3:number}): ${4:number} {",
+      "  $0",
+      "}"
+    ]
+  },
+  "Async function": {
+    "prefix": "afn",
+    "description": "An async function.",
+    "body": [
+      "async function ${1:name}(${2:value}: ${3:string}): Promise<${4:void}> {",
+      "  $0",
+      "}"
+    ]
+  },
+  "Class": {
+    "prefix": "class",
+    "description": "A class with a constructor.",
+    "body": [
+      "class ${1:Name} {",
+      "  constructor(${2:value}: ${3:number}) {",
+      "    $0",
+      "  }",
+      "}"
+    ]
+  },
+  "Interface": {
+    "prefix": "interface",
+    "description": "An interface declaration.",
+    "body": ["interface ${1:Name} {", "  ${2:field}: ${3:string}", "}"]
+  },
+  "Type alias": {
+    "prefix": "type",
+    "description": "A type alias.",
+    "body": ["type ${1:Name} = ${2:string}$0"]
+  },
+  "Generic type alias": {
+    "prefix": "typegeneric",
+    "description": "A generic type alias.",
+    "body": ["type ${1:Box}<${2:T}> = { ${3:value}: ${2:T} }$0"]
+  },
+  "Import": {
+    "prefix": "import",
+    "description": "Import named values from a relative .nrs module.",
+    "body": ["import { ${1:name} } from \"./${2:module}.nrs\"$0"]
+  },
+  "Runtime contract": {
+    "prefix": "contract",
+    "description": "Check an unknown value against a type at runtime.",
+    "body": ["contract<${1:Type}>(${2:value})$0"]
+  },
+  "For loop": {
+    "prefix": "for",
+    "description": "A for loop.",
+    "body": ["for (let ${1:i} = 0; ${1:i} < ${2:items}.length; ${1:i}++) {", "  $0", "}"]
+  },
+  "While loop": {
+    "prefix": "while",
+    "description": "A while loop.",
+    "body": ["while (${1:condition}) {", "  $0", "}"]
+  },
+  "If/else": {
+    "prefix": "ifelse",
+    "description": "A conditional with an else branch.",
+    "body": ["if (${1:condition}) {", "  $2", "} else {", "  $0", "}"]
+  },
+  "Main entry": {
+    "prefix": "main",
+    "description": "An exported main() — the playground and host call this.",
+    "body": ["export function main() {", "  $0", "}"]
+  }
+}

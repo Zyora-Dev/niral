@@ -1,0 +1,152 @@
+{
+  "Component scaffold": {
+    "prefix": "niral",
+    "description": "A full .niral component: server load, script, markup and scoped styles.",
+    "body": [
+      "<server>",
+      "  export async function load({ params, locals }) {",
+      "    return { ${1:items}: [] }",
+      "  }",
+      "</server>",
+      "",
+      "<script>",
+      "  let { ${1:items} } = \\$props",
+      "  let list = \\$state(${1:items})",
+      "</script>",
+      "",
+      "<h1>${2:Hello}</h1>",
+      "",
+      "<style>",
+      "  h1 { color: ${3:#34d399}; }",
+      "</style>",
+      ""
+    ]
+  },
+  "Server block": {
+    "prefix": "server",
+    "description": "A <server> block — runs only on the server.",
+    "body": ["<server>", "  $0", "</server>"]
+  },
+  "SSR loader": {
+    "prefix": "load",
+    "description": "Export load() to provide SSR data for this page.",
+    "body": [
+      "export async function load({ params, locals }) {",
+      "  return { $0 }",
+      "}"
+    ]
+  },
+  "Server RPC": {
+    "prefix": "rpc",
+    "description": "An exported server function, callable from the client by name.",
+    "body": [
+      "export async function ${1:save}(${2:value}) {",
+      "  $0",
+      "  return true",
+      "}"
+    ]
+  },
+  "Form action": {
+    "prefix": "action",
+    "description": "A form action target — works without JavaScript.",
+    "body": [
+      "export async function ${1:save}(fields) {",
+      "  $0",
+      "  return { ok: true }",
+      "}"
+    ]
+  },
+  "SQL query": {
+    "prefix": "sql",
+    "description": "Parameterised Postgres query (never concatenate values).",
+    "body": ["await sql.query(\"${1:select * from posts where id = \\$1}\", [${2:id}])$0"]
+  },
+  "Publish to a channel": {
+    "prefix": "publish",
+    "description": "Fan out a realtime message to subscribers.",
+    "body": ["publish(\"${1:channel}\", ${2:data})$0"]
+  },
+  "Enqueue a job": {
+    "prefix": "enqueue",
+    "description": "Queue a durable background job.",
+    "body": ["await enqueue(\"${1:job}\", ${2:data}, { delay: ${3:0} })$0"]
+  },
+  "Script block": {
+    "prefix": "script",
+    "description": "A client <script> block.",
+    "body": ["<script>", "  $0", "</script>"]
+  },
+  "Static script block": {
+    "prefix": "scriptstatic",
+    "description": "Zero-JavaScript server-rendered page.",
+    "body": ["<script mode=\"static\">", "  $0", "</script>"]
+  },
+  "Streaming script block": {
+    "prefix": "scriptstream",
+    "description": "Streaming SSR — early head flush and out-of-order {#await}.",
+    "body": ["<script stream>", "  $0", "</script>"]
+  },
+  "State rune": {
+    "prefix": "state",
+    "description": "Reactive state.",
+    "body": ["let ${1:value} = \\$state(${2:0})$0"]
+  },
+  "Derived rune": {
+    "prefix": "derived",
+    "description": "A value recomputed from state.",
+    "body": ["let ${1:total} = \\$derived(${2:items.length})$0"]
+  },
+  "Props rune": {
+    "prefix": "props",
+    "description": "Route params plus load() data.",
+    "body": ["let { ${1:data} } = \\$props$0"]
+  },
+  "Live subscription": {
+    "prefix": "live",
+    "description": "Subscribe to a realtime channel.",
+    "body": ["live(\"${1:channel}\", (${2:message}) => {", "  $0", "})"]
+  },
+  "If block": {
+    "prefix": "if",
+    "description": "Conditional template block.",
+    "body": ["{#if ${1:condition}}", "  $0", "{/if}"]
+  },
+  "If/else block": {
+    "prefix": "ifelse",
+    "description": "Conditional template block with an else branch.",
+    "body": ["{#if ${1:condition}}", "  $2", "{:else}", "  $3", "{/if}"]
+  },
+  "For block": {
+    "prefix": "for",
+    "description": "Keyed list rendering.",
+    "body": ["{#for ${1:item} of ${2:items} key ${1:item}.id}", "  $0", "{/for}"]
+  },
+  "Await block": {
+    "prefix": "await",
+    "description": "Async rendering — streams out of order on a <script stream> page.",
+    "body": [
+      "{#await ${1:promise}}",
+      "  ${2:Loading…}",
+      "{:then ${3:value}}",
+      "  $4",
+      "{:catch ${5:error}}",
+      "  $0",
+      "{/await}"
+    ]
+  },
+  "Head block": {
+    "prefix": "head",
+    "description": "Document head for this page.",
+    "body": ["<head>", "  <title>${1:Page}</title>", "</head>"]
+  },
+  "Style block": {
+    "prefix": "style",
+    "description": "Styles scoped to this component.",
+    "body": ["<style>", "  $0", "</style>"]
+  },
+  "Layout": {
+    "prefix": "layout",
+    "description": "A _layout.niral wrapper rendering its children.",
+    "body": ["<script>", "  $1", "</script>", "", "<slot/>", ""]
+  }
+}

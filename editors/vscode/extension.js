@@ -16,7 +16,26 @@ let proc = null;
 let nextId = 1;
 const pending = new Map(); // id → resolve
 let diagnostics = null;
+let output = null;
+let status = null;
 const languages = ["niral", "niralscript"];
+
+function log(line) {
+  output?.appendLine(`[${new Date().toISOString().slice(11, 19)}] ${line}`);
+}
+
+let lastStatus = { icon: "circle-outline", tooltip: "Niral" };
+
+function setStatus(icon, tooltip) {
+  if (icon) lastStatus = { icon, tooltip };
+  if (!status) return;
+  status.text = `$(${lastStatus.icon}) Niral`;
+  status.tooltip = lastStatus.tooltip;
+  const active = vscode.window.activeTextEditor;
+  const relevant = active && languages.includes(active.document.languageId);
+  if (relevant && vscode.workspace.getConfiguration("niral").get("showStatusBar", true)) status.show();
+  else status.hide();
+}
 
 function findServer() {
   const configured = vscode.workspace.getConfiguration("niral").get("serverPath");
@@ -34,14 +53,16 @@ function findServer() {
 }
 
 function send(msg) {
+  if (!proc?.stdin.writable) return false;
   const body = Buffer.from(JSON.stringify(msg), "utf8");
   proc.stdin.write(`Content-Length: ${body.length}\r\n\r\n`);
   proc.stdin.write(body);
+  return true;
 }
 
 function request(method, params) {
   const id = nextId++;
-  send({ jsonrpc: "2.0", id, method, params });
+  if (!send({ jsonrpc: "2.0", id, method, params })) return Promise.resolve(null);
   return new Promise((resolve) => {
     pending.set(id, resolve);
     setTimeout(() => {
@@ -117,28 +138,91 @@ function syncDoc(doc, isOpen) {
   }
 }
 
-function activate(context) {
-  const serverPath = findServer();
-  diagnostics = vscode.languages.createDiagnosticCollection("niral");
-  context.subscriptions.push(diagnostics);
+function stopServer() {
+  pending.clear();
+  diagnostics?.clear();
+  const dying = proc;
+  proc = null;
+  try {
+    dying?.kill();
+  } catch {
+    /* already gone */
+  }
+}
 
-  if (!serverPath) {
-    vscode.window.showWarningMessage(
-      "Niral: couldn't find the niral CLI — set `niral.serverPath` to <niral>/bin/niral.js for diagnostics & completions. (Syntax highlighting still works.)"
-    );
+function startServer() {
+  stopServer();
+
+  if (!vscode.workspace.isTrusted) {
+    log("Workspace is not trusted — the language server stays off.");
+    setStatus("shield", "Niral: trust this workspace to enable diagnostics and completions.");
     return;
   }
 
-  proc = spawn(process.execPath, [serverPath, "lsp"], { stdio: ["pipe", "pipe", "inherit"] });
+  const serverPath = findServer();
+  if (!serverPath) {
+    log("Could not find the niral CLI. Set `niral.serverPath` to <niral>/bin/niral.js.");
+    setStatus("warning", "Niral: CLI not found. Highlighting and snippets still work — set `niral.serverPath` for diagnostics and completions.");
+    return;
+  }
+
+  log(`Starting language server: ${serverPath}`);
+  setStatus("loading~spin", "Niral: starting the language server…");
+
+  proc = spawn(process.execPath, [serverPath, "lsp"], { stdio: ["pipe", "pipe", "pipe"] });
+  const started = proc;
   attachReader(proc.stdout);
+  proc.stderr.on("data", (chunk) => log(String(chunk).trimEnd()));
+  proc.on("error", (err) => {
+    if (proc !== started) return;
+    log(`Failed to start: ${err.message}`);
+    setStatus("error", `Niral: the language server failed to start — ${err.message}`);
+  });
+  proc.on("exit", (code) => {
+    if (proc !== started) return;
+    proc = null;
+    log(`Language server exited with code ${code}.`);
+    setStatus("error", "Niral: the language server stopped. Run “Niral: Restart Language Server”.");
+  });
+
+  const config = vscode.workspace.getConfiguration("niral");
   request("initialize", {
     processId: process.pid, capabilities: {},
     workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map(folder => ({ uri: folder.uri.toString(), name: folder.name })),
-    initializationOptions: { niralscriptGlobals: vscode.workspace.getConfiguration("niral").get("niralscriptGlobals", []), niralscriptStrictTypes: vscode.workspace.getConfiguration("niral").get("niralscriptStrictTypes", false) },
-  }).then(() => notifyServer("initialized", {}));
+    initializationOptions: {
+      niralscriptGlobals: config.get("niralscriptGlobals", []),
+      niralscriptStrictTypes: config.get("niralscriptStrictTypes", false),
+    },
+  }).then(() => {
+    if (proc !== started) return;
+    notifyServer("initialized", {});
+    setStatus("check", `Niral: language server ready.\n${serverPath}`);
+    for (const doc of vscode.workspace.textDocuments) syncDoc(doc, true);
+  });
+}
+
+function activate(context) {
+  diagnostics = vscode.languages.createDiagnosticCollection("niral");
+  output = vscode.window.createOutputChannel("Niral");
+  status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  status.command = "niral.showOutput";
+  context.subscriptions.push(diagnostics, output, status);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("niral.restartServer", () => startServer()),
+    vscode.commands.registerCommand("niral.showOutput", () => output.show(true)),
+    vscode.commands.registerCommand("niral.openDocs", () =>
+      vscode.env.openExternal(vscode.Uri.parse("https://niral.site"))),
+    vscode.window.onDidChangeActiveTextEditor(() => setStatus()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("niral")) startServer();
+    }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => startServer())
+  );
+
+  startServer();
 
   // document lifecycle → server
-  for (const doc of vscode.workspace.textDocuments) syncDoc(doc, true);
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument((doc) => syncDoc(doc, true)),
     vscode.workspace.onDidChangeTextDocument((e) => syncDoc(e.document, false)),
@@ -200,11 +284,7 @@ function activate(context) {
 }
 
 function deactivate() {
-  try {
-    proc?.kill();
-  } catch {
-    /* already gone */
-  }
+  stopServer();
 }
 
 module.exports = { activate, deactivate };

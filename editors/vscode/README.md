@@ -1,78 +1,50 @@
 # Niral for VS Code
 
 Language support for [**Niral**](https://niral.site) — the zero-dependency,
-compiler-first full-stack web framework. Rich editing for `.niral` single-file
-components and dedicated `.nrs` NiralScript files.
+compiler-first full-stack web framework — and for **NiralScript**, its
+independent reactive language.
+
+Like the framework it serves, this extension ships **zero dependencies**: a single
+file that speaks LSP to `niral lsp` directly.
 
 ## Features
 
-- **Syntax highlighting** for `.niral` files — including embedded highlighting inside
-  `<server>` blocks (JavaScript, **Python**, **Ruby**, **Go**), `<script>`, `<style>` (CSS)
-  and `{ expressions }`.
-- **Completions, diagnostics and hover docs** via the built-in Niral language server
-  (`niral lsp`) — runes (`$state`, `$props`, `$derived`), server ambients
-  (`load`, `publish`, `live`, `enqueue`, `sql`, `session`, `user`) and routing.
-- **Bracket matching, auto-closing pairs and comment toggling** tuned for `.niral`.
-- **NiralScript (`.nrs`)** highlighting, compiler diagnostics, declared-signature
-  hover, keyword/top-level completions and Go to Definition for local and imported
-  names, classes, members and type aliases, including imported generic classes/aliases.
-  Receiver member completions include fields and methods. Open, unsaved changes
-  to existing imported files refresh dependent diagnostics.
-  `contract<Type>(value)` has highlighting, keyword help/completion and compiler
-  diagnostics for unsupported runtime schemas. Type aliases inside contracts use
-  the same navigation support as ordinary annotations.
+### `.niral` single-file components
 
-## NiralScript Source Extension
+- **Syntax highlighting** across every block, including embedded highlighting inside
+  `<server>` (JavaScript, Python, Ruby, Go), `<script>`, `<style>` and `{ expressions }`.
+- **Diagnostics, completions and hover** from the built-in language server — runes
+  (`$state`, `$props`, `$derived`), server ambients (`load`, `publish`, `live`,
+  `enqueue`, `sql`, `session`, `user`) and routing.
+- **Snippets** for component scaffolds, `load` and RPC exports, form actions,
+  `{#if}` / `{#for}` / `{#await}`, `<head>`, static and streaming script modes.
+- Bracket matching, auto-closing pairs and comment toggling tuned for the format.
 
-These additions are in the repository source extension; an updated Marketplace
-package has not been published. Load `editors/vscode` in an Extension Development
-Host and set `niral.serverPath` to this checkout's absolute `bin/niral.js` path.
-Use Node.js 22 or newer and open the project folder containing your `.nrs` files.
-The existing `.niral` language remains registered independently.
+### `.nrs` NiralScript files
 
-Standalone NiralScript has no implicit host globals. Set `niral.niralscriptGlobals`
-to an array such as `["print"]` only when your host actually supplies those names,
-then reload the window. This matches the standalone CLI's `--global` contract.
-Set `niral.niralscriptStrictTypes` to `true` and reload to require unknown/null
-narrowing, matching `nrs check --strict`. The default remains gradual checking.
+- Highlighting and compiler diagnostics from the standalone NiralScript compiler.
+- **Hover** on declared annotations and signatures.
+- **Go to Definition** for local and imported names, classes, members and type
+  aliases — including imported generic classes and aliases. Unsaved edits to an
+  imported file refresh the diagnostics of files that depend on it.
+- Member completions on a receiver, plus keyword and top-level completions.
+- Snippets for `state`, `derive`, `input`, functions, classes, interfaces, generic
+  type aliases and `contract<Type>(value)`.
 
-Hover shows declared annotations/signatures, not general inferred types.
-Symbol navigation requires a valid program. An unfinished simple receiver such as
-`counter.` recovers member completions; other invalid source receives keyword
-completions. Completions currently include top-level names, not every
-local lexical scope. Imports must be explicit relative `.nrs` paths to existing,
-non-private files within the project, without symlinks.
+### Commands
 
-## Extension Host Verification
+| Command | What it does |
+| --- | --- |
+| **Niral: Restart Language Server** | Relaunches `niral lsp`. |
+| **Niral: Show Language Server Output** | Opens the **Niral** output channel. |
+| **Niral: Open Documentation** | Opens [niral.site](https://niral.site). |
 
-`tests/vscode-host.cjs` exercises the actual VS Code extension API, including
-activation, diagnostics, hover, completions, local/imported definitions and
-unsaved dependency updates, generic aliases/calls, defaults/rest, loop control,
-type navigation, generic class constructors/member navigation and strict-checking
-recovery. It requires an isolated workspace
-named `niral-vscode-host-*` and sets `niral.serverPath` and strict checking only
-in that workspace. The expanded suite has nine check groups.
+A status bar item shows whether the server is running; click it for the log.
 
-From the repository root, set `CODE` to your installed VS Code desktop executable
-and run:
+## Requirements
 
-```sh
-test_workspace=$(mktemp -d /tmp/niral-vscode-host-XXXXXX)
-env -u ELECTRON_RUN_AS_NODE -u VSCODE_IPC_HOOK_CLI "$CODE" "$test_workspace" \
-  --user-data-dir="$test_workspace/profile" \
-  --extensions-dir="$test_workspace/extensions" \
-  --extensionDevelopmentPath="$PWD/editors/vscode" \
-  --extensionTestsPath="$PWD/tests/vscode-host.cjs" \
-  --disable-extensions --disable-workspace-trust --skip-welcome --skip-release-notes
-```
-
-This macOS/Linux command uses the installed application, without downloading a
-test runner or dependencies. A successful run writes `result.json` inside the
-temporary workspace and closes the test host. The suite passed on macOS with
-VS Code 1.143.1 (Extension Host Node24.21.0) on 26 October 2026. It does not
-publish or install the extension into your normal profile.
-
-## Getting started
+- **Node.js 22+** — Niral is Node standard library, end to end.
+- The `niral` CLI, which comes with your project:
 
 ```sh
 npx create-niral my-app
@@ -80,27 +52,51 @@ cd my-app
 niral dev
 ```
 
-Open any `.niral` file — highlighting and IntelliSense work immediately.
+Open any `.niral` file and IntelliSense works immediately. The extension finds the
+CLI in `node_modules`, in a sibling checkout, or at the project root. If yours lives
+somewhere else, point **`niral.serverPath`** at its `bin/niral.js`.
+
+Highlighting and snippets never depend on the CLI — only diagnostics, completions,
+hover and Go to Definition do.
+
+## Settings
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `niral.serverPath` | `""` | Path to `bin/niral.js`. Empty means auto-detect. |
+| `niral.niralscriptStrictTypes` | `false` | Require narrowing `unknown` and nullable values in standalone `.nrs` checking, matching `nrs check --strict`. |
+| `niral.niralscriptGlobals` | `[]` | Explicit host globals for standalone `.nrs` checking — the same contract as `nrs --global`. |
+| `niral.showStatusBar` | `true` | Show the status bar item for Niral files. |
+
+Standalone NiralScript has no implicit host globals; add names to
+`niral.niralscriptGlobals` only when your host actually supplies them.
+
+## Notes and limits
+
+- Hover reports declared annotations and signatures, not general inferred types.
+- Symbol navigation needs a parseable program. An unfinished receiver such as
+  `counter.` still recovers member completions; otherwise you get keyword completions.
+- Completions cover top-level names rather than every local lexical scope.
+- NiralScript imports must be explicit relative `.nrs` paths to existing, non-private
+  files inside the project, without symlinks.
+- The language server runs your project's own `niral` CLI, so it stays off until the
+  workspace is trusted.
 
 ## Great with AI agents
 
 Every Niral project scaffolds an `AGENTS.md`, so GitHub Copilot, Claude and Cursor
-understand the framework's conventions natively instead of guessing. New projects
-also recommend this extension automatically via `.vscode/extensions.json`, and agents
-can verify their own edits with `niral check` (the real TypeScript compiler) and `niral test`.
-
-## Requirements
-
-- **Node.js 22+** — Niral is Node standard library, end to end.
-- The `niral` CLI — installed with your project (`npx create-niral`) or globally.
-  If the extension can't find it, set **`niral.serverPath`** to `bin/niral.js`.
+follow the framework's conventions instead of guessing. New projects recommend this
+extension through `.vscode/extensions.json`, and agents can verify their own edits
+with `niral check` (the real TypeScript compiler) and `niral test`.
 
 ## Links
 
 - **Docs** — https://niral.site
 - **GitHub** — https://github.com/Zyora-Dev/niral
 - **Issues** — https://github.com/Zyora-Dev/niral/issues
+- **Changelog** — [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
-Built by [ZyoraLabs](https://zyoralabs.com). Zero dependencies, forever.
+Built by ZyoraLabs. The framework is MIT; the NiralScript compiler is Apache-2.0
+with a Runtime Library Exception. Zero dependencies, forever.

@@ -1,30 +1,45 @@
 {
   "name": "niral-vscode",
   "displayName": "Niral",
-  "description": "Language support for Niral and NiralScript: highlighting, diagnostics, completions, hover and .nrs definitions.",
+  "description": "Language support for Niral and NiralScript: highlighting, diagnostics, completions, hover, snippets and .nrs definitions.",
   "icon": "icon.png",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "zyoralabs",
   "license": "MIT",
   "homepage": "https://niral.site",
   "repository": { "type": "git", "url": "https://github.com/Zyora-Dev/niral.git", "directory": "editors/vscode" },
+  "bugs": { "url": "https://github.com/Zyora-Dev/niral/issues" },
   "engines": { "vscode": "^1.80.0" },
-  "categories": ["Programming Languages"],
+  "categories": ["Programming Languages", "Snippets", "Linters"],
+  "keywords": ["niral", "niralscript", "nrs", "fullstack", "compiler"],
+  "galleryBanner": { "color": "#120A24", "theme": "dark" },
   "main": "./extension.js",
-  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The language server runs the project's own niral CLI, so diagnostics and completions stay off until the workspace is trusted. Highlighting and snippets work either way."
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "The language server needs files on disk. Highlighting and snippets work in virtual workspaces."
+    }
+  },
+  "activationEvents": ["onLanguage:niral", "onLanguage:niralscript"],
   "contributes": {
     "languages": [
       {
         "id": "niral",
         "aliases": ["Niral", "niral"],
         "extensions": [".niral"],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": { "light": "./icon.png", "dark": "./icon.png" }
       },
       {
         "id": "niralscript",
         "aliases": ["NiralScript", "niralscript"],
         "extensions": [".nrs"],
-        "configuration": "./niralscript-language-configuration.json"
+        "configuration": "./niralscript-language-configuration.json",
+        "icon": { "light": "./icon.png", "dark": "./icon.png" }
       }
     ],
     "grammars": [
@@ -47,24 +62,39 @@
         }
       }
     ],
+    "snippets": [
+      { "language": "niral", "path": "./snippets/niral.json" },
+      { "language": "niralscript", "path": "./snippets/niralscript.json" }
+    ],
+    "commands": [
+      { "command": "niral.restartServer", "title": "Restart Language Server", "category": "Niral" },
+      { "command": "niral.showOutput", "title": "Show Language Server Output", "category": "Niral" },
+      { "command": "niral.openDocs", "title": "Open Documentation", "category": "Niral" }
+    ],
     "configuration": {
       "title": "Niral",
       "properties": {
+        "niral.serverPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the Niral CLI (`bin/niral.js`). Leave empty to auto-detect from `node_modules` or a sibling checkout.",
+          "scope": "machine-overridable"
+        },
         "niral.niralscriptStrictTypes": {
           "type": "boolean",
           "default": false,
-          "description": "Require narrowing unknown and nullable values in standalone .nrs checking. Reload the window after changes."
+          "markdownDescription": "Require narrowing `unknown` and nullable values in standalone `.nrs` checking, matching `nrs check --strict`."
         },
         "niral.niralscriptGlobals": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Explicit host globals for standalone .nrs checking (same contract as nrs --global). Reload the window after changes."
+          "markdownDescription": "Explicit host globals for standalone `.nrs` checking — the same contract as `nrs --global`."
         },
-        "niral.serverPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the niral CLI (bin/niral.js). Leave empty to auto-detect from node_modules or a sibling checkout."
+        "niral.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Niral language server status in the status bar while a Niral or NiralScript file is open."
         }
       }
     }
