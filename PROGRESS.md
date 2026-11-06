@@ -1,5 +1,35 @@
 # Niral Progress
 
+## 2026-11-06: Documentation publication and deployment
+
+- User explicitly authorized commit, push and deployment. Standalone README,
+  reference, LICENSE and metadata committed/pushed as `5e9971b`; framework docs,
+  README metadata, regression tests and records committed/pushed as `383d678`.
+  Both remote `main` commit IDs verified. No npm republish.
+- Production preflight: Node22.23.3, release `cfb4a188b4fe`, nginx/app/watchdog
+  active, NRestarts0, health200. Private checkpoint created at
+  `/root/niral-upgrade-checkpoints/20261106-niralscript-docs` (environment,
+  docs/framework source, previous release and pointer). Environment unchanged.
+- Only `lib/content.js`, `routes/niralscript.niral` and `sitemap.xml` transferred
+  into isolated `/var/tmp/niral-docs-20261106/framework/apps/docs`, using the
+  existing production compiler/framework. Build `c72d3023a0d1` passed integrity
+  (76 files), all 29 sitemap-page HTTP checks and 10 asset checks. No framework
+  or compiler upgrade; environment and private data were preserved.
+- First activation build matched `c72d3023a0d1` and passed integrity, but an
+  immediate health request preceded Node's listening socket. Automatic rollback
+  restored source/pointer to `cfb4a188b4fe`; old release health200, all services
+  active, NRestarts0 and unchanged env verified. Startup log showed listen one
+  second after systemd active. Use the new PID's listening log as the readiness
+  gate before health verification; reuse the already validated release.
+- Final activation succeeded after waiting for the new PID's listening log:
+  release `c72d3023a0d1`, PID141705, origin health200/ok, nginx/app/watchdog active,
+  NRestarts0 and normal startup/request logs. Environment byte-identical;
+  production framework file hashes unchanged; old release `cfb4a188b4fe` retained.
+- Public `/docs/niralscript` and `/niralscript` return200 with correct titles,
+  canonical URLs, Apache-2.0/Runtime Library Exception and CLI invocation.
+  Public sitemap includes the new guide; GitHub raw README confirms the expanded
+  content/license; live mobile guide screenshot verified. Deployment complete.
+
 ## 2026-11-06: NiralScript README, license and website documentation
 
 - Registry metadata now confirms public `niralscript@0.1.0`, `bin.nrs=cli.js`
@@ -13,7 +43,7 @@
   `/tmp/niralscript-docs-Go4i9W`. Added the missing LICENSE and changed that
   repository's manifest from MIT to Apache-2.0, including LICENSE in its archive.
   Compiler implementation was not changed. User authorized commit, push and
-  website deployment on 2026-11-06; publication is in progress.
+  website deployment on 2026-11-06; publication/deployment completed (see above).
 - Added `/docs/niralscript` to the existing guide index and sitemap. Expanded
   `/niralscript` with installation, CLI/API examples, runtime/license details and
   links. Corrected stale unpublished-extension and language-reference statements.
@@ -24,7 +54,8 @@
   pass whitespace checks. Desktop/mobile preview has no page-width overflow.
 - Local preview: `http://127.0.0.1:5199/docs/niralscript` and `/niralscript`.
   Restarted the existing preview task after the shared guide index changed.
-  No production build/deployment, framework push or new npm release performed.
+  Source commits/pushes and website deployment subsequently completed (see above).
+  No new npm release performed.
 
 ## 2026-11-06: NiralScript npm package preflight
 

@@ -22,13 +22,26 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- Documentation publication/deployment verified (2026-11-06): standalone source
+  commit `5e9971b`, framework docs commit `383d678`, both pushed and remote IDs
+  confirmed after explicit approval. Live release `c72d3023a0d1` passed integrity
+  (76 files), 29 staged sitemap-page HTTP and 10 asset checks; origin health200/ok,
+  PID141705, nginx/app/watchdog active, NRestarts0, normal logs. Public guide,
+  overview, canonical/title/license/CLI, sitemap and GitHub raw README verified;
+  live mobile screenshot checked. Private checkpoint
+  `/root/niral-upgrade-checkpoints/20261106-niralscript-docs` preserves source/env/
+  old release/pointer; old `cfb4a188b4fe` retained. Environment byte-identical and
+  framework hashes unchanged; no data changes or npm republish. First activation
+  rolled back because health preceded Node listen; new-PID listening-log gate
+  resolved readiness without code changes. Do not treat systemd active as HTTP ready.
+
 - NiralScript documentation verified locally (2026-11-06): complete package README,
   `/docs/niralscript` guide/sidebar/sitemap and expanded `/niralscript` overview.
   Registry confirms public0.1.0, `bin.nrs=cli.js`, Apache-2.0 (supersedes the pending
   preflight status below). Standalone checkout `/tmp/niralscript-docs-Go4i9W` has
   corrected README/reference/manifest and the missing Apache-2.0 LICENSE with
   Runtime Library Exception. User authorized commit/push and site deployment
-  on 2026-11-06; publication is in progress.
+  on 2026-11-06; publication/deployment completed as recorded above.
   Examples execute against both compilers, package-content checks and two focused
   rendered/metadata tests pass. Desktop/mobile local preview verified at
   `http://127.0.0.1:5199`. No compiler implementation change or npm republish.
