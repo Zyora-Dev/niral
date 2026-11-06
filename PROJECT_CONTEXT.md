@@ -22,6 +22,28 @@ are historical unless explicitly marked as verified with a date.
 
 ## Local Development
 
+- NiralScript documentation verified locally (2026-11-06): complete package README,
+  `/docs/niralscript` guide/sidebar/sitemap and expanded `/niralscript` overview.
+  Registry confirms public0.1.0, `bin.nrs=cli.js`, Apache-2.0 (supersedes the pending
+  preflight status below). Standalone checkout `/tmp/niralscript-docs-Go4i9W` has
+  corrected README/reference/manifest and the missing Apache-2.0 LICENSE with
+  Runtime Library Exception. User authorized commit/push and site deployment
+  on 2026-11-06; publication is in progress.
+  Examples execute against both compilers, package-content checks and two focused
+  rendered/metadata tests pass. Desktop/mobile local preview verified at
+  `http://127.0.0.1:5199`. No compiler implementation change or npm republish.
+
+- NiralScript npm preflight verified (2026-11-06): explicit compiler/LICENSE
+  allowlist, 13-file archive, executable CLI, zero dependencies. All81 language
+  and framework258 tests pass. Offline tarball installation verifies public
+  exports, CLI, generated reactivity/isolation/input updates, maps and rejection
+  paths. After user login, npm confirmed account zyoralabs and accepted the
+  public niralscript@0.1.0 upload. Processing pending: immediate registry check
+  E404; publish normalization warned bin[nrs] removed. Verify public availability
+  and CLI metadata before declaring complete; do not blindly republish 0.1.0.
+  No commit/push; no new package README or browser release gate.
+  Niral VS Code0.2.0 is publicly available and locally installed, verified.
+
 - Runtime contracts verified locally (2026-10-27): explicit
   `contract<Type>(value)`, shared generated strict validators, copied data and
   field-path errors. Four focused groups and real inline/external dev+prod HTTP

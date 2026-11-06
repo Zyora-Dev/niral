@@ -1,5 +1,53 @@
 # Niral Progress
 
+## 2026-11-06: NiralScript README, license and website documentation
+
+- Registry metadata now confirms public `niralscript@0.1.0`, `bin.nrs=cli.js`
+  and `license=Apache-2.0`. This resolves the processing/CLI metadata uncertainty
+  from the preflight below; no version was republished.
+- Added a complete package README: installation, executable naming, runnable
+  module/consumer, full CLI flags, compiler APIs, language capabilities, contracts,
+  runtime semantics, integrations, verification and Apache-2.0 Runtime Library
+  Exception. The local npm allowlist now includes README.
+- Prepared the same README/reference in the isolated standalone checkout
+  `/tmp/niralscript-docs-Go4i9W`. Added the missing LICENSE and changed that
+  repository's manifest from MIT to Apache-2.0, including LICENSE in its archive.
+  Compiler implementation was not changed. User authorized commit, push and
+  website deployment on 2026-11-06; publication is in progress.
+- Added `/docs/niralscript` to the existing guide index and sitemap. Expanded
+  `/niralscript` with installation, CLI/API examples, runtime/license details and
+  links. Corrected stale unpublished-extension and language-reference statements.
+- Verified real compiler execution of README and guide examples, including the
+  standalone repository's compiler. Archive content/license checks pass; the
+  focused guide-metadata and all-sitemap initial-HTML tests pass (2 tests), with
+  new rendered quickstart/license assertions in the existing test. Both diffs
+  pass whitespace checks. Desktop/mobile preview has no page-width overflow.
+- Local preview: `http://127.0.0.1:5199/docs/niralscript` and `/niralscript`.
+  Restarted the existing preview task after the shared guide index changed.
+  No production build/deployment, framework push or new npm release performed.
+
+## 2026-11-06: NiralScript npm package preflight
+
+- `niralscript@0.1.0` now explicitly allowlists compiler JavaScript and LICENSE.
+  npm's archive contains 13 files, including the manifest and executable `nrs` CLI;
+  runtime dependencies remain empty.
+- All 81 NiralScript tests and 258 framework tests pass with zero failures.
+- A real tarball installed offline into an isolated temporary directory passes
+  all three public exports, CLI help/check/compile, strict type-error rejection,
+  generated runtime state/derive behavior, instance isolation, input updates,
+  source maps and refusal to overwrite existing output. Temporary files removed.
+  Verified archive SHA1: `2196e2e089cf7df5c98522152b49beb9edbef5e5`.
+- After user login, `npm whoami` confirmed `zyoralabs` and npm accepted the public
+  upload with `+ niralscript@0.1.0`, using the verified archive SHA1 above.
+  npm reported processing; the immediate registry version check returned E404.
+  Public availability is not yet verified. npm also warned that its publish
+  normalization removed `bin[nrs]`; the final registry CLI mapping needs checking
+  before declaring the release complete. Do not blindly republish this version.
+  No commit or push. No new package README was created. Browser/full framework
+  release gates were not run for this package-only preflight.
+- Niral VS Code 0.2.0 was confirmed publicly available and locally installed
+  through the Marketplace API and VS Code CLI in this session.
+
 ## 2026-11-04: NiralScript generic constraints in bodies, generic arrows, recursive types
 
 For the second time the documented list of missing type features was stale. A probe

@@ -4,13 +4,176 @@
 
 export const GROUPS = [
   { name: "Start", slugs: ["getting-started", "components", "reactivity"] },
-  { name: "Build", slugs: ["routing", "styling", "typescript"] },
+  { name: "Build", slugs: ["routing", "styling", "typescript", "niralscript"] },
   { name: "Server", slugs: ["server", "api-routes", "database", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
   { name: "Ship", slugs: ["deployment", "zhost", "scaling", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
+  "niralscript": {
+    title: "NiralScript",
+    seoTitle: "NiralScript Compiler, CLI and Runtime | Niral Docs",
+    description: "Install NiralScript, check and compile .nrs files, use compiler APIs and standalone reactive modules, and understand runtime behavior and licensing.",
+    body: `
+NiralScript is an independent, experimental language with its own zero-dependency
+compiler. Niral is its first framework integration. The language uses
+\`.nrs\` files; Niral components still use \`.niral\`.
+
+## Install the standalone compiler
+
+Requires Node.js 22 or newer. In a standalone project:
+
+\`\`\`sh
+npm install --save-dev niralscript
+npx nrs --help
+\`\`\`
+
+For a one-off command without installing into your project:
+
+\`\`\`sh
+npx --package niralscript nrs --help
+\`\`\`
+
+The package is named \`niralscript\`; the executable is \`nrs\`. Niral itself
+vendors the compiler and does not need an additional runtime dependency.
+
+## Check and compile a module
+
+Save this as \`counter.nrs\`:
+
+\`\`\`text
+input initial: number
+state count: number = initial
+derive doubled: number = count * 2
+
+export function increment(): number {
+  count += 1
+  return doubled
+}
+\`\`\`
+
+\`\`\`sh
+npx nrs check counter.nrs --strict
+npx nrs compile counter.nrs --strict --out counter.mjs
+\`\`\`
+
+Compilation emits \`counter.mjs\` and \`counter.mjs.map\`. Neither command executes
+your source. The compiled module embeds the reactive primitives it needs; there
+is no separate runtime package to install.
+
+Save this consumer as \`consumer.mjs\`:
+
+\`\`\`js
+import { createInstance } from "./counter.mjs";
+
+const counter = createInstance({ initial: 2 });
+console.log(counter.values.count);       // 2
+console.log(counter.values.increment()); // 6
+counter.updateInputs({ initial: 8 });
+console.log(counter.values.initial);     // 8
+console.log(counter.values.count);       // 3
+\`\`\`
+
+\`\`\`sh
+node --enable-source-maps consumer.mjs
+\`\`\`
+
+## Command reference
+
+\`\`\`text
+nrs check <file.nrs>... [--root <directory>] [--global <name>] [--strict] [--json]
+nrs compile <file.nrs> --out <file.mjs> [--root <directory>] [--global <name>] [--strict] [--json]
+\`\`\`
+
+- \`check\` accepts one or more entry files and checks their imported module graphs.
+- \`compile\` accepts exactly one entry and requires \`--out\` ending in \`.mjs\`.
+- \`--root\` selects an existing project directory; input/output paths are relative
+  to it. The default is the current directory.
+- \`--strict\` requires narrowing of unknown and nullable values before typed use.
+- Repeat \`--global name\` to allow explicit host identifiers. Supply actual values
+  in the second argument of \`createInstance\`; the option does not inject them.
+- \`--json\` emits \`{ ok, entries, diagnostics }\` with original-source locations.
+- \`--help\` or \`-h\` shows usage. \`--\` treats subsequent arguments as entry paths.
+
+Exit codes: 0 success, 1 source/file errors, 2 invalid arguments. Imports must use
+explicit relative \`.nrs\` paths and stay inside the root. Source symlinks are
+rejected. Output parent directories must already exist. Existing output files
+are never overwritten. There is no watch mode or \`nrs build\` command.
+
+## Compiler APIs
+
+\`\`\`js
+import { parseNiralScript } from "niralscript";
+import { checkNiralScript } from "niralscript/check";
+import { compileNiralScript } from "niralscript/compile";
+
+const source = "state count: number = 1\\n derive doubled = count * 2";
+const program = parseNiralScript(source, "counter.nrs");
+checkNiralScript(source, "counter.nrs", { strictTypes: true });
+const { code, map, topLevelAwait } = compileNiralScript(source, "counter.nrs", {
+  strictTypes: true, file: "counter.mjs",
+});
+\`\`\`
+
+APIs do not read/write files or execute source. For imports, hosts provide
+\`resolveModule(specifier, importer, location)\`, returning \`{ filename, source }\`.
+The host owns filesystem policy. Source maps include original source text;
+do not expose them publicly when source must remain private.
+
+## Runtime behavior
+
+Each \`createInstance(inputs, globals, runtime?)\` initializes independent state
+and imported module scopes. \`values\` exposes entry bindings; state values are
+writable, while inputs and derives are readonly. \`updateInputs\` updates known
+inputs without resetting state or rerunning ordinary initializers.
+
+The embedded runtime is pull-based. Derives are read on demand, using
+instance-wide revision invalidation where caching is needed; simple derives can
+be inlined. Object/array reactivity is shallow: replace a binding to invalidate
+dependent values. Nested mutations do not automatically trigger updates.
+There are no subscriptions or DOM rendering in the default runtime.
+
+Top-level await makes the factory asynchronous; await \`createInstance\` before
+reading its values. Hosts can inject a runtime providing
+\`signal(initial) -> { get, set }\` and \`derived(compute) -> { get }\` as the third
+argument. Host integration must preserve immediate reads and instance isolation.
+
+## Types and external data
+
+Gradual annotations check primitives, unions, records, arrays, aliases,
+interfaces, function signatures, generics and recursive types. Annotations are
+erased: they do not validate external data at runtime.
+
+\`\`\`text
+type Order = { quantity: number, note?: string }
+
+export function readOrder(candidate: unknown): Order {
+  return contract<Order>(candidate)
+}
+\`\`\`
+
+Explicit contracts copy valid data and throw NRS081 with a field path on invalid
+data. They do not coerce values. Recursive, class, function, promise and unknown
+schemas cannot become runtime contracts.
+
+## Integrations and license
+
+Niral is the only implemented framework adapter. React/Next.js adapters and full
+JavaScript/TypeScript compatibility are not included. The published
+[Niral VS Code extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode)
+supports standalone files; language-server features require \`niral lsp\`.
+
+NiralScript is **Apache-2.0 with a Runtime Library Exception**. Emitted runtime
+code and compiled output may be distributed under your own terms; the compiler
+remains Apache-2.0. The Niral framework is separately MIT-licensed.
+
+[Full license](https://github.com/Zyora-Dev/niralscript/blob/main/LICENSE) |
+[Language reference](https://github.com/Zyora-Dev/niralscript/blob/main/NIRALSCRIPT.md) |
+[Standalone source](https://github.com/Zyora-Dev/niralscript) |
+[NiralScript overview and playground](/niralscript)
+`,
+  },
   "api-routes": {
     title: "HTTP API routes",
     seoTitle: "HTTP API Routes and Webhooks | Niral Docs",

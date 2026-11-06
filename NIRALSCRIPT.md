@@ -1,7 +1,7 @@
 # NiralScript v0.1 Design Draft
 
-Status: proposed language contract, 2026-10-25. This is not a released language
-specification or a claim that the examples below compile today.
+Status: experimental language reference, updated 2026-11-06. The compiler is
+published as `niralscript@0.1.0`; this draft is not a stable language specification.
 
 ## Identity
 
@@ -44,7 +44,7 @@ rewriting and all language semantic checks still run. The returned component AST
 retains the original script text rather than replacing it with lowered JavaScript.
 `emitNiralScript()` and `lowerNiralScript()` retain their rune-emitting behavior.
 
-The language core now lives in root-level `niralscript/`, a private,
+The language core now lives in root-level `niralscript/`, a standalone,
 zero-dependency ES module package. `parser.js`, `expressions.js`, `analysis.js`, `modules.js`,
 `scanner.js` and `errors.js`
 operate without the Niral framework. `src/compiler/niralscript.js` remains the
@@ -52,7 +52,9 @@ Niral adapter: it emits runtime code (or runes for compatibility) and maps langu
 existing `NIRAL` codes, preserving source spans. The existing framework parser
 entry point remains compatible. Niral build hashes include the language core.
 Tests verify parsing from an isolated copy of this directory as well as the
-integrated compiler. This is source organization, not a published package.
+integrated compiler. The standalone npm package is published as `niralscript`.
+The compiler is Apache-2.0 with a Runtime Library Exception; see `niralscript/LICENSE`
+in the framework checkout or `LICENSE` in the standalone checkout. Niral is MIT.
 
 External `.nrs` instance scripts and named utility-module imports/exports work in
 Niral dev/build/SSR. Standalone checking/compilation APIs and CLI commands, source
@@ -69,11 +71,11 @@ declared-signature hover, keyword/top-level completions and local/imported
 definitions. Existing imported files use unsaved editor contents, with project,
 private-path and symlink guards. Configure explicit host names through
 `niral.niralscriptGlobals`; opt into stricter unknown/null checking with
-`niral.niralscriptStrictTypes` and reload the window. Type aliases, including
+`niral.niralscriptStrictTypes`; extension settings restart its language server. Type aliases, including
 imported generic aliases, have hover, completion and definition support.
 Hover/navigation require valid source; incomplete
-source receives keywords only. An updated extension package is not published.
-See `editors/vscode/README.md` for development-host setup.
+source receives keywords only. Niral VS Code 0.2.0 is published on the Marketplace.
+Language-server features require `niral lsp`; the npm compiler has no standalone LSP.
 
 The docs application's `/niralscript#playground` contains a single-file playground.
 It compiles the actual language core locally, without submitting source to a
