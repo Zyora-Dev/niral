@@ -250,10 +250,11 @@ const isBox: boolean = counter instanceof Box
   `accessor` keyword and `addInitializer`. A decorated class is typed as its
   undecorated form, so a replacing decorator is not type-checked, and the class
   cannot be referenced from its own static initializers.
-- Arbitrary computed names, complex base expressions, `new.target`, abstract
+- Arbitrary computed names, complex base expressions, abstract
   classes, `implements`, and TypeScript visibility/readonly/parameter-property
   modifiers are not supported. Use `#name` for native private members. This is
-  not full JS/TS class parity.
+  not full JS/TS class parity. `new.target` is available inside any function and
+  reads as the constructor under `new`, otherwise `undefined`.
 
 ### Implemented Statements and Scopes
 

@@ -294,6 +294,7 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
       case "ContractExpression": write(analysis.contracts.get(node), node); write("("); emit(node.argument); write(")"); break;
       case "CastExpression": emit(node.expression); break;
       case "NewExpression": write("new (", node); emit(node.callee); write(")("); joined(node.arguments); write(")"); break;
+      case "MetaProperty": write("new.target", node); break;
       case "ArrayExpression":
       case "ArrayPattern": write("[", node); joined(node.elements); if (node.elements.at(-1) === null) write(","); write("]"); break;
       case "ObjectExpression":

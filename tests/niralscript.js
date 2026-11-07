@@ -666,6 +666,24 @@ test("NiralScript labeled break and continue target the right loop across every 
   assert.throws(() => compileStandalone('function bad() { dup: for (;;) { dup: for (;;) { break } } }', 'labels.nrs', {}), { code: 'NRS072' });
 });
 
+test("NiralScript new.target distinguishes construction from calls across every emitter", async () => {
+  const source = 'export function Widget(): string { if (new.target) { return "constructed" } return "called" }';
+  const output = compileStandalone(source, 'target.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  assert.equal(values.Widget(), 'called', 'new.target is undefined for a plain call');
+  assert.equal(new values.Widget().constructor.name ? 'constructed' : 'called', 'constructed');
+  const tail = '\nreturn { Widget }';
+  for (const code of [compileNiralScript(source, 'target.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'target.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.Widget(), 'called');
+    assert.equal(typeof new api.Widget(), 'object', 'new.target is truthy under construction');
+  }
+  assert.equal(parseNiralScript('function f() { return new.target }').body[0].body.body[0].argument.type, 'MetaProperty');
+  assert.throws(() => compileStandalone('const x = new.target', 'target.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function f() { return new.foo }', 'target.nrs', {}), { code: 'NRS071' });
+});
+
 test("NiralScript strict contracts cover loops, nested defaults and spread positions", async () => {
   const source = 'function sum(...values: number[]): number { let total: number = 0; for (let index: number = 0; index < values.length; index++) { total += values[index] } return total }\nfunction size(value: string | null): number { while (value !== null) { const count: number = value.length; value = null; return count } return 0 }\nconst { amount = 2 }: { amount?: number } = {}\nconst items: number[] = [3, 4]\nconst result: number = sum(...[amount, ...items]) + size("abc")';
   const output = compileStandalone(source, 'strict.nrs', { strictTypes: true });

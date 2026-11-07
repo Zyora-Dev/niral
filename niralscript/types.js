@@ -557,6 +557,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       return value;
     }
     if (node.type === "ParenthesizedExpression") return infer(node.expression, seen);
+    if (node.type === "MetaProperty") return UNKNOWN;
     if (node.type === "ContractExpression") return typeOf(node.typeAnnotation);
     if (node.type === "CastExpression") {
       return node.operator === "as" ? typeOf(node.castType) : infer(node.expression, seen);

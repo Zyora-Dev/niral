@@ -128,6 +128,10 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       }
       return;
     }
+    if (node.type === "MetaProperty") {
+      if (!scope.depth && !scope.receiver) fail("NRS072", "new.target is only valid inside a function", node);
+      return;
+    }
     if (node.type === "Identifier") return reference(node, scope, deferred, shorthand);
     if (node.type === "MemberExpression") {
       if (!node.computed && node.property.name.startsWith("#")) {
@@ -348,6 +352,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "Identifier":
       case "ThisExpression":
       case "Super":
+      case "MetaProperty":
       case "Literal":
       case "TemplateElement":
       case "ImportDeclaration":
