@@ -1314,6 +1314,41 @@ test("NiralScript links isolated modules with transitive semantic checks", async
   assert.throws(() => compileNiralScript(source), { code: "NIRAL078" });
 });
 
+test("NiralScript re-exports module members across every emitter", async () => {
+  const library = "export const base = 5\nexport const twice = value => value * 2";
+  const resolveModule = () => ({ filename: "math.nrs", source: library });
+  const entry = 'export { twice, base as initial } from "./math.nrs"\nconst total = twice(initial)';
+
+  const parsed = parseNiralScript(entry, "entry.nrs");
+  assert.equal(parsed.body[0].type, "ExportNamedDeclaration");
+  assert.equal(parsed.body[0].source.value, "./math.nrs");
+  assert.deepEqual(parsed.body[0].specifiers.map(({ imported, local }) => [imported.name, local.name]), [["twice", "twice"], ["base", "initial"]]);
+
+  const standalone = compileStandalone(entry, "entry.nrs", { resolveModule });
+  const values = (await import("data:text/javascript;base64," + Buffer.from(standalone.code).toString("base64"))).createInstance().values;
+  const runtime = { signal: value => ({ get: () => value, set() {} }), derived: compute => ({ get: compute }) };
+  const direct = new Function("__n", compileNiralScript(entry, "entry.nrs", { resolveModule }).code + "\nreturn { total, twice, initial };")(runtime);
+  const legacy = new Function("__n", lowerNiralScript(entry, "entry.nrs", { resolveModule }) + "\nreturn { total, twice, initial };")(runtime);
+  for (const api of [values, direct, legacy]) {
+    assert.equal(api.total, 10);
+    assert.equal(api.initial, 5);
+    assert.equal(typeof api.twice, "function");
+    assert.equal(api.twice(4), 8);
+  }
+
+  const chain = new Map([
+    ["./b.nrs", 'export { value } from "./c.nrs"'],
+    ["./c.nrs", "export const value = 42"],
+  ]);
+  const resolveChain = specifier => ({ filename: specifier, source: chain.get(specifier) });
+  const chained = compileStandalone('import { value } from "./b.nrs"\nconst answer = value', "entry.nrs", { resolveModule: resolveChain });
+  const chainedValues = (await import("data:text/javascript;base64," + Buffer.from(chained.code).toString("base64"))).createInstance().values;
+  assert.equal(chainedValues.answer, 42);
+
+  assert.throws(() => compileStandalone('export { missing } from "./math.nrs"', "entry.nrs", { resolveModule }), { code: "NRS078" });
+  assert.throws(() => compileStandalone('export { base } from "./math.nrs"\nconst base = 1', "entry.nrs", { resolveModule }), { code: "NRS070" });
+});
+
 test("NiralScript parses named module imports and exported declarations", () => {
   const source = 'import { twice, base as initial, } from "./math.nrs";\nexport const answer = twice(initial)\nexport function read() { return answer }';
   const program = parseNiralScript(source, "module.nrs");

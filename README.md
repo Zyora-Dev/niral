@@ -185,12 +185,13 @@ paths or symlinks. Do not mix inline code with `src`. Dev reloads external edits
 SSR caches and production hashes include their contents. Raw sources stay private.
 
 Named imports and aliases (`import { twice as scale } from "./math.nrs"`) can use
-library `export const` and `export function` declarations. Modules keep separate
-scopes and initialize once per component execution, not as process singletons.
-Transitive dependencies participate in semantic checks, SSR invalidation, dev
-reloads and build hashes. Libraries cannot declare top-level input/state/derive/let;
-default/namespace imports, re-exports and cycles are not supported. Private paths,
-including `.server.nrs`, are rejected throughout the graph.
+library `export const` and `export function` declarations, and modules can
+re-export members of another module (`export { twice as scale } from "./math.nrs"`).
+Modules keep separate scopes and initialize once per component execution, not as
+process singletons. Transitive dependencies and re-export chains participate in
+semantic checks, SSR invalidation, dev reloads and build hashes. Libraries cannot
+declare top-level input/state/derive/let; default/namespace imports and cycles are
+not supported. Private paths, including `.server.nrs`, are rejected throughout the graph.
 
 Read-only external inputs use `input name` in inline or external instance scripts:
 

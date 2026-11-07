@@ -603,10 +603,21 @@ export const initial = 0
 export function twice(value) { return value * 2 }
 ```
 
-Library top levels permit imports, constants, functions and type aliases. Local names stay
+A module may also re-export members of another module, optionally renaming them:
+
+```text
+export { twice, initial as start } from "./math.nrs"
+```
+
+Re-exports participate in the dependency graph like imports and chain through
+intermediate modules (`a.nrs` re-exports from `b.nrs` which re-exports from
+`c.nrs`). Re-exporting a name the target module does not export, or omitting the
+`from` clause, is rejected with NRS078/NIRAL078.
+
+Library top levels permit imports, re-exports, constants, functions and type aliases. Local names stay
 private unless the declaration is exported; aliases do not expose other module
 bindings. Imports are readonly bindings (constant objects are not deeply frozen).
-Default/namespace imports, bare side-effect imports, re-exports, cyclic graphs and
+Default/namespace imports, bare side-effect imports, cyclic graphs and
 exported mutable/reactive declarations are rejected with NRS078/NIRAL078.
 
 Dependencies initialize before their importer and are deduplicated within that

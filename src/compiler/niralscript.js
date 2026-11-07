@@ -140,6 +140,9 @@ function emitProgram(program, options, direct) {
         if (node.typeOnly) return "";
         return node.specifiers.filter(specifier => analysis.imports.get(specifier).scope === analysis.root)
           .map(specifier => `const ${specifier.local.name} = ${name(analysis.imports.get(specifier).binding)};`).join("\n");
+      case "ExportNamedDeclaration":
+        return node.specifiers.filter(specifier => analysis.imports.get(specifier).scope === analysis.root)
+          .map(specifier => `const ${specifier.local.name} = ${name(analysis.imports.get(specifier).binding)};`).join("\n");
       case "Program":
         return body(node, node.start, node.end);
       case "InputDeclaration":

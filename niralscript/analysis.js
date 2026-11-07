@@ -59,6 +59,14 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     for (const { id, shorthand, path } of patternBindings(pattern)) declareName(id, kind, scope, end, declaration, shorthand, path);
   }
 
+  // A module exports a name when it declares it with `export`, or re-exports it from
+  // another module; re-exports are followed to the binding that holds the real value.
+  function resolveExport(target, name) {
+    const binding = target.bindings.get(name);
+    if (!binding || !declarations.get(binding)?.exported || binding.scope !== target) return null;
+    return binding.reexport ?? binding;
+  }
+
   function declareName(id, kind, scope, end, declaration, shorthand, path) {
     if (scope.bindings.has(id.name) || (scope === root && reservedNames.has(id.name))) {
       fail("NRS073", `Duplicate binding '${id.name}'`, id);
@@ -153,12 +161,27 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       if (node.id && !["ForOfStatement", "ForInStatement", "TypeAliasDeclaration", "InterfaceDeclaration"].includes(node.type)) declare(node.id, node.kind ?? ({ InputDeclaration: "input", StateDeclaration: "state", DerivedDeclaration: "derive", FunctionDeclaration: "function", ClassDeclaration: "class" })[node.type], scope, node.end, node);
     }
     for (const node of nodes) {
+      if (node.type === "ExportNamedDeclaration" && node.source) {
+        const target = modules.get(node.target);
+        if (!target) fail("NRS078", "Module re-exports must be linked before analysis", node);
+        for (const specifier of node.specifiers) {
+          const source = resolveExport(target, specifier.imported.name);
+          if (!source) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
+          if (scope.bindings.has(specifier.local.name) || (scope === root && reservedNames.has(specifier.local.name))) fail("NRS073", `Duplicate binding '${specifier.local.name}'`, specifier.local);
+          const binding = { name: specifier.local.name, kind: "const", id: specifier.local, path: [], scope, end: specifier.local.end, index: bindings.length, reexport: source };
+          bindings.push(binding);
+          scope.bindings.set(specifier.local.name, binding);
+          declarations.set(binding, { exported: true });
+          imports.set(specifier, { binding: source, scope });
+        }
+        continue;
+      }
       if (node.type !== "ImportDeclaration" || node.typeOnly) continue;
       const target = modules.get(node.target);
       if (!target) fail("NRS078", "Module imports must be linked before analysis", node);
       for (const specifier of node.specifiers) {
-        const binding = target.bindings.get(specifier.imported.name);
-        if (!binding || !declarations.get(binding)?.exported || binding.scope !== target) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
+        const binding = resolveExport(target, specifier.imported.name);
+        if (!binding) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
         if (scope.bindings.has(specifier.local.name) || (scope === root && reservedNames.has(specifier.local.name))) fail("NRS073", `Duplicate binding '${specifier.local.name}'`, specifier.local);
         scope.bindings.set(specifier.local.name, binding);
         imports.set(specifier, { binding, scope });
@@ -201,6 +224,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         if (scope !== root) fail("NRS072", "Inputs are only valid at component top level", node);
         break;
       case "ImportDeclaration":
+      case "ExportNamedDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration":
       case "BreakStatement":
@@ -356,6 +380,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "Literal":
       case "TemplateElement":
       case "ImportDeclaration":
+      case "ExportNamedDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration":
       case "InputDeclaration":
@@ -450,12 +475,13 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     }
     if (node?.type === "ArrowFunctionExpression") return node;
     if (node?.type !== "Identifier") return null;
-    const binding = resolved.get(node);
+    let binding = resolved.get(node);
+    while (binding?.reexport) binding = binding.reexport;
     if (!binding || seen.has(binding)) return null;
     seen.add(binding);
     const declaration = declarations.get(binding);
     if (binding.kind === "function") return declaration;
-    if (binding.kind === "const" && !binding.path.length) return callable(declaration.init, seen);
+    if (binding.kind === "const" && !binding.path?.length) return callable(declaration.init, seen);
     if (binding.kind === "parameter" && !binding.path.length) {
       const values = sources.get(binding) ?? [];
       const targets = values.map(value => callable(value, new Set(seen)));

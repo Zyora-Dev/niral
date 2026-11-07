@@ -172,6 +172,13 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
       case "ImportDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration": break;
+      case "ExportNamedDeclaration":
+        node.specifiers.forEach((specifier, index) => {
+          if (index) write("\n");
+          const local = analysis.bindings.find(binding => binding.id === specifier.local);
+          write(`const ${identifier(local)} = ${identifier(analysis.imports.get(specifier).binding)};`);
+        });
+        break;
       case "InputDeclaration":
         write("const ", node); emit(node.id); write(` = __runtime.signal(__inputs[${JSON.stringify(node.id.name)}]);\n`);
         write(`__inputCells[${JSON.stringify(node.id.name)}] = `); emit(node.id); write(";"); break;

@@ -330,6 +330,42 @@ export class StatementParser {
     if (kind === "export") {
       if (!topLevel) scanner.error("NRS078", "Exports are only valid at top level", { start });
       this.trivia();
+      if (scanner.peek() === "{") {
+        scanner.expect("{", "NRS078", "Expected named re-exports in braces");
+        const specifiers = [];
+        this.trivia();
+        while (scanner.peek() !== "}") {
+          const importedStart = scanner.pos;
+          const importedName = scanner.read(IDENTIFIER);
+          if (!importedName || RESERVED_WORDS.has(importedName)) scanner.error("NRS070", "Expected a non-reserved NiralScript identifier", { start: importedStart });
+          const imported = { type: "Identifier", name: importedName, start: importedStart, end: scanner.pos };
+          let local = imported;
+          this.trivia();
+          const afterName = scanner.pos;
+          if (scanner.read(IDENTIFIER) === "as") local = this.name(names, scanner.pos);
+          else {
+            scanner.pos = afterName;
+            if (names.has(imported.name)) scanner.error("NRS070", `Duplicate declaration '${imported.name}'`, { start: imported.start });
+            names.add(imported.name);
+          }
+          specifiers.push({ type: "ExportSpecifier", imported, local, start: imported.start, end: local.end });
+          this.trivia();
+          if (!scanner.eat(",")) break;
+          this.trivia();
+        }
+        scanner.expect("}", "NRS078", "Expected '}' after named re-exports");
+        this.trivia();
+        if (scanner.read(IDENTIFIER) !== "from") scanner.error("NRS078", "Re-exports must name a module with 'from'", { start });
+        this.trivia();
+        const moduleParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+        const token = moduleParser.take();
+        if (token.kind !== "string") scanner.error("NRS078", "Expected a quoted module specifier", { start });
+        scanner.pos = token.end;
+        this.trivia();
+        const terminated = scanner.eat(";");
+        if (!terminated && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(token.end, scanner.pos))) scanner.error("NRS078", "Expected a semicolon or newline after re-export", { start: token.end });
+        return { type: "ExportNamedDeclaration", specifiers, source: { type: "Literal", value: token.value, start: token.start, end: token.end }, exported: true, start, end: terminated ? scanner.pos : token.end };
+      }
       const declarationStart = scanner.pos;
       const declarationKind = scanner.read(IDENTIFIER);
       if (!["const", "function", "async", "type", "interface", "class"].includes(declarationKind)) scanner.error("NRS078", "Only constants, functions, classes and types can be exported", { start });
