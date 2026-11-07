@@ -620,6 +620,32 @@ test("NiralScript loop control preserves scope, completion and reactive writes",
   for (const code of [compileNiralScript(closures).code, lowerNiralScript(closures)]) assert.deepEqual(new Function(code + '\nreturn [result, count]')(), ['0,1,2', 2]);
 });
 
+test("NiralScript do...while runs the body before the test across every emitter", async () => {
+  const source = 'export function countdown(n: number): number { let steps = 0; do { steps = steps + 1; n = n - 1 } while (n > 0); return steps }\nexport function sum(limit: number): number { let total = 0; let index = 0; do { index = index + 1; if (index === 2) { continue } if (index > limit) { break } total = total + index } while (index < 10); return total }';
+  const output = compileStandalone(source, 'dowhile.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  assert.equal(values.countdown(3), 3);
+  assert.equal(values.countdown(0), 1, 'do...while must run the body at least once');
+  assert.equal(values.sum(4), 8, 'break and continue must work inside do...while');
+  const tail = '\nreturn { countdown, sum }';
+  for (const code of [compileNiralScript(source, 'dowhile.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'dowhile.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.countdown(3), 3);
+    assert.equal(api.countdown(0), 1);
+    assert.equal(api.sum(4), 8);
+  }
+  const reactive = 'state count = 3\nfunction drain() { let runs = 0; do { count--; runs++ } while (count > 0); return runs }';
+  const direct = compileNiralScript(reactive);
+  const runtime = await import('../src/runtime/index.js');
+  for (const code of [direct.code, rewriteScript(lowerNiralScript(reactive), direct.signals)]) {
+    const instance = new Function('__n', code + '\nreturn { drain, count }')(runtime);
+    assert.equal(instance.drain(), 3);
+    assert.equal(instance.count.get(), 0);
+  }
+  assert.throws(() => compileStandalone('function bad() { do { call() } }', 'dowhile.nrs', {}), { code: 'NRS072' });
+});
+
 test("NiralScript strict contracts cover loops, nested defaults and spread positions", async () => {
   const source = 'function sum(...values: number[]): number { let total: number = 0; for (let index: number = 0; index < values.length; index++) { total += values[index] } return total }\nfunction size(value: string | null): number { while (value !== null) { const count: number = value.length; value = null; return count } return 0 }\nconst { amount = 2 }: { amount?: number } = {}\nconst items: number[] = [3, 4]\nconst result: number = sum(...[amount, ...items]) + size("abc")';
   const output = compileStandalone(source, 'strict.nrs', { strictTypes: true });
@@ -1106,9 +1132,13 @@ test("NiralScript standalone CLI checks copied sources without the framework", (
     const compiledCode = readFileSync(join(project, "entry.mjs"), "utf8");
     assert.match(compiledCode, /sourceMappingURL=entry.mjs.map/);
     assert.deepEqual(JSON.parse(readFileSync(join(project, "entry.mjs.map"), "utf8")).sources, ["base.nrs", "math.nrs", "entry.nrs"]);
-    assert.equal(run("compile", "entry.nrs", "--out", "entry.mjs").status, 1);
+    const existing = run("compile", "entry.nrs", "--out", "entry.mjs", "--json");
+    assert.equal(existing.status, 1);
+    assert.equal(JSON.parse(existing.stdout).diagnostics[0].code, "NRS079");
     assert.equal(readFileSync(join(project, "entry.mjs"), "utf8"), compiledCode);
-    assert.equal(run("compile", "entry.nrs", "--out", "../escape.mjs").status, 1);
+    const escaped = run("compile", "entry.nrs", "--out", "../escape.mjs", "--json");
+    assert.equal(escaped.status, 1);
+    assert.equal(JSON.parse(escaped.stdout).diagnostics[0].code, "NRS079");
     assert.equal(run("compile", "entry.nrs", "--out", "missing/output.mjs").status, 1);
     assert.equal(run("compile", "entry.nrs").status, 2);
     writeFileSync(join(project, "trace.nrs"), 'import { fail } from "./fail.nrs"\nfunction run() { return fail() }');
@@ -1690,6 +1720,27 @@ test("NiralScript rejects malformed literals and syntax outside the expression s
     assert.equal(component.slice(error.start, error.end), "*");
     return true;
   });
+});
+
+test("NiralScript scanner reports unterminated strings, templates and block comments", () => {
+  const cases = [
+    { code: "NRS012", message: "String literal is never closed", source: 'state label = "open', open: '"' },
+    { code: "NRS013", message: "Template literal is never closed", source: "state label = `open", open: "`" },
+    { code: "NRS014", message: "Block comment is never closed", source: "state count = 1 /* open", open: "/*" },
+  ];
+  for (const { code, message, source, open } of cases) {
+    assert.throws(() => parseNiralScript(source, "open.nrs"), error => {
+      assert.equal(error.code, code);
+      assert.equal(error.message, message);
+      assert.equal(error.filename, "open.nrs");
+      assert.equal(error.source, source);
+      assert.equal(error.start, source.indexOf(open));
+      return true;
+    }, source);
+    const niralCode = code.replace("NRS", "NIRAL");
+    assert.throws(() => lowerNiralScript(source, "open.niral"), { code: niralCode }, source);
+  }
+  assert.doesNotThrow(() => parseNiralScript('state ok = "closed"\nstate done = `t${1}` /* shut */', "ok.nrs"));
 });
 
 test("NiralScript handles comments, quoted delimiters and multiline initializers", () => {

@@ -186,6 +186,8 @@ function emitProgram(program, options, direct) {
         return `for (${node.init ? emit(node.init).replace(/;$/, "") : ""}; ${node.test ? source(node.test) : ""}; ${node.update ? emit(node.update).replace(/;$/, "") : ""}) ${emit(node.body)}`;
       case "WhileStatement":
         return `while (${source(node.test)}\n) ${emit(node.body)}`;
+      case "DoWhileStatement":
+        return `do ${emit(node.body)} while (${source(node.test)}\n);`;
       case "BreakStatement": return "break;";
       case "ContinueStatement": return "continue;";
       case "IfStatement":

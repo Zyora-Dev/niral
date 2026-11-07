@@ -734,7 +734,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       flow(node.right, narrowed(node.left, environment, node.operator === "&&"));
       return environment;
     }
-    if (["ForStatement", "WhileStatement", "ForOfStatement", "ForInStatement"].includes(node.type)) {
+    if (["ForStatement", "WhileStatement", "DoWhileStatement", "ForOfStatement", "ForInStatement"].includes(node.type)) {
       flow(node.init, new Map());
       flow(node.test ?? node.right, new Map());
       flow(node.body, node.test ? narrowed(node.test, new Map(), true) : new Map());

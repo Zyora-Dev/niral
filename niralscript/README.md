@@ -118,7 +118,7 @@ The second example requires an existing `dist` directory and a host-provided
 | Area | Implemented capabilities |
 | --- | --- |
 | Reactive declarations | Top-level `input`, `state`, `derive`; readonly inputs and derived bindings; immediate state reads. |
-| Functions and control flow | Named/anonymous functions, arrows, defaults/rest, spread, destructuring, conditionals, for/of/in, while, break and continue. |
+| Functions and control flow | Named/anonymous functions, arrows, defaults/rest, spread, destructuring, conditionals, for/of/in, while, do...while, break and continue. |
 | Async and errors | Async functions/arrows, await, throw, try/catch/finally; top-level await in standalone modules. |
 | Gradual types | Primitives, literals, unions, records, arrays, aliases, interfaces, casts, signatures, generics, constraints/defaults, recursive types and opt-in strict narrowing. |
 | Classes | Typed constructors, generic inheritance, private members, accessors, static blocks, class expressions and a documented decorator subset. |

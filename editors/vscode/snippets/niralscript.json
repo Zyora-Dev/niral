@@ -87,6 +87,11 @@
     "description": "A while loop.",
     "body": ["while (${1:condition}) {", "  $0", "}"]
   },
+  "Do...while loop": {
+    "prefix": "dowhile",
+    "description": "A do...while loop that runs the body at least once.",
+    "body": ["do {", "  $0", "} while (${1:condition});"]
+  },
   "If/else": {
     "prefix": "ifelse",
     "description": "A conditional with an else branch.",

@@ -272,11 +272,13 @@ const isBox: boolean = counter instanceof Box
   call/construction statements, and function-only `return` with an optional expression.
 - `for (const item of items) { ... }` and `let` variants accept the same patterns.
   Loop bindings are local to each iteration; the body must be braced.
-  Conventional `for (let index = 0; index < limit; index++) { ... }` and
-  `while (condition) { ... }` support `break` and `continue`, preserving finally
-  completion and per-iteration let closure capture. For headers allow omitted
-  parts, one initialized declaration or a simple statement; comma lists are not
-  supported. Labels, do-while and async iteration remain unsupported.
+  Conventional `for (let index = 0; index < limit; index++) { ... }`,
+  `while (condition) { ... }` and `do { ... } while (condition)` support `break`
+  and `continue`, preserving finally completion and per-iteration let closure
+  capture. The `do...while` body is braced and always runs at least once before the
+  test; a trailing semicolon after the `while (...)` clause is optional. For headers
+  allow omitted parts, one initialized declaration or a simple statement; comma
+  lists are not supported. Labels and async iteration remain unsupported.
 - `for (const key in record) { ... }` walks own enumerable keys. The binding must
   be a plain identifier and is always typed `string`, so destructured ids and
   explicit annotations are rejected with NRS072. `break`/`continue` behave as in

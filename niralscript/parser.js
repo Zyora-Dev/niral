@@ -451,6 +451,23 @@ export class StatementParser {
       this.loopDepth--;
       return { type: "WhileStatement", test, body, start, end: body.end };
     }
+    if (kind === "do") {
+      this.trivia();
+      this.loopDepth++;
+      const body = this.block(depth);
+      this.loopDepth--;
+      this.trivia();
+      if (scanner.read(IDENTIFIER) !== "while") scanner.error("NRS072", "Expected 'while' after do block", { start });
+      this.trivia();
+      scanner.expect("(", "NRS072", "Expected '(' after while");
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const test = parser.expression();
+      parser.expect(")");
+      scanner.pos = parser.scanner.pos;
+      this.trivia();
+      scanner.eat(";");
+      return { type: "DoWhileStatement", test, body, start, end: scanner.pos };
+    }
     if (kind === "break" || kind === "continue") {
       if (!this.loopDepth) scanner.error("NRS072", `${kind} is only valid inside a loop`, { start });
       const keywordEnd = scanner.pos;

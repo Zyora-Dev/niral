@@ -243,7 +243,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
                 states = construction(node.left, states, nested);
                 return new Set([...states, ...construction(node.right, states, nested)]);
               }
-              if (["ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "TryStatement"].includes(node.type)) {
+              if (["ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "DoWhileStatement", "TryStatement"].includes(node.type)) {
                 for (const child of children(node)) construction(child, states, true);
                 return states;
               }
@@ -280,6 +280,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         break;
       }
       case "WhileStatement":
+      case "DoWhileStatement":
         expression(node.test, scope, false);
         block(node.body, scope);
         break;
@@ -401,6 +402,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "ForStatement":
         return [node.init, node.test, node.body, node.update].filter(Boolean);
       case "WhileStatement":
+      case "DoWhileStatement":
         return [node.test, node.body];
       case "MemberExpression":
         return node.computed ? [node.object, node.property] : [node.object];
