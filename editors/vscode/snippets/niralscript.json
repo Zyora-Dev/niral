@@ -92,6 +92,11 @@
     "description": "A do...while loop that runs the body at least once.",
     "body": ["do {", "  $0", "} while (${1:condition});"]
   },
+  "Labeled loop": {
+    "prefix": "label",
+    "description": "A labeled loop targeted by break/continue <label>.",
+    "body": ["${1:outer}: for (${2:const row of rows}) {", "  for (${3:const cell of row}) {", "    if (${4:condition}) { continue $1 }", "    $0", "  }", "}"]
+  },
   "If/else": {
     "prefix": "ifelse",
     "description": "A conditional with an else branch.",

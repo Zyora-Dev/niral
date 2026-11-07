@@ -284,6 +284,9 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         expression(node.test, scope, false);
         block(node.body, scope);
         break;
+      case "LabeledStatement":
+        statement(node.body, scope);
+        break;
       case "IfStatement":
         expression(node.test, scope, false);
         statement(node.consequent, scope);
@@ -404,6 +407,8 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "WhileStatement":
       case "DoWhileStatement":
         return [node.test, node.body];
+      case "LabeledStatement":
+        return [node.body];
       case "MemberExpression":
         return node.computed ? [node.object, node.property] : [node.object];
       case "CallExpression":

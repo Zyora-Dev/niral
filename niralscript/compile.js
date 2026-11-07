@@ -238,8 +238,9 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
         write("while (", node); emit(node.test); write(") "); emit(node.body); break;
       case "DoWhileStatement":
         write("do ", node); emit(node.body); write(" while ("); emit(node.test); write(");"); break;
-      case "BreakStatement": write("break;", node); break;
-      case "ContinueStatement": write("continue;", node); break;
+      case "LabeledStatement": write(`${node.label.name}: `, node); emit(node.body); break;
+      case "BreakStatement": write(node.label ? `break ${node.label.name};` : "break;", node); break;
+      case "ContinueStatement": write(node.label ? `continue ${node.label.name};` : "continue;", node); break;
       case "IfStatement":
         write("if (", node); emit(node.test); write(") "); emit(node.consequent);
         if (node.alternate) { write(" else "); emit(node.alternate); } break;

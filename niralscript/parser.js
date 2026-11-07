@@ -21,6 +21,7 @@ export class StatementParser {
   constructor(code, filename) {
     this.scanner = new Scanner(code, filename);
     this.loopDepth = 0;
+    this.labels = [];
   }
 
   trivia() {
@@ -113,9 +114,12 @@ export class StatementParser {
     }
     params.forEach(collectNames);
     const outerLoopDepth = this.loopDepth;
+    const outerLabels = this.labels;
     this.loopDepth = 0;
+    this.labels = [];
     const body = this.block(depth + 1, parameterNames);
     this.loopDepth = outerLoopDepth;
+    this.labels = outerLabels;
     return { type, ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), ...(typeParameters ? { typeParameters } : {}), id, params, body, start, end: body.end };
   }
 
@@ -174,9 +178,12 @@ export class StatementParser {
           if (decorators.length) parser.error("Static initialization blocks cannot be decorated", memberStart);
           scanner.pos = parser.peek().start;
           const outerLoopDepth = this.loopDepth;
+          const outerLabels = this.labels;
           this.loopDepth = 0;
+          this.labels = [];
           const body = this.block(depth + 1);
           this.loopDepth = outerLoopDepth;
+          this.labels = outerLabels;
           members.push({ type: "StaticBlock", static: true, body, start: memberStart, end: body.end });
           parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
           continue;
@@ -215,9 +222,12 @@ export class StatementParser {
         if (kind === "constructor" && returnType) parser.error("Constructors cannot declare a return type", returnType.start);
         scanner.pos = parser.peek().start;
         const outerLoopDepth = this.loopDepth;
+        const outerLabels = this.labels;
         this.loopDepth = 0;
+        this.labels = [];
         const body = this.block(depth + 1, new Set(params.flatMap(patternBindings).map(binding => binding.id.name)));
         this.loopDepth = outerLoopDepth;
+        this.labels = outerLabels;
         members.push({ type: "MethodDefinition", key: memberKey, static: isStatic, kind, async, params, returnType, typeParameters: methodTypes, ...(decorators.length ? { decorators } : {}), body, start: memberStart, end: body.end });
         parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
       } else {
@@ -250,6 +260,24 @@ export class StatementParser {
       return { ...declaration, decorators, start };
     }
     let kind = scanner.read(IDENTIFIER);
+    if (kind && !RESERVED_WORDS.has(kind)) {
+      const afterLabel = scanner.pos;
+      this.trivia();
+      if (scanner.peek() === ":" && scanner.src[scanner.pos + 1] !== ":") {
+        scanner.pos++;
+        this.trivia();
+        const labelStart = scanner.pos;
+        const target = scanner.read(IDENTIFIER);
+        scanner.pos = labelStart;
+        if (!["for", "while", "do"].includes(target)) scanner.error("NRS072", "Labels may only prefix a loop", { start });
+        if (this.labels.includes(kind)) scanner.error("NRS072", `Duplicate label '${kind}'`, { start });
+        this.labels.push(kind);
+        const body = this.statement(false, depth, names);
+        this.labels.pop();
+        return { type: "LabeledStatement", label: { type: "Identifier", name: kind, start, end: afterLabel }, body, start, end: body.end };
+      }
+      scanner.pos = afterLabel;
+    }
     let async = false;
     if (kind === "async") {
       const afterAsync = scanner.pos;
@@ -472,8 +500,17 @@ export class StatementParser {
       if (!this.loopDepth) scanner.error("NRS072", `${kind} is only valid inside a loop`, { start });
       const keywordEnd = scanner.pos;
       this.trivia();
-      if (!scanner.eat(";") && scanner.peek() !== "}" && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(keywordEnd, scanner.pos))) scanner.error("NRS072", "Loop labels are not supported", { start });
-      return { type: kind === "break" ? "BreakStatement" : "ContinueStatement", start, end: scanner.pos };
+      let label = null;
+      const sameLine = !/[\r\n]/.test(scanner.src.slice(keywordEnd, scanner.pos));
+      const labelStart = scanner.pos;
+      const candidate = sameLine ? scanner.read(IDENTIFIER) : "";
+      if (candidate && !RESERVED_WORDS.has(candidate)) {
+        if (!this.labels.includes(candidate)) scanner.error("NRS072", `Undefined label '${candidate}'`, { start: labelStart });
+        label = { type: "Identifier", name: candidate, start: labelStart, end: scanner.pos };
+        this.trivia();
+      } else scanner.pos = labelStart;
+      if (!scanner.eat(";") && scanner.peek() !== "}" && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(label?.end ?? keywordEnd, scanner.pos))) scanner.error("NRS072", "Expected a semicolon or newline after " + kind, { start });
+      return { type: kind === "break" ? "BreakStatement" : "ContinueStatement", ...(label ? { label } : {}), start, end: scanner.pos };
     }
     if (kind === "if") {
       this.trivia();

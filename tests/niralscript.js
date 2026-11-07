@@ -646,6 +646,26 @@ test("NiralScript do...while runs the body before the test across every emitter"
   assert.throws(() => compileStandalone('function bad() { do { call() } }', 'dowhile.nrs', {}), { code: 'NRS072' });
 });
 
+test("NiralScript labeled break and continue target the right loop across every emitter", async () => {
+  const source = 'export function firstHit(grid: number[][], target: number): string { outer: for (let r = 0; r < grid.length; r++) { for (let c = 0; c < grid[r].length; c++) { if (grid[r][c] === target) { return r + "," + c } } } return "none" }\nexport function skipRow(grid: number[][], skip: number): number { let total = 0; scan: for (const row of grid) { for (const cell of row) { if (cell === skip) { continue scan } total = total + cell } } return total }';
+  const output = compileStandalone(source, 'labels.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  const grid = [[1, 2, 3], [4, 5, 6]];
+  assert.equal(values.firstHit(grid, 5), '1,1', 'break <label> must find the nested match');
+  assert.equal(values.firstHit(grid, 9), 'none');
+  assert.equal(values.skipRow(grid, 5), 10, 'continue <label> must skip the rest of the outer iteration');
+  const tail = '\nreturn { firstHit, skipRow }';
+  for (const code of [compileNiralScript(source, 'labels.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'labels.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.firstHit(grid, 5), '1,1');
+    assert.equal(api.skipRow(grid, 5), 10);
+  }
+  assert.throws(() => compileStandalone('function bad() { for (;;) { break missing } }', 'labels.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function bad() { label: call() }', 'labels.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function bad() { dup: for (;;) { dup: for (;;) { break } } }', 'labels.nrs', {}), { code: 'NRS072' });
+});
+
 test("NiralScript strict contracts cover loops, nested defaults and spread positions", async () => {
   const source = 'function sum(...values: number[]): number { let total: number = 0; for (let index: number = 0; index < values.length; index++) { total += values[index] } return total }\nfunction size(value: string | null): number { while (value !== null) { const count: number = value.length; value = null; return count } return 0 }\nconst { amount = 2 }: { amount?: number } = {}\nconst items: number[] = [3, 4]\nconst result: number = sum(...[amount, ...items]) + size("abc")';
   const output = compileStandalone(source, 'strict.nrs', { strictTypes: true });

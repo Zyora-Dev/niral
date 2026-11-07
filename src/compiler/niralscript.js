@@ -188,8 +188,9 @@ function emitProgram(program, options, direct) {
         return `while (${source(node.test)}\n) ${emit(node.body)}`;
       case "DoWhileStatement":
         return `do ${emit(node.body)} while (${source(node.test)}\n);`;
-      case "BreakStatement": return "break;";
-      case "ContinueStatement": return "continue;";
+      case "LabeledStatement": return `${node.label.name}: ${emit(node.body)}`;
+      case "BreakStatement": return node.label ? `break ${node.label.name};` : "break;";
+      case "ContinueStatement": return node.label ? `continue ${node.label.name};` : "continue;";
       case "IfStatement":
         return `if (${source(node.test)}\n) ${emit(node.consequent)}${node.alternate ? " else " + emit(node.alternate) : ""}`;
       case "ReturnStatement":

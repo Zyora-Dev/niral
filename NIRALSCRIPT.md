@@ -278,7 +278,9 @@ const isBox: boolean = counter instanceof Box
   capture. The `do...while` body is braced and always runs at least once before the
   test; a trailing semicolon after the `while (...)` clause is optional. For headers
   allow omitted parts, one initialized declaration or a simple statement; comma
-  lists are not supported. Labels and async iteration remain unsupported.
+  lists are not supported. A `label:` prefix may precede any loop, and `break label`
+  or `continue label` target that loop; labels are function-scoped, must be unique,
+  and may only prefix loops. Async iteration remains unsupported.
 - `for (const key in record) { ... }` walks own enumerable keys. The binding must
   be a plain identifier and is always typed `string`, so destructured ids and
   explicit annotations are rejected with NRS072. `break`/`continue` behave as in

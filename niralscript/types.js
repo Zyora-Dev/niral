@@ -743,7 +743,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     }
     let current = new Map(environment);
     for (const [key, child] of Object.entries(node)) {
-      if (["key", "source", "sources", "id", "typeAnnotation", "returnType"].includes(key)) continue;
+      if (["key", "source", "sources", "id", "label", "typeAnnotation", "returnType"].includes(key)) continue;
       if (Array.isArray(child)) for (const item of child) current = flow(item, current);
       else if (child?.type) current = flow(child, current);
     }
