@@ -1,6 +1,6 @@
 {
   "name": "niral",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Niral (நிரல்) — the zero-dependency full-stack web framework by ZyoraLabs.",
   "type": "module",
   "main": "./src/index.js",

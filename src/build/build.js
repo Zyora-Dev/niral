@@ -146,6 +146,10 @@ export function build({ root = ".", out } = {}) {
   let release = stage;
   try {
 
+  // Emitted server/client files use ESM `import`. Mark the release as ESM so Node
+  // treats its .js as modules regardless of the host app's package.json "type".
+  writeFileSync(join(release, "package.json"), '{ "type": "module" }\n');
+
   /* ── write compiled modules + server blocks ── */
   const manifestRoutes = [];
   if (endpoints.length) writeEndpointModules(join(release, "server", "endpoints"), endpointFiles);
