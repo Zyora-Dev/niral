@@ -1,10 +1,12 @@
 {
   "name": "niral",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Niral (நிரல்) — the zero-dependency full-stack web framework by ZyoraLabs.",
   "type": "module",
   "main": "./src/index.js",
-  "bin": { "niral": "./bin/niral.js" },
+  "bin": {
+    "niral": "./bin/niral.js"
+  },
   "files": [
     "bin",
     "src",
@@ -14,7 +16,9 @@
     "LICENSE"
   ],
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "prepare:docs": "node apps/docs/prepare.server.js",
     "sync:niralscript": "node scripts/sync-niralscript.mjs",
