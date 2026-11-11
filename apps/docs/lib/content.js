@@ -2262,6 +2262,11 @@ Local snapshots protect against bad deploys and corruption. Remote snapshots
 survive the entire server being lost. Niral supports any S3-compatible object
 store with no SDK and no plaintext upload:
 
+> **Off-box recovery is opt-in.** Until you set \`NIRAL_SNAPSHOT_REMOTE_*\`, every
+> snapshot lives on the same disk as your database — if the box is terminated,
+> wiped, or its disk fails, the backups go with it. Configure the vars below to
+> get true disaster recovery; the encrypted upload path itself is free.
+
 1. package the local snapshot databases
 2. gzip the package
 3. derive a 256-bit key with scrypt

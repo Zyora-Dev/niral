@@ -16,7 +16,8 @@
  *
  * Honest scope: on-box backups protect against bad deploys, corruption and
  * malicious writes. They do NOT survive the box being lost or root-wiped —
- * for that, push snapshots off-box (roadmap: `niral snapshot --remote`).
+ * for that, configure NIRAL_SNAPSHOT_REMOTE_* and push snapshots off-box with
+ * `niral snapshot --remote` (opt-in; see remote-snapshot.js).
  */
 
 import { existsSync, mkdirSync, readdirSync, statSync, lstatSync, unlinkSync, rmSync, copyFileSync, readlinkSync, symlinkSync, renameSync, readFileSync, writeFileSync } from "node:fs";
