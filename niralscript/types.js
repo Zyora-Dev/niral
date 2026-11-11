@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { NiralScriptError, sourceLocation } from "./errors.js";
 import { emitContractValidator } from "./contracts.js";
 
@@ -40,7 +42,7 @@ export function readTypeParameters(parser) {
     }
     params.push({ name: name.value, ...(constraint ? { constraint } : {}), ...(defaultType ? { default: defaultType } : {}) });
   } while (parser.eat(","));
-  const close = parser.expect(">");
+  const close = parser.expectClose();
   return { type: "TypeAnnotation", value: { kind: "parameters", names, params }, start: opening.start, end: close.end };
 }
 
@@ -86,14 +88,16 @@ export function readType(parser) {
       }
       parser.expect("}");
       value = { kind: "object", properties };
-    } else if (token.kind === "identifier" && ["number", "string", "boolean", "null", "undefined", "void", "unknown"].includes(token.value)) value = { kind: token.value };
+    } else if (token.kind === "identifier" && ["number", "bigint", "string", "boolean", "null", "undefined", "void", "unknown"].includes(token.value)) value = { kind: token.value };
     else if (token.kind === "identifier" && token.value === "Promise") {
-      parser.expect("<"); const result = union(); parser.expect(">"); value = { kind: "promise", result };
+      parser.expect("<"); const result = union(); parser.expectClose(); value = { kind: "promise", result };
+    } else if (token.kind === "identifier" && token.value === "tainted") {
+      parser.expect("<"); const inner = union(); parser.expectClose(); value = { ...inner, tainted: true };
     } else if (["number", "string"].includes(token.kind) || token.kind === "identifier" && ["true", "false"].includes(token.value)) value = { kind: "literal", value: token.kind === "identifier" ? token.value === "true" : token.value };
     else if (token.kind === "-") value = { kind: "literal", value: -parser.expect("number").value };
     else if (token.kind === "identifier") {
       const args = [];
-      if (parser.eat("<")) { do { args.push(union()); } while (parser.eat(",")); parser.expect(">"); }
+      if (parser.eat("<")) { do { args.push(union()); } while (parser.eat(",")); parser.expectClose(); }
       value = { kind: "reference", name: token.value, args, start: token.start, end: token.end };
     }
     else parser.error("Expected a type", token.start);
@@ -125,9 +129,11 @@ export function typeAnnotations(node, result = []) {
 }
 
 const UNKNOWN = { kind: "unknown" };
+const ANY = { kind: "any" };
 const UNDEFINED = { kind: "undefined" };
 // recursive aliases make type values cyclic, so identity keys stand in for a repeat visit
 function identify(value, seen = new Map()) {
+  if (typeof value === "bigint") return `${value}n`;
   if (!value || typeof value !== "object") return JSON.stringify(value);
   if (seen.has(value)) return `#${seen.get(value)}`;
   seen.set(value, seen.size);
@@ -159,6 +165,7 @@ function accepts(expected, actual, strict = false, base = () => null, pending = 
 }
 
 function compare(expected, actual, strict, base, pending) {
+  if (expected.kind === "any" || actual.kind === "any") return true;
   if (expected.kind === "unknown" || actual.kind === "never") return true;
   if (actual.kind === "unknown") return !strict;
   if (actual.kind === "union") return actual.members.every(value => accepts(expected, value, strict, base, pending));
@@ -209,9 +216,9 @@ export function walk(node, visit) {
   }
 }
 
-export function checkTypes(program, analysis, { strictTypes = false } = {}) {
+export function checkTypes(program, analysis, { strictTypes = false, taintSources = [], taintExportedParams = false } = {}) {
   const annotations = hasTypeSyntax(program) ? typeAnnotations(program) : [];
-  if (!strictTypes && !analysis.classes.length && !annotations.length && ![...(program.modules ?? []), program].some(owner => owner.body.some(node => node.typeOnly))) return;
+  if (!strictTypes && !taintSources.length && !taintExportedParams && !analysis.classes.length && !annotations.length && ![...(program.modules ?? []), program].some(owner => owner.body.some(node => node.typeOnly))) return;
   const annotated = new Map();
   const declared = new Map(analysis.bindings.map(binding => [binding.id, binding]));
   const functions = [];
@@ -360,6 +367,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     if (!accepts(expected, actual, strictTypes, baseType)) fail(`Expected ${describe(expected)}, received ${describe(actual)}`, node);
   };
   function property(value, key, seen = new Set()) {
+    if (value.kind === "any") return ANY;
     if (value.kind === "literal") value = { kind: typeof value.value };
     if (value.kind === "union") return merge(value.members.map(member => property(member, key, seen)));
     if (["instance", "constructor"].includes(value.kind)) {
@@ -546,6 +554,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       const binding = analysis.resolved.get(node) ?? declared.get(node);
       if (flows.get(node)?.has(binding)) return flows.get(node).get(binding);
       if (annotated.has(binding)) return annotated.get(binding);
+      if (binding?.kind === "global") return ANY;
       const declaration = analysis.declarations.get(binding);
       if (["FunctionDeclaration", "FunctionExpression"].includes(declaration?.type)) return { kind: "function", node: declaration };
       if (declaration?.type === "ClassDeclaration" || declaration?.type === "ClassExpression") return classType(declaration, "constructor");
@@ -555,6 +564,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       return value;
     }
     if (node.type === "ParenthesizedExpression") return infer(node.expression, seen);
+    if (node.type === "MetaProperty") return UNKNOWN;
     if (node.type === "ContractExpression") return typeOf(node.typeAnnotation);
     if (node.type === "CastExpression") {
       return node.operator === "as" ? typeOf(node.castType) : infer(node.expression, seen);
@@ -567,22 +577,36 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     }
     if (node.type === "NewExpression") {
       const callee = infer(node.callee, seen);
+      if (callee.kind === "any") return ANY;
       return callee.kind === "constructor" ? constructorSignature(callee, node, seen).result : UNKNOWN;
     }
     if (node.type === "SpreadElement") return infer(node.argument, seen).element ?? UNKNOWN;
     if (node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression") return { kind: "function", node };
     if (node.type === "AwaitExpression") return unwrap(infer(node.argument, seen));
     if (node.type === "TemplateLiteral") return { kind: "string" };
-    if (node.type === "UnaryExpression") return { kind: node.operator === "typeof" ? "string" : node.operator === "!" ? "boolean" : "number" };
+    if (node.type === "UnaryExpression") {
+      if (node.operator === "typeof") return { kind: "string" };
+      if (node.operator === "!") return { kind: "boolean" };
+      if (node.operator === "~" || node.operator === "-" || node.operator === "+") {
+        const operand = infer(node.argument, seen);
+        const scalar = operand.kind === "literal" ? { kind: typeof operand.value } : operand;
+        return node.operator !== "+" && scalar.kind === "bigint" ? { kind: "bigint" } : { kind: "number" };
+      }
+      return { kind: "number" };
+    }
     if (node.type === "BinaryExpression") {
       if (["===", "!==", "<", "<=", ">", ">=", "instanceof"].includes(node.operator)) return { kind: "boolean" };
-      if (node.operator !== "+") return { kind: "number" };
       const leftValue = infer(node.left, seen);
       const rightValue = infer(node.right, seen);
       const left = leftValue.kind === "literal" ? { kind: typeof leftValue.value } : leftValue;
       const right = rightValue.kind === "literal" ? { kind: typeof rightValue.value } : rightValue;
-      if (left.kind === "string" || right.kind === "string") return { kind: "string" };
-      return left.kind === "number" && right.kind === "number" ? { kind: "number" } : UNKNOWN;
+      if (node.operator === "+") {
+        if (left.kind === "string" || right.kind === "string") return { kind: "string" };
+        if (left.kind === "bigint" && right.kind === "bigint") return { kind: "bigint" };
+        return left.kind === "number" && right.kind === "number" ? { kind: "number" } : UNKNOWN;
+      }
+      if (left.kind === "bigint" && right.kind === "bigint") return { kind: "bigint" };
+      return { kind: "number" };
     }
     if (node.type === "LogicalExpression") {
       let left = infer(node.left, seen);
@@ -609,6 +633,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     }
     if (node.type === "CallExpression") {
       const callee = infer(node.callee, seen);
+      if (callee.kind === "any") return ANY;
       if (callee.kind === "function") return callSignature(callee.node, node, seen).result;
       if (callee.kind === "signature") return callee.result;
       if (node.callee.type === "MemberExpression") {
@@ -732,7 +757,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
       flow(node.right, narrowed(node.left, environment, node.operator === "&&"));
       return environment;
     }
-    if (["ForStatement", "WhileStatement", "ForOfStatement", "ForInStatement"].includes(node.type)) {
+    if (["ForStatement", "WhileStatement", "DoWhileStatement", "ForOfStatement", "ForInStatement"].includes(node.type)) {
       flow(node.init, new Map());
       flow(node.test ?? node.right, new Map());
       flow(node.body, node.test ? narrowed(node.test, new Map(), true) : new Map());
@@ -741,7 +766,7 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     }
     let current = new Map(environment);
     for (const [key, child] of Object.entries(node)) {
-      if (["key", "source", "sources", "id", "typeAnnotation", "returnType"].includes(key)) continue;
+      if (["key", "source", "sources", "id", "label", "typeAnnotation", "returnType"].includes(key)) continue;
       if (Array.isArray(child)) for (const item of child) current = flow(item, current);
       else if (child?.type) current = flow(child, current);
     }
@@ -822,8 +847,8 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     const expected = assignmentType(node.left);
     let actual = infer(node.right);
     if (node.update) actual = { kind: "number" };
-    else if (node.operator === "+=") actual = expected.kind === "string" || actual.kind === "string" || actual.kind === "literal" && typeof actual.value === "string" ? { kind: "string" } : { kind: "number" };
-    else if (node.operator !== "=") actual = { kind: "number" };
+    else if (node.operator === "+=") actual = expected.kind === "string" || actual.kind === "string" || actual.kind === "literal" && typeof actual.value === "string" ? { kind: "string" } : expected.kind === "bigint" ? { kind: "bigint" } : { kind: "number" };
+    else if (node.operator !== "=") actual = expected.kind === "bigint" ? { kind: "bigint" } : { kind: "number" };
     if (node.left.type === "MemberExpression") {
       const receiver = infer(node.left.object);
       if (["instance", "constructor"].includes(receiver.kind)) {
@@ -866,11 +891,11 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     let callee = infer(node.callee);
     if (node.type === "NewExpression") {
       if (callee.kind === "constructor") callee = constructorSignature(callee, node);
-      else if (callee.kind !== "unknown") fail("new requires a class constructor", node.callee);
+      else if (!["unknown", "any"].includes(callee.kind)) fail("new requires a class constructor", node.callee);
     } else if (node.callee.type === "Super") {
       callee = constructorSignature(callee, node);
     } else if (callee.kind === "constructor") fail("Class constructors must be invoked with new", node.callee);
-    if (node.callee.type === "MemberExpression" && ["instance", "constructor"].includes(infer(node.callee.object).kind) && !["function", "signature", "unknown"].includes(callee.kind)) fail("Class member is not callable", node.callee);
+    if (node.callee.type === "MemberExpression" && ["instance", "constructor"].includes(infer(node.callee.object).kind) && !["function", "signature", "unknown", "any"].includes(callee.kind)) fail("Class member is not callable", node.callee);
     if (!["function", "signature"].includes(callee.kind)) continue;
     const contract = callee.kind === "function" ? callSignature(callee.node, node) : callee;
     const argumentsList = flattenArguments(node.arguments);
@@ -901,5 +926,142 @@ export function checkTypes(program, analysis, { strictTypes = false } = {}) {
     const values = fn.body.type === "BlockStatement" ? returns(fn.body).map(node => node.argument) : [fn.body];
     for (const value of values) check(expected, fn.async ? unwrap(infer(value)) : infer(value), value ?? fn.returnType ?? fn);
     if (fn.body.type === "BlockStatement" && !terminates(fn.body)) check(expected, UNDEFINED, fn.returnType ?? fn);
+  }
+
+  checkTaint(program, analysis, { annotated, calls, taintSources: new Set(taintSources), taintExportedParams });
+}
+
+// A call that strips taint: contract<T>(x) validates; sanitize/trust/escape explicitly launder.
+// escape() is the HTML-escaping launder for the XSS sinks; sanitize/trust are generic.
+const LAUNDER_CALLS = new Set(["sanitize", "trust", "escape"]);
+// Dangerous member-call sinks keyed by receiver.method; value is the injectable argument index.
+const TAINT_SINKS = new Map([["sql.query", 0]]);
+// Dangerous bare-identifier call sinks (raw HTML emitters that bypass escaping → XSS).
+const HTML_SINKS = new Map([["html", 0], ["raw", 0], ["unsafeHTML", 0], ["renderHTML", 0]]);
+
+// Compile-enforced taint tracking: untrusted data may not reach a dangerous sink unless
+// laundered through contract<T>(), sanitize() or trust(). A value is untrusted when it is
+// annotated tainted<T>, or when its binding kind is a configured taint source (e.g. "input"
+// for request-bound data, marked by the Niral framework). When taintExportedParams is set,
+// the parameters of every exported function are untrusted too — in a Niral <server> block an
+// exported function is an RPC whose arguments come straight from the network. Raises NRS090.
+function checkTaint(program, analysis, { annotated, calls, taintSources = new Set(), taintExportedParams = false }) {
+  const taintFail = (message, node) => { throw new NiralScriptError("NRS090", message, sourceLocation(program, node)); };
+  const resolved = analysis.resolved;
+
+  // A parameter binding belongs to a param pattern when its declaration site is spanned by it;
+  // this also covers destructured params like ({ id }) or ([first]).
+  const isParamBinding = (binding, param) => binding.id.start >= param.start && binding.id.end <= param.end;
+
+  function launders(node) {
+    if (node.type === "ContractExpression") return true;
+    if (node.type !== "CallExpression") return false;
+    const callee = node.callee;
+    if (callee.type !== "Identifier" || !LAUNDER_CALLS.has(callee.name)) return false;
+    // The launder must be the ambient sanitize/trust (unresolved or a global), never a user shadow.
+    const binding = resolved.get(callee);
+    return !binding || binding.kind === "global";
+  }
+
+  // Every binding a tainted value flows into, tracked across reassignments and derivations.
+  const taintedBindings = new Set();
+
+  // Exported functions in a <server> block are RPCs: their arguments arrive from the network,
+  // so every parameter binding is untrusted. `load` is the SSR data loader, not an RPC, so it
+  // is exempt (its arguments are framework-controlled: params, locals).
+  if (taintExportedParams) {
+    for (const node of program.body ?? []) {
+      if (node.type !== "FunctionDeclaration" || !node.exported || node.id?.name === "load") continue;
+      for (const param of node.params) {
+        for (const binding of analysis.bindings) {
+          if (binding.kind === "parameter" && isParamBinding(binding, param)) taintedBindings.add(binding);
+        }
+      }
+    }
+  }
+
+  // Conservative (default-taint-on-contact) propagation: a value is tainted when it is
+  // derived from any tainted operand, unless it passes through an explicit launder. Only
+  // literals, pure constants and laundered results are trusted. This errs toward false
+  // positives (which are fixed by laundering) rather than silent bypasses.
+  function tainted(node, seen = new Set()) {
+    if (!node || seen.has(node)) return false;
+    seen = new Set(seen).add(node);
+    switch (node.type) {
+      case "ParenthesizedExpression": return tainted(node.expression, seen);
+      case "SequenceExpression": return tainted(node.expressions[node.expressions.length - 1], seen);
+      case "TemplateLiteral": return node.expressions.some(part => tainted(part, seen));
+      case "BinaryExpression": return tainted(node.left, seen) || tainted(node.right, seen);
+      case "LogicalExpression":
+      case "ConditionalExpression": return ["left", "right", "consequent", "alternate"].some(key => node[key] && tainted(node[key], seen));
+      case "UnaryExpression":
+      case "UpdateExpression": return tainted(node.argument, seen);
+      case "AwaitExpression": case "YieldExpression": return tainted(node.argument, seen);
+      case "SpreadElement": return tainted(node.argument, seen);
+      case "MemberExpression": return tainted(node.object, seen);
+      case "ArrayExpression": return node.elements.some(element => element && tainted(element, seen));
+      case "ObjectExpression":
+        return node.properties.some(prop => tainted(prop.value ?? prop.argument, seen));
+      case "CallExpression":
+      case "NewExpression": {
+        if (launders(node)) return false;
+        // A non-laundering call carries taint out when its receiver or any argument is tainted.
+        const receiver = node.callee?.type === "MemberExpression" && tainted(node.callee.object, seen);
+        return receiver || node.arguments.some(argument => tainted(argument, seen));
+      }
+      case "Identifier": {
+        const binding = resolved.get(node);
+        if (!binding) return false;
+        if (annotated.get(binding)?.tainted || taintSources.has(binding.kind) || taintedBindings.has(binding)) return true;
+        const declaration = analysis.declarations.get(binding);
+        return declaration?.init ? tainted(declaration.init, seen) : false;
+      }
+      default: return false;
+    }
+  }
+
+  // Seed the fixed point: every assignment or declaration of a tainted value taints its target.
+  function seedAssignments() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      walk(program, node => {
+        let target, value;
+        if ((node.type === "AssignmentExpression" || node.type === "AssignmentStatement") && node.operator === "=") { target = node.left; value = node.right; }
+        else if ((node.type === "VariableDeclaration" || node.type === "VariableDeclarator") && node.init) { target = node.id; value = node.init; }
+        else return;
+        if (target?.type !== "Identifier") return;
+        const binding = resolved.get(target);
+        if (binding && !taintedBindings.has(binding) && tainted(value)) { taintedBindings.add(binding); changed = true; }
+      });
+    }
+  }
+  seedAssignments();
+
+  // The sink callee must resolve to the ambient helper, never a user binding that shadows the name.
+  const isAmbient = reference => {
+    const binding = resolved.get(reference);
+    return !binding || binding.kind === "global";
+  };
+
+  for (const node of calls) {
+    if (node.type !== "CallExpression") continue;
+    const callee = node.callee;
+    let key, index;
+    if (callee.type === "MemberExpression" && !callee.computed && callee.object.type === "Identifier" && isAmbient(callee.object)) {
+      // Member-call sink, e.g. sql.query(...).
+      key = `${callee.object.name}.${callee.property.name}`;
+      index = TAINT_SINKS.get(key);
+    } else if (callee.type === "Identifier" && isAmbient(callee)) {
+      // Bare-identifier sink, e.g. html(...) — a raw HTML emitter that bypasses escaping.
+      key = callee.name;
+      index = HTML_SINKS.get(key);
+    }
+    if (index === undefined) continue;
+    const argument = node.arguments[index];
+    if (argument && tainted(argument)) {
+      const hint = HTML_SINKS.has(key) ? "escape() or sanitize()" : "contract<T>(), sanitize() or trust()";
+      taintFail(`Untrusted (tainted) value reaches ${key}; launder it with ${hint} first`, argument);
+    }
   }
 }

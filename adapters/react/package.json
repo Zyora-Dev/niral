@@ -1,0 +1,30 @@
+{
+  "name": "@niral/react",
+  "version": "0.1.0",
+  "description": "Use compiled NiralScript (.nrs) modules as reactive React components.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./runtime": "./runtime.js"
+  },
+  "files": [
+    "index.js",
+    "runtime.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "dependencies": {},
+  "keywords": [
+    "niralscript",
+    "react",
+    "adapter",
+    "signals",
+    "reactive"
+  ]
+}

@@ -1,5 +1,6 @@
 # build artifacts
 dist/
+.next/
 .niral/
 apps/docs/playground/compiler/
 apps/docs/lib/playground-sandbox.json
@@ -20,3 +21,19 @@ aws-keys/
 # OS noise
 .DS_Store
 editors/vscode/*.vsix
+
+# internal development files — never ship to the public repo
+.kiro/
+.vscode/
+.agents/
+deploy/
+editors/
+docs/archive/
+AGENTS.md
+CLAUDE.md
+PROGRESS.md
+PROGRESS.short.md
+PROJECT_CONTEXT.md
+
+# internal planning notes
+suggestion/

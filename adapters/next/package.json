@@ -1,0 +1,34 @@
+{
+  "name": "@niral/next",
+  "version": "0.1.0",
+  "description": "Next.js App Router adapter to import NiralScript (.nrs) files as Client Components.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./loader": "./loader.js"
+  },
+  "files": [
+    "index.js",
+    "loader.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "niralscript": ">=0.1.0"
+  },
+  "peerDependencies": {
+    "next": ">=14",
+    "react": ">=18"
+  },
+  "keywords": [
+    "niralscript",
+    "next",
+    "nextjs",
+    "app-router",
+    "loader",
+    "react"
+  ]
+}

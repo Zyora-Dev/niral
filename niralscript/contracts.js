@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 export function emitContractValidator(type) {
   const functions = [];
   const open = new Set();
@@ -9,13 +11,14 @@ export function emitContractValidator(type) {
     open.add(value);
     let body;
     const fail = expected => `throw new __ContractError(__path, ${JSON.stringify(expected)});`;
-    if (["string", "boolean", "number"].includes(value.kind)) {
+    if (["string", "boolean", "number", "bigint"].includes(value.kind)) {
       body = `if (typeof __value !== ${JSON.stringify(value.kind)}${value.kind === "number" ? " || !Number.isFinite(__value)" : ""}) { ${fail(value.kind)} } return __value;`;
     } else if (["null", "undefined"].includes(value.kind)) {
       body = `if (__value !== ${value.kind === "undefined" ? "void 0" : "null"}) { ${fail(value.kind)} } return __value;`;
     } else if (value.kind === "literal") {
       if (typeof value.value === "number" && !Number.isFinite(value.value)) throw new TypeError("Runtime contract numeric literals must be finite");
-      body = `if (__value !== ${JSON.stringify(value.value)}) { ${fail(JSON.stringify(value.value))} } return __value;`;
+      const literal = typeof value.value === "bigint" ? `${value.value}n` : JSON.stringify(value.value);
+      body = `if (__value !== ${literal}) { ${fail(literal)} } return __value;`;
     } else if (value.kind === "array") {
       const child = generate(value.element, depth + 1);
       body = `if (!Array.isArray(__value)) { ${fail("array")} } if (__value.length > 10000) { ${fail("at most 10000 array elements")} } const __result = []; for (let __index = 0; __index < __value.length; __index++) { const __entry = Object.getOwnPropertyDescriptor(__value, String(__index)); const __itemPath = __path + "[" + __index + "]"; if (__entry && !("value" in __entry)) throw new __ContractError(__itemPath, "data property"); __result.push(${child}(__entry?.value, __itemPath)); } return __result;`;

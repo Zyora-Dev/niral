@@ -17,6 +17,9 @@ import { registerDiTests } from "./di.js";
 import { registerCliTests } from "./cli.js";
 import { registerDiCliTests } from "./di-cli.js";
 import { registerBuildReleaseTests } from "./build-releases.js";
+import { registerReactAdapterTests } from "./react-adapter.js";
+import { registerVitePluginTests } from "./vite-plugin.js";
+import { registerNextAdapterTests } from "./next-adapter.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8");
@@ -37,6 +40,9 @@ registerDiTests(test);
 registerCliTests(test);
 registerDiCliTests(test);
 registerBuildReleaseTests(test);
+registerReactAdapterTests(test);
+registerVitePluginTests(test);
+registerNextAdapterTests(test);
 
 async function runAll() {
   for (const { name, fn } of queue) {
@@ -4522,6 +4528,8 @@ export async function load() { log.info("loading home", { area: "test" }); retur
     const health = await (await fetch(`http://localhost:${port}/@niral/health`)).json();
     ok(health.ok === true && /^[0-9a-f]{12}$/.test(health.release), `health carries the release hash — got ${JSON.stringify(health)}`);
     ok(typeof health.uptime_s === "number", "health carries uptime");
+    ok("prev_release" in health && "built_at" in health, "health exposes prev_release + built_at for rollback/age ops");
+    ok(typeof health.built_at === "string" && !Number.isNaN(Date.parse(health.built_at)), "built_at is an ISO timestamp from the manifest");
 
     const missing = await fetch(`http://localhost:${port}/nope`);
     eq(missing.status, 404);
@@ -5262,6 +5270,8 @@ test("niral deploy: generates the deployment kit (systemd + nginx + Dockerfile +
   ok(sh.includes("--exclude 'data/'"), "deploys never clobber data/");
   ok(sh.includes("--exclude '*.env'") && sh.includes("--exclude 'app.env'"), "deploys NEVER sync env files — secrets live only on the server");
   ok(sh.includes("/@niral/health"), "post-deploy health check wired");
+  ok(sh.includes("h.release===want"), "health gate waits for the NEW release to actually listen, not just systemd 'active'");
+  ok(sh.includes("rollback") && sh.includes("--to"), "failed deploy auto-rolls back to the previous release");
   const nginx = readFileSync(join(dir, "deploy", "nginx.conf"), "utf8");
   ok(nginx.includes("Upgrade") && nginx.includes("upgrade"), "WebSocket upgrade for live channels");
   ok(readFileSync(join(dir, "app.env"), "utf8").includes("NIRAL_SECRET"), "env template demands a secret");

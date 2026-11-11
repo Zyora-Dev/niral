@@ -1,7 +1,7 @@
 # NiralScript v0.1 Design Draft
 
-Status: proposed language contract, 2026-10-25. This is not a released language
-specification or a claim that the examples below compile today.
+Status: experimental language reference, updated 2026-11-06. The compiler is
+published as `niralscript@0.1.0`; this draft is not a stable language specification.
 
 ## Identity
 
@@ -44,7 +44,7 @@ rewriting and all language semantic checks still run. The returned component AST
 retains the original script text rather than replacing it with lowered JavaScript.
 `emitNiralScript()` and `lowerNiralScript()` retain their rune-emitting behavior.
 
-The language core now lives in root-level `niralscript/`, a private,
+The language core now lives in root-level `niralscript/`, a standalone,
 zero-dependency ES module package. `parser.js`, `expressions.js`, `analysis.js`, `modules.js`,
 `scanner.js` and `errors.js`
 operate without the Niral framework. `src/compiler/niralscript.js` remains the
@@ -52,7 +52,9 @@ Niral adapter: it emits runtime code (or runes for compatibility) and maps langu
 existing `NIRAL` codes, preserving source spans. The existing framework parser
 entry point remains compatible. Niral build hashes include the language core.
 Tests verify parsing from an isolated copy of this directory as well as the
-integrated compiler. This is source organization, not a published package.
+integrated compiler. The standalone npm package is published as `niralscript`.
+The compiler is Apache-2.0 with a Runtime Library Exception; see `niralscript/LICENSE`
+in the framework checkout or `LICENSE` in the standalone checkout. Niral is MIT.
 
 External `.nrs` instance scripts and named utility-module imports/exports work in
 Niral dev/build/SSR. Standalone checking/compilation APIs and CLI commands, source
@@ -69,11 +71,11 @@ declared-signature hover, keyword/top-level completions and local/imported
 definitions. Existing imported files use unsaved editor contents, with project,
 private-path and symlink guards. Configure explicit host names through
 `niral.niralscriptGlobals`; opt into stricter unknown/null checking with
-`niral.niralscriptStrictTypes` and reload the window. Type aliases, including
+`niral.niralscriptStrictTypes`; extension settings restart its language server. Type aliases, including
 imported generic aliases, have hover, completion and definition support.
 Hover/navigation require valid source; incomplete
-source receives keywords only. An updated extension package is not published.
-See `editors/vscode/README.md` for development-host setup.
+source receives keywords only. Niral VS Code 0.2.0 is published on the Marketplace.
+Language-server features require `niral lsp`; the npm compiler has no standalone LSP.
 
 The docs application's `/niralscript#playground` contains a single-file playground.
 It compiles the actual language core locally, without submitting source to a
@@ -107,10 +109,12 @@ can still destabilize a browser. Chromium is the currently verified browser.
 
 ### Implemented Expression Subset
 
-- Decimal numbers (including fractions and exponents), single/double-quoted
-  strings, booleans and null. Parsing is syntax-only; identifier references are
-  resolved by the separate analyzer. Strings support ordinary JavaScript escapes,
-  hexadecimal and Unicode escapes; legacy numeric escapes are rejected.
+- Numbers: decimals (including fractions and exponents), hexadecimal (`0xFF`),
+  binary (`0b1010`), octal (`0o17`), digit separators (`1_000_000`) and `bigint`
+  literals (`123n`). Single/double-quoted strings, booleans and null. Parsing is
+  syntax-only; identifier references are resolved by the separate analyzer.
+  Strings support ordinary JavaScript escapes, hexadecimal and Unicode escapes;
+  legacy numeric escapes are rejected.
 - Arrays without holes; plain objects with identifier/string/number keys,
   explicit values or identifier shorthand. Array/object spreads and trailing
   commas are accepted, as is call-argument spread.
@@ -122,14 +126,16 @@ can still destabilize a browser. Chromium is the currently verified browser.
 - Optional member/index/call access uses `?.name`, `?.[key]` and `?.(args)`.
   Native short-circuiting skips keys/arguments and preserves method receivers;
   parentheses end a continuous chain. Optional chains cannot be assignment targets.
-- Precedence, tightest first: member/index/call, unary `! + - await typeof`, `* / %`, `+ -`,
-  `< <= > >= instanceof`, `=== !==`, `&&`, `||`/`??`, then conditional `?:`. Binary operators
-  associate left; unary operators and conditional alternatives associate right.
-  Mixing `??` with `&&`/`||` requires parentheses. `typeof` does not bypass name
-  resolution: undeclared names remain errors.
+- Precedence, tightest first: member/index/call, unary `! ~ + - await typeof`,
+  exponent `**`, `* / %`, `+ -`, shifts `<< >> >>>`, `< <= > >= instanceof`,
+  `=== !==`, bitwise `&`, `^`, `|`, `&&`, `||`/`??`, then conditional `?:`.
+  Binary operators associate left except `**`, which associates right alongside
+  unary operators and conditional alternatives. A `>>`/`>>>` token is split when
+  it closes a generic type-argument list. Mixing `??` with `&&`/`||` requires
+  parentheses. `typeof` does not bypass name resolution: undeclared names remain
+  errors.
 - Unsupported syntax fails with source-spanned NRS071 (mapped to NIRAL071 in
-  components). Assignment/update expressions, bitwise/exponent operators,
-  loose equality, regex literals, nondecimal and legacy leading-zero
+  components). Loose equality (`== !=`), regex literals and legacy leading-zero
   numbers are not accepted.
 
 ### Compiler-Generated Runtime Contracts
@@ -193,6 +199,69 @@ Contracts do not guarantee integer ranges, nonempty strings or business rules;
 check those separately after the structural guard. Existing static-checking
 limitations for dynamic methods and escaping aliases still apply.
 
+### Compile-Enforced Taint Tracking
+
+Injection — untrusted input reaching a query, template or shell unchecked — is the
+most common cause of real-world data breaches. NiralScript tracks it in the type
+system: `tainted<T>` marks a value as untrusted. A tainted value behaves exactly
+like `T` for arithmetic, concatenation and assignment, but the compiler refuses to
+let it reach a dangerous sink until it is laundered. This is a hard compile error
+(`NRS090`, `NIRAL090` in components), not a lint warning.
+
+```niralscript
+function search(term: tainted<string>): string {
+  return sql.query(term)                       // NRS090 — untrusted value reaches a sink
+}
+
+function safe(term: tainted<string>): string {
+  return sql.query(contract<string>(term))     // laundered — compiles
+}
+```
+
+- A value is tainted when it is annotated `tainted<T>`, or when its binding kind is
+  a configured taint source. The checker accepts `taintSources` (an array of binding
+  kinds, for example `["input"]`), so a host can mark whole classes of untrusted
+  data without per-value annotations — Niral marks request-bound `input` this way, so
+  request data is untrusted by default on the server. The option is opt-in: with no
+  `taintSources`, only explicit `tainted<T>` annotations are tracked (backward compatible).
+- Exported functions are remote-call entry points (RPCs): their arguments arrive from
+  the network. With `taintExportedParams`, every exported function's parameters are
+  tainted automatically, so an RPC argument reaching a sink unlaundered is `NRS090`
+  without any per-parameter annotation. `load` (the framework-controlled SSR loader)
+  is exempt, and non-exported helpers are unaffected. This is also opt-in and
+  backward compatible.
+
+  ```niralscript
+  // with taintExportedParams
+  export function run(q: string) { return sql.query(q) }            // NRS090 — RPC arg is untrusted
+  export function run(q: string) { return sql.query(sanitize(q)) }  // laundered — compiles
+  ```
+- Propagation is conservative (taint-on-contact): a value is tainted whenever it is
+  derived from any tainted operand. Taint flows through assignment and reassignment,
+  aliasing, member access, array/object construction and spread, string `+` and
+  coercion, template literals, logical/conditional expressions, unary/update
+  operators, and the arguments and receiver of any non-laundering call. Only
+  literals, pure constants and laundered results are trusted, so there is no silent
+  bypass through an unmodeled expression shape.
+- The taint is cleared only by an explicit launder: `contract<T>(value)` (which
+  also validates the shape), `sanitize(value)`, `trust(value)`, or `escape(value)`
+  (HTML-escaping, for the XSS sinks). The escape hatch is a named call, so a
+  reviewer can find every bypass with one grep for `trust(`.
+- The enforced sinks in this release are the SQL sink `sql.query(...)` (recognized
+  as the ambient `sql`) and the raw-HTML emitters `html(...)`, `raw(...)`,
+  `unsafeHTML(...)` and `renderHTML(...)` — the functions that write unescaped HTML
+  and are therefore the cross-site-scripting (XSS) injection points. A local binding
+  that shadows one of these names is not treated as the sink, so honest code is never
+  falsely flagged. Shell and `eval` sinks follow the same mechanism and are next.
+- `NRS090` reports at the exact argument that carried the taint. Laundering with a
+  contract gives you validation and de-tainting in one boundary; `sanitize`/`trust`
+  are for cases where you have already proven the value safe by other means.
+
+This makes injection prevention a property the compiler checks, not a convention a
+developer must remember. It is a real language-level control for the injection
+class specifically; it is not memory safety or formal verification, and a laundered
+value is only as safe as the sanitizer you supplied.
+
 ### Classes and Constructors
 
 Named classes emit native JavaScript classes in standalone ESM and both Niral
@@ -248,10 +317,11 @@ const isBox: boolean = counter instanceof Box
   `accessor` keyword and `addInitializer`. A decorated class is typed as its
   undecorated form, so a replacing decorator is not type-checked, and the class
   cannot be referenced from its own static initializers.
-- Arbitrary computed names, complex base expressions, `new.target`, abstract
+- Arbitrary computed names, complex base expressions, abstract
   classes, `implements`, and TypeScript visibility/readonly/parameter-property
   modifiers are not supported. Use `#name` for native private members. This is
-  not full JS/TS class parity.
+  not full JS/TS class parity. `new.target` is available inside any function and
+  reads as the constructor under `new`, otherwise `undefined`.
 
 ### Implemented Statements and Scopes
 
@@ -270,11 +340,15 @@ const isBox: boolean = counter instanceof Box
   call/construction statements, and function-only `return` with an optional expression.
 - `for (const item of items) { ... }` and `let` variants accept the same patterns.
   Loop bindings are local to each iteration; the body must be braced.
-  Conventional `for (let index = 0; index < limit; index++) { ... }` and
-  `while (condition) { ... }` support `break` and `continue`, preserving finally
-  completion and per-iteration let closure capture. For headers allow omitted
-  parts, one initialized declaration or a simple statement; comma lists are not
-  supported. Labels, do-while and async iteration remain unsupported.
+  Conventional `for (let index = 0; index < limit; index++) { ... }`,
+  `while (condition) { ... }` and `do { ... } while (condition)` support `break`
+  and `continue`, preserving finally completion and per-iteration let closure
+  capture. The `do...while` body is braced and always runs at least once before the
+  test; a trailing semicolon after the `while (...)` clause is optional. For headers
+  allow omitted parts, one initialized declaration or a simple statement; comma
+  lists are not supported. A `label:` prefix may precede any loop, and `break label`
+  or `continue label` target that loop; labels are function-scoped, must be unique,
+  and may only prefix loops. Async iteration remains unsupported.
 - `for (const key in record) { ... }` walks own enumerable keys. The binding must
   be a plain identifier and is always typed `string`, so destructured ids and
   explicit annotations are rejected with NRS072. `break`/`continue` behave as in
@@ -596,10 +670,21 @@ export const initial = 0
 export function twice(value) { return value * 2 }
 ```
 
-Library top levels permit imports, constants, functions and type aliases. Local names stay
+A module may also re-export members of another module, optionally renaming them:
+
+```text
+export { twice, initial as start } from "./math.nrs"
+```
+
+Re-exports participate in the dependency graph like imports and chain through
+intermediate modules (`a.nrs` re-exports from `b.nrs` which re-exports from
+`c.nrs`). Re-exporting a name the target module does not export, or omitting the
+`from` clause, is rejected with NRS078/NIRAL078.
+
+Library top levels permit imports, re-exports, constants, functions and type aliases. Local names stay
 private unless the declaration is exported; aliases do not expose other module
 bindings. Imports are readonly bindings (constant objects are not deeply frozen).
-Default/namespace imports, bare side-effect imports, re-exports, cyclic graphs and
+Default/namespace imports, bare side-effect imports, cyclic graphs and
 exported mutable/reactive declarations are rejected with NRS078/NIRAL078.
 
 Dependencies initialize before their importer and are deduplicated within that
@@ -709,8 +794,10 @@ Checking remains gradual by default. Use `{ strictTypes: true }` in the checking
 standalone compile or component adapter API, `--strict` with standalone CLI
 check/compile, or the reload-required `niral.niralscriptStrictTypes` editor setting
 to require narrowing unknown and nullable values before typed use/property access.
-This is not runtime validation or a sound replacement for TypeScript. Unannotated
-host globals, server results and complex methods remain unknown; input annotations
+This is not runtime validation or a sound replacement for TypeScript. Approved host
+globals are treated as opaque-but-known, so property access, calls and `new` on
+them are permitted (and keep flowing as opaque) even under strict typing; unannotated
+server results and complex methods remain unknown; input annotations
 do not validate supplied values. Function variance,
 generic inference and general collection-method checks remain bounded.
 Dynamic method selection and

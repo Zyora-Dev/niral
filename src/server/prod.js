@@ -8,7 +8,7 @@
  */
 
 import { createServer } from "node:http";
-import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { readFileSync, existsSync, realpathSync, readdirSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -57,6 +57,7 @@ const MIME = {
 export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secure } = {}) {
   const releaseDir = realpathSync(join(resolve(dist), "current"));
   const manifest = JSON.parse(readFileSync(join(releaseDir, "manifest.json"), "utf8"));
+  const prevRelease = previousReleaseHash(resolve(dist), manifest.hash);
   const sessionSecret = secret ?? process.env.NIRAL_SECRET ?? newSecret();
   const etag = `"${manifest.hash}"`;
   const rpcLimiter = createLimiter({ limit: 300, windowMs: 60_000 });
@@ -283,7 +284,7 @@ export function createProdServer({ dist = "dist", port = 8199, secret, cwd, secu
 
     // load-balancer probe — release + uptime, no secrets
     if (urlPath === "/@niral/health") {
-      return sendJson(res, 200, { ...healthPayload({ release: manifest.hash }), shield: shield.status() });
+      return sendJson(res, 200, { ...healthPayload({ release: manifest.hash, builtAt: manifest.createdAt ?? null, prevRelease }), shield: shield.status() });
     }
 
     // hooks.js middleware — auth guards, redirects, locals (framework/asset paths exempt)
@@ -712,6 +713,17 @@ function writeBody(res, status, headers, body) {
 
 function sendJson(res, status, obj, extraHeaders) {
   send(res, status, "application/json", JSON.stringify(obj), extraHeaders);
+}
+
+/** The most-recently-built release that ISN'T the current one — a rollback hint for ops. */
+function previousReleaseHash(dist, current) {
+  try {
+    const dir = join(dist, "releases");
+    return readdirSync(dir)
+      .filter((h) => h !== current)
+      .map((h) => ({ h, t: statSync(join(dir, h)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)[0]?.h ?? null;
+  } catch { return null; }
 }
 
 /** Shield events log through the same observability pipeline, tagged "shield". */

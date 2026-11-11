@@ -1,0 +1,13 @@
+input initial: number
+state count: number = initial
+derive doubled: number = count * 2
+derive parity: string = count % 2 === 0 ? "even" : "odd"
+
+export function increment(): number {
+  count += 1
+  return count
+}
+
+export function reset(): void {
+  count = initial
+}

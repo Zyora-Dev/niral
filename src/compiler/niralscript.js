@@ -77,7 +77,7 @@ function emitProgram(program, options, direct) {
     array: ["slice", "concat", "includes", "indexOf", "lastIndexOf", "join", "at", "map", "filter", "find", "findIndex", "some", "every", "forEach", "reduce"],
     string: ["slice", "substring", "includes", "indexOf", "lastIndexOf", "startsWith", "endsWith", "trim", "trimStart", "trimEnd", "toLowerCase", "toUpperCase", "charAt", "charCodeAt", "at", "split"],
   };
-  const analysis = analyzeNiralScript(program, { globals: [...GLOBALS, ...(options.globals ?? [])], moduleGlobals: GLOBALS, reserved: options.reserved, pureGlobals, pureMethods, strictTypes: options.strictTypes });
+  const analysis = analyzeNiralScript(program, { globals: [...GLOBALS, ...(options.globals ?? [])], moduleGlobals: GLOBALS, reserved: options.reserved, pureGlobals, pureMethods, strictTypes: options.strictTypes, taintSources: options.taintSources, taintExportedParams: options.taintExportedParams });
   const processReference = analysis.references.find(reference => reference.binding.kind === "global" && reference.binding.name === "process");
   if (processReference) throw new NiralError("NIRAL044", "process is server-only; client code cannot read environment variables", sourceLocation(program, processReference.node));
   const typed = hasTypeSyntax(program);
@@ -140,6 +140,9 @@ function emitProgram(program, options, direct) {
         if (node.typeOnly) return "";
         return node.specifiers.filter(specifier => analysis.imports.get(specifier).scope === analysis.root)
           .map(specifier => `const ${specifier.local.name} = ${name(analysis.imports.get(specifier).binding)};`).join("\n");
+      case "ExportNamedDeclaration":
+        return node.specifiers.filter(specifier => analysis.imports.get(specifier).scope === analysis.root)
+          .map(specifier => `const ${specifier.local.name} = ${name(analysis.imports.get(specifier).binding)};`).join("\n");
       case "Program":
         return body(node, node.start, node.end);
       case "InputDeclaration":
@@ -186,8 +189,11 @@ function emitProgram(program, options, direct) {
         return `for (${node.init ? emit(node.init).replace(/;$/, "") : ""}; ${node.test ? source(node.test) : ""}; ${node.update ? emit(node.update).replace(/;$/, "") : ""}) ${emit(node.body)}`;
       case "WhileStatement":
         return `while (${source(node.test)}\n) ${emit(node.body)}`;
-      case "BreakStatement": return "break;";
-      case "ContinueStatement": return "continue;";
+      case "DoWhileStatement":
+        return `do ${emit(node.body)} while (${source(node.test)}\n);`;
+      case "LabeledStatement": return `${node.label.name}: ${emit(node.body)}`;
+      case "BreakStatement": return node.label ? `break ${node.label.name};` : "break;";
+      case "ContinueStatement": return node.label ? `continue ${node.label.name};` : "continue;";
       case "IfStatement":
         return `if (${source(node.test)}\n) ${emit(node.consequent)}${node.alternate ? " else " + emit(node.alternate) : ""}`;
       case "ReturnStatement":

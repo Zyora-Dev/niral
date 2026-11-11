@@ -1,0 +1,81 @@
+name: Adapters E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    name: Core test suite (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run zero-dependency core tests
+        run: node tests/run.js
+
+  react-vite-e2e:
+    name: Real React + Vite integration (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: examples/react-nrs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install real React, react-dom and Vite (adapters linked via file:)
+        run: npm install --install-links --foreground-scripts
+      - name: Real end-to-end render test (react-dom/server + @niral/react + @niral/vite)
+        run: npm test
+      - name: Real production build (vite build through the real @niral/vite plugin)
+        run: npm run build
+      - name: Assert compiled .nrs code is present in the production bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d dist/assets
+          grep -q "createInstance" dist/assets/*.js
+          grep -q "increment" dist/assets/*.js
+          echo "Verified: compiled NiralScript module is bundled by the real Vite build."
+
+  next-e2e:
+    name: Real Next.js App Router integration (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: examples/next-nrs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install real Next.js and React (adapters linked via file:)
+        run: npm install --install-links --foreground-scripts
+      - name: Real production build (next build through the real @niral/next loader)
+        run: npx next build
+      - name: Assert compiled .nrs code is bundled into the Next client chunks
+        run: npm run verify

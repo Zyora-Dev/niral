@@ -1,0 +1,24 @@
+{
+  "name": "niral-react-nrs-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Real React + Vite app consuming a NiralScript (.nrs) component via @niral/react and @niral/vite.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "@niral/react": "file:../../adapters/react",
+    "@niral/vite": "file:../../adapters/vite",
+    "niralscript": "file:../../niralscript",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

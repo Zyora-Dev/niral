@@ -87,6 +87,11 @@
 <div class="homepage" id="top">
   <a class="skip-link" href="#main-content">Skip to content</a>
   <SiteHeader />
+  <a class="ticker" href="/niralscript" aria-label="New: React, Vite and Next.js adapters for NiralScript">
+    <span class="ticker-badge">New</span>
+    <span class="ticker-text">NiralScript now ships official <strong>React</strong>, <strong>Vite</strong> and <strong>Next.js</strong> adapters — bring your <code>.nrs</code> modules anywhere.</span>
+    <img src={(icons) + "arrow-right.svg"} alt="" width="16" height="16" />
+  </a>
   <main id="main-content">
     <section class="opening" aria-labelledby="page-title">
       <div class="opening-inner frame">
@@ -173,6 +178,15 @@
   .inline-link { display: inline-flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
   .inline-link:hover { color: var(--gold); }
   .site-header { height: 76px; position: sticky; top: 0; z-index: 30; background: #15092af5; border-bottom: 1px solid var(--border); backdrop-filter: blur(16px); }
+  .ticker { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 24px; background: linear-gradient(90deg, #241739, #322057); border-bottom: 1px solid var(--border); color: #fafafa; font-size: 13.5px; text-align: center; }
+  .ticker:hover { background: linear-gradient(90deg, #2b1c45, #3b2666); }
+  .ticker:hover .ticker-text { color: var(--gold); }
+  .ticker-badge { flex-shrink: 0; padding: 2px 9px; border-radius: 999px; background: var(--gold); color: #15092a; font: 600 11px/1.5 "Geist Mono", monospace; text-transform: uppercase; letter-spacing: .04em; }
+  .ticker-text { color: #ededee; transition: color .15s; }
+  .ticker-text strong { color: #fafafa; font-weight: 600; }
+  .ticker-text code { padding: 1px 5px; border-radius: 4px; background: #15092a66; font-size: 12px; }
+  .ticker img { filter: invert(1); flex-shrink: 0; }
+  @media (max-width: 640px) { .ticker { gap: 9px; padding: 9px 16px; font-size: 12.5px; } .ticker img { display: none; } }
   /* The header and footer are shared components, so only the homepage copy is tinted. */
   .homepage :global(.site-header) { background: #15092af5; border-bottom-color: #3a2a55; }
   .homepage :global(.site-footer) { background: #0d0520; }
@@ -357,7 +371,7 @@
   .footer-email { background: #241739; border: 1px solid #4a3570; }
   .footer-email img { filter: invert(1); }
   .footer-email:hover { border-color: var(--gold); }
-  .footer-whatsapp { background: var(--gold); color: #080808; border: 1px solid var(--gold); }
+  .footer-whatsapp { background: var(--gold); color: #15092a; border: 1px solid var(--gold); }
   .footer-whatsapp img:last-child { margin-left: auto; }
   .footer-whatsapp:hover { background: #ffd17a; }
   .footer-copyright { border-top: 1px solid #3a2a55; margin-top: 64px; text-align: center; padding-block: 28px 32px; font-size: 12px; }
@@ -490,7 +504,7 @@
     .terminal-foot { padding-inline: 16px; font-size: 11px; }
     .terminal-foot img { flex-shrink: 0; }
     .growth-path { grid-template-columns: 1fr; gap: 24px; margin-top: 36px; }
-    .growth-path a + a { padding-top: 24px; border-top: 1px solid #343436; }
+    .growth-path a + a { padding-top: 24px; border-top: 1px solid #3a2a55; }
     .resource-card { padding: 24px; grid-template-columns: 28px 1fr; gap: 0 16px; }
     .resource-card h3 { font-size: 20px; }
     .resource-card p { font-size: 13px; }

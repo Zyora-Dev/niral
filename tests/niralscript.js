@@ -40,6 +40,232 @@ test("NiralScript runtime contracts execute across all emitters", async () => {
   assert.throws(() => compileStandalone('const result: string = contract<number>(4)'), /Expected string/);
 });
 
+test("NiralScript runtime contracts validate bigint primitives and literals", async () => {
+  const source = [
+    'type Ledger = { total: bigint, entries: bigint[], mode: 1n | 2n }',
+    'function read(candidate: unknown): Ledger { return contract<Ledger>(candidate) }',
+    'function amount(candidate: unknown): bigint { return contract<bigint>(candidate) }',
+    'const sample = read({ total: 9007199254740993n, entries: [1n, 2n], mode: 2n })',
+  ].join("\n");
+  const exported = ";return { read, amount, sample }";
+  const module = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(source, "bigint-contract.nrs", { strictTypes: true }).code).toString("base64"));
+  const variants = [
+    module.createInstance().values,
+    new Function(compileNiralScript(source, "bigint-contract.nrs", { strictTypes: true }).code + exported)(),
+    new Function(lowerNiralScript(source, "bigint-contract.nrs", { strictTypes: true }) + exported)(),
+  ];
+  for (const values of variants) {
+    assert.deepEqual(values.sample, { total: 9007199254740993n, entries: [1n, 2n], mode: 2n });
+    assert.equal(values.amount(2n ** 64n), 18446744073709551616n);
+    // A large bigint survives exactly where a Number would silently lose precision.
+    assert.equal(values.read({ total: 9007199254740993n, entries: [], mode: 1n }).total, 9007199254740993n);
+    assert.throws(() => values.amount(4), { code: "NRS081", path: "$", expected: "bigint" });
+    assert.doesNotThrow(() => values.amount(4n), "a valid bigint must not throw");
+    assert.throws(() => values.read({ total: 4, entries: [], mode: 1n }), { path: "$.total", expected: "bigint" });
+    assert.throws(() => values.read({ total: 1n, entries: [2], mode: 1n }), { path: "$.entries[0]", expected: "bigint" });
+    assert.throws(() => values.read({ total: 1n, entries: [], mode: 3n }), { path: "$.mode" });
+  }
+  assert.doesNotThrow(() => compileStandalone('const amount = contract<bigint>(1n)'));
+  assert.doesNotThrow(() => compileStandalone('const mode = contract<7n>(7n)'));
+});
+
+test("NiralScript taint tracking blocks untrusted data at the sql.query sink", async () => {
+  const globals = ["sql", "sanitize", "trust"];
+  const opts = { strictTypes: true, globals };
+  // Untrusted (tainted<T>) data reaching a dangerous sink is a hard compile error, not a warning.
+  const blocked = {
+    direct: 'function run(raw: tainted<string>): string { return sql.query(raw) }',
+    concat: 'function run(raw: tainted<string>): string { const q = "select " + raw; return sql.query(q) }',
+    template: 'function run(raw: tainted<string>): string { return sql.query(`select ${raw}`) }',
+    member: 'function run(raw: tainted<{ id: string }>): string { return sql.query(raw.id) }',
+    annotation: 'function run(x: string): string { const raw: tainted<string> = trust(x); return sql.query(raw) }',
+    aliased: 'function run(raw: tainted<string>): string { const alias = raw; return sql.query(alias) }',
+  };
+  // The standalone package reports NRS090; the framework adapter remaps the prefix to NIRAL090.
+  const emitters = [[compileStandalone, "NRS090"], [compileNiralScript, "NIRAL090"], [lowerNiralScript, "NIRAL090"]];
+  for (const [name, source] of Object.entries(blocked)) {
+    for (const [emit, code] of emitters) {
+      assert.throws(() => emit(source, `${name}.nrs`, opts), { code }, `${name} via ${emit.name} must be blocked`);
+    }
+  }
+
+  // Laundering through contract<T>(), sanitize() or trust() clears the taint and must compile across emitters.
+  const laundered = {
+    contract: 'function run(raw: tainted<string>): string { return sql.query(contract<string>(raw)) }',
+    sanitize: 'function run(raw: tainted<string>): string { return sql.query(sanitize(raw)) }',
+    trust: 'function run(raw: tainted<string>): string { return sql.query(trust(raw)) }',
+    clean: 'function run(raw: string): string { return sql.query(raw) }',
+    shadowed: 'function run(sql: { query: (x: string) => string }, raw: tainted<string>): string { return sql.query(raw) }',
+  };
+  for (const [name, source] of Object.entries(laundered)) {
+    for (const [emit] of emitters) {
+      assert.doesNotThrow(() => emit(source, `${name}.nrs`, opts), `${name} via ${emit.name} must launder cleanly`);
+    }
+  }
+
+  // Execute the laundered path for real: the sink receives the sanitized value, proving the escape hatch works.
+  const runtimeSource = 'export function run(raw: tainted<string>): string { return sql.query(sanitize(raw)) }';
+  const output = compileStandalone(runtimeSource, "taint-runtime.nrs", opts);
+  const module = await import("data:text/javascript;base64," + Buffer.from(output.code).toString("base64"));
+  const seen = [];
+  const instance = module.createInstance({}, {
+    sql: { query: text => { seen.push(text); return text; } },
+    sanitize: value => value.replace(/[^\w ]/g, ""),
+  });
+  assert.equal(instance.values.run("drop; table--"), "drop table");
+  assert.deepEqual(seen, ["drop table"], "the sink must receive the laundered value, never the raw taint");
+});
+
+test("NiralScript marks configured binding kinds (request-bound input) as taint sources", async () => {
+  const globals = ["sql", "sanitize"];
+  const emitters = [[compileStandalone, "NRS090"], [compileNiralScript, "NIRAL090"], [lowerNiralScript, "NIRAL090"]];
+
+  // With taintSources opted in, request-bound `input` is untrusted and may not reach a sink unlaundered.
+  const marked = { strictTypes: true, globals, taintSources: ["input"] };
+  const blocked = {
+    direct: "input q: string\nexport function run() { return sql.query(q) }",
+    concat: 'input q: string\nexport function run() { return sql.query("select " + q) }',
+    aliased: "input q: string\nexport function run() { const alias = q; return sql.query(alias) }",
+  };
+  for (const [name, source] of Object.entries(blocked)) {
+    for (const [emit, code] of emitters) {
+      assert.throws(() => emit(source, `${name}.nrs`, marked), { code }, `${name} input via ${emit.name} must be blocked`);
+    }
+  }
+  assert.doesNotThrow(() => compileStandalone("input q: string\nexport function run() { return sql.query(sanitize(q)) }", "laundered.nrs", marked), "laundered input must compile");
+
+  // A non-source binding (state) is never flagged, so honest code is not falsely blocked.
+  assert.doesNotThrow(() => compileStandalone('state q: string = "x"\nexport function run() { return sql.query(q) }', "state.nrs", marked), "state is not a taint source");
+
+  // Without opting in, input stays untainted: the feature is opt-in and backward compatible.
+  const unmarked = { strictTypes: true, globals };
+  for (const source of Object.values(blocked)) {
+    assert.doesNotThrow(() => compileStandalone(source, "default.nrs", unmarked), "input is not tainted unless taintSources is configured");
+  }
+});
+
+test("NiralScript taint propagation resists laundering bypasses", async () => {
+  const opts = { strictTypes: true, globals: ["sql", "sanitize", "trust"], taintSources: ["input"] };
+  // Taint must flow through every derivation; nothing but an explicit launder may clear it.
+  const bypasses = {
+    arrayElement: "input q: string\nexport function r() { const a = [q]; return sql.query(a[0]) }",
+    objectProperty: "input q: string\nexport function r() { const o = { x: q }; return sql.query(o.x) }",
+    objectSpread: "input q: string\nexport function r() { const o = { x: q }; const p = { ...o }; return sql.query(p.x) }",
+    returnViaCall: "input q: string\nfunction wrap(x: string): string { return x }\nexport function r() { return sql.query(wrap(q)) }",
+    nestedCall: "input q: string\nfunction id(x: string): string { return x }\nexport function r() { return sql.query(id(id(q))) }",
+    reassignment: 'input q: string\nexport function r() { let s = "ok"; s = q; return sql.query(s) }',
+    deepAlias: "input q: string\nexport function r() { const a = q; const b = a; const d = b; return sql.query(d) }",
+    logicalDefault: 'input q: string\nexport function r() { return sql.query(q || "d") }',
+    coerce: 'input q: string\nexport function r() { return sql.query("" + q) }',
+    // A user-defined sanitize must NOT silently launder; only the ambient launder clears taint.
+    shadowedSanitize: "input q: string\nfunction sanitize(x: string): string { return x }\nexport function r() { return sql.query(sanitize(q)) }",
+  };
+  for (const [name, source] of Object.entries(bypasses)) {
+    assert.throws(() => compileStandalone(source, `${name}.nrs`, opts), { code: "NRS090" }, `${name} must not bypass taint tracking`);
+  }
+
+  // Laundering through the ambient sanitize clears taint even inside a container or via assignment.
+  const safe = {
+    launderInContainer: "input q: string\nexport function r() { const a = [q]; return sql.query(sanitize(a[0])) }",
+    launderViaAssign: 'input q: string\nexport function r() { let s = "x"; s = sanitize(q); return sql.query(s) }',
+    launderThenAlias: "input q: string\nexport function r() { const safe = sanitize(q); return sql.query(safe) }",
+  };
+  for (const [name, source] of Object.entries(safe)) {
+    assert.doesNotThrow(() => compileStandalone(source, `${name}.nrs`, opts), `${name} must compile after laundering`);
+  }
+});
+
+test("NiralScript taint tracking blocks untrusted data at raw-HTML (XSS) sinks", async () => {
+  const globals = ["sql", "sanitize", "trust", "escape", "html", "raw", "unsafeHTML", "renderHTML"];
+  const opts = { strictTypes: true, globals, taintSources: ["input"] };
+  const emitters = [[compileStandalone, "NRS090"], [compileNiralScript, "NIRAL090"], [lowerNiralScript, "NIRAL090"]];
+
+  // Untrusted data reaching a raw HTML emitter is an XSS injection and must not compile.
+  const blocked = {
+    html: "input q: string\nexport function r() { return html(q) }",
+    raw: "input q: string\nexport function r() { return raw(q) }",
+    unsafeHTML: "input q: string\nexport function r() { return unsafeHTML(q) }",
+    renderHTML: "input q: string\nexport function r() { return renderHTML(q) }",
+    concat: 'input q: string\nexport function r() { return html("<b>" + q + "</b>") }',
+    template: "input q: string\nexport function r() { return html(`<b>${q}</b>`) }",
+    member: "input q: string\nexport function r() { const o = { x: q }; return html(o.x) }",
+  };
+  for (const [name, source] of Object.entries(blocked)) {
+    for (const [emit, code] of emitters) {
+      assert.throws(() => emit(source, `${name}.nrs`, opts), { code }, `${name} XSS sink must block tainted input via ${emit.name}`);
+    }
+  }
+
+  // escape() is the HTML-escaping launder; sanitize()/trust()/contract<T>() also clear taint.
+  const safe = {
+    escape: "input q: string\nexport function r() { return html(escape(q)) }",
+    sanitize: "input q: string\nexport function r() { return html(sanitize(q)) }",
+    trust: "input q: string\nexport function r() { return raw(trust(q)) }",
+    literal: 'export function r() { return html("<b>hi</b>") }',
+    // A user-defined html() is not the ambient sink; its own body is checked separately.
+    shadowed: "input q: string\nfunction html(x: string): string { return escape(x) }\nexport function r() { return html(q) }",
+  };
+  for (const [name, source] of Object.entries(safe)) {
+    for (const [emit] of emitters) {
+      assert.doesNotThrow(() => emit(source, `${name}.nrs`, opts), `${name} must compile after laundering via ${emit.name}`);
+    }
+  }
+
+  // Real execution: escape() laundering neutralizes markup before it reaches the HTML emitter.
+  const source = "export function run(raw: tainted<string>): string { return html(escape(raw)) }";
+  const seen = [];
+  const module = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(source, "xss.nrs", { strictTypes: true, globals }).code).toString("base64"));
+  const { values } = module.createInstance({}, {
+    html: value => { seen.push(value); return value; },
+    escape: value => String(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])),
+  });
+  assert.equal(values.run("<script>alert(1)</script>"), "&lt;script&gt;alert(1)&lt;/script&gt;");
+  assert.deepEqual(seen, ["&lt;script&gt;alert(1)&lt;/script&gt;"]);
+});
+
+test("NiralScript auto-taints exported RPC parameters (network arguments are untrusted)", async () => {
+  const globals = ["sql", "sanitize", "trust", "escape", "html"];
+  const opts = { strictTypes: true, globals, taintExportedParams: true };
+  const emitters = [[compileStandalone, "NRS090"], [compileNiralScript, "NIRAL090"], [lowerNiralScript, "NIRAL090"]];
+
+  // An exported function is an RPC: its arguments arrive from the network, so a parameter
+  // reaching a sink unlaundered is an injection and must not compile.
+  const blocked = {
+    direct: "export function run(q: string) { return sql.query(q) }",
+    concat: 'export function run(q: string) { return sql.query("select " + q) }',
+    alias: "export function run(q: string) { const a = q; return sql.query(a) }",
+    reassign: 'export function run(q: string) { let s = "x"; s = q; return sql.query(s) }',
+    xss: "export function run(q: string) { return html(q) }",
+    template: "export function run(q: string) { return html(`<b>${q}</b>`) }",
+    destructured: "export function run(payload: { id: string }) { return sql.query(payload.id) }",
+    secondParam: 'export function run(safe: string, q: string) { return sql.query(q) }',
+  };
+  for (const [name, source] of Object.entries(blocked)) {
+    for (const [emit, code] of emitters) {
+      assert.throws(() => emit(source, `${name}.nrs`, opts), { code }, `${name} RPC param via ${emit.name} must be blocked`);
+    }
+  }
+
+  // Laundering clears the RPC-param taint, exactly like any other source.
+  const safe = {
+    laundered: "export function run(q: string) { return sql.query(sanitize(q)) }",
+    escaped: "export function run(q: string) { return html(escape(q)) }",
+    // `load` is the SSR data loader, not an RPC — its arguments are framework-controlled.
+    load: "export function load(params: { id: string }) { return sql.query(params.id) }",
+    // A non-exported helper's parameters are not RPC entry points.
+    helper: 'function helper(q: string) { return sql.query(q) }\nexport function run() { return helper("x") }',
+  };
+  for (const [name, source] of Object.entries(safe)) {
+    for (const [emit] of emitters) {
+      assert.doesNotThrow(() => emit(source, `${name}.nrs`, opts), `${name} must compile via ${emit.name}`);
+    }
+  }
+
+  // Off by default: without the flag, exported params are not tainted (opt-in, backward compatible).
+  const unmarked = { strictTypes: true, globals };
+  assert.doesNotThrow(() => compileStandalone("export function run(q: string) { return sql.query(q) }", "off.nrs", unmarked), "exported params are untainted unless taintExportedParams is set");
+});
+
 test("NiralScript supports for-in, destructuring assignment and function expressions", async () => {
   const source = [
     'function keys(record: { a: number, b: number }): string { let out = ""; for (const key in record) { out += key } return out }',
@@ -69,6 +295,62 @@ test("NiralScript supports for-in, destructuring assignment and function express
   assert.throws(() => compileStandalone('function read(pair: number[]) { const first = 0; [first] = pair }'), { code: "NRS074" });
   assert.throws(() => compileStandalone('function read(pair: string[]) { let first: number = 0; [first] = pair; return first }'), { code: "NRS080" });
   assert.throws(() => compileStandalone('function read(n: number) { const run = function step(x: number): number { return x }; return step(n) }'), { code: "NRS073" });
+});
+
+test("NiralScript supports exponent, bitwise operators and extended numeric literals", async () => {
+  const source = [
+    'export function power(): number { return 2 ** 10 }',
+    'export function rightAssoc(): number { return 2 ** 3 ** 2 }',
+    'export function unaryBase(): number { return (-2) ** 2 }',
+    'export function bitAnd(): number { return 6 & 3 }',
+    'export function bitOr(): number { return 5 | 2 }',
+    'export function bitXor(): number { return 5 ^ 1 }',
+    'export function bitNot(): number { return ~5 }',
+    'export function shiftLeft(): number { return 1 << 8 }',
+    'export function shiftRight(): number { return 256 >> 2 }',
+    'export function unsignedShift(): number { return (-1) >>> 28 }',
+    'export function mixed(): number { return (5 & 3) | (1 << 4) ^ 2 }',
+    'export function hex(): number { return 0xff }',
+    'export function binary(): number { return 0b1010 }',
+    'export function octal(): number { return 0o17 }',
+    'export function separators(): number { return 1_000_000 }',
+    'export function fraction(): number { return 3.14_15 }',
+    'export function exponent(): number { return 1e1_0 }',
+    'export function bigLiteral(): bigint { return 2n ** 64n }',
+    'export function hexBig(): bigint { return 0xffn }',
+    'export function compound(): number { let x = 8; x **= 2; x >>= 1; x &= 30; x |= 1; x ^= 4; x <<= 1; x >>>= 0; return x }',
+    'export function bigCompound(): bigint { let b: bigint = 2n; b **= 8n; return b }',
+  ].join("\n");
+  const exported = ";return { power, rightAssoc, unaryBase, bitAnd, bitOr, bitXor, bitNot, shiftLeft, shiftRight, unsignedShift, mixed, hex, binary, octal, separators, fraction, exponent, bigLiteral, hexBig, compound, bigCompound }";
+  const module = await import("data:text/javascript;base64," + Buffer.from(compileStandalone(source, "numbers.nrs", { strictTypes: true }).code).toString("base64"));
+  const variants = [
+    module.createInstance().values,
+    new Function(compileNiralScript(source, "numbers.nrs", { strictTypes: true }).code + exported)(),
+    new Function(lowerNiralScript(source, "numbers.nrs", { strictTypes: true }) + exported)(),
+  ];
+  for (const v of variants) {
+    assert.equal(v.power(), 1024);
+    assert.equal(v.rightAssoc(), 512);
+    assert.equal(v.unaryBase(), 4);
+    assert.equal(v.bitAnd(), 2);
+    assert.equal(v.bitOr(), 7);
+    assert.equal(v.bitXor(), 4);
+    assert.equal(v.bitNot(), -6);
+    assert.equal(v.shiftLeft(), 256);
+    assert.equal(v.shiftRight(), 64);
+    assert.equal(v.unsignedShift(), 15);
+    assert.equal(v.mixed(), 19);
+    assert.equal(v.hex(), 255);
+    assert.equal(v.binary(), 10);
+    assert.equal(v.octal(), 15);
+    assert.equal(v.separators(), 1000000);
+    assert.equal(v.fraction(), 3.1415);
+    assert.equal(v.exponent(), 1e10);
+    assert.equal(v.bigLiteral(), 18446744073709551616n);
+    assert.equal(v.hexBig(), 255n);
+    assert.equal(v.compound(), 10);
+    assert.equal(v.bigCompound(), 256n);
+  }
 });
 
 test("NiralScript runtime contracts resolve imports and preserve explicit boundaries", async () => {
@@ -620,6 +902,70 @@ test("NiralScript loop control preserves scope, completion and reactive writes",
   for (const code of [compileNiralScript(closures).code, lowerNiralScript(closures)]) assert.deepEqual(new Function(code + '\nreturn [result, count]')(), ['0,1,2', 2]);
 });
 
+test("NiralScript do...while runs the body before the test across every emitter", async () => {
+  const source = 'export function countdown(n: number): number { let steps = 0; do { steps = steps + 1; n = n - 1 } while (n > 0); return steps }\nexport function sum(limit: number): number { let total = 0; let index = 0; do { index = index + 1; if (index === 2) { continue } if (index > limit) { break } total = total + index } while (index < 10); return total }';
+  const output = compileStandalone(source, 'dowhile.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  assert.equal(values.countdown(3), 3);
+  assert.equal(values.countdown(0), 1, 'do...while must run the body at least once');
+  assert.equal(values.sum(4), 8, 'break and continue must work inside do...while');
+  const tail = '\nreturn { countdown, sum }';
+  for (const code of [compileNiralScript(source, 'dowhile.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'dowhile.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.countdown(3), 3);
+    assert.equal(api.countdown(0), 1);
+    assert.equal(api.sum(4), 8);
+  }
+  const reactive = 'state count = 3\nfunction drain() { let runs = 0; do { count--; runs++ } while (count > 0); return runs }';
+  const direct = compileNiralScript(reactive);
+  const runtime = await import('../src/runtime/index.js');
+  for (const code of [direct.code, rewriteScript(lowerNiralScript(reactive), direct.signals)]) {
+    const instance = new Function('__n', code + '\nreturn { drain, count }')(runtime);
+    assert.equal(instance.drain(), 3);
+    assert.equal(instance.count.get(), 0);
+  }
+  assert.throws(() => compileStandalone('function bad() { do { call() } }', 'dowhile.nrs', {}), { code: 'NRS072' });
+});
+
+test("NiralScript labeled break and continue target the right loop across every emitter", async () => {
+  const source = 'export function firstHit(grid: number[][], target: number): string { outer: for (let r = 0; r < grid.length; r++) { for (let c = 0; c < grid[r].length; c++) { if (grid[r][c] === target) { return r + "," + c } } } return "none" }\nexport function skipRow(grid: number[][], skip: number): number { let total = 0; scan: for (const row of grid) { for (const cell of row) { if (cell === skip) { continue scan } total = total + cell } } return total }';
+  const output = compileStandalone(source, 'labels.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  const grid = [[1, 2, 3], [4, 5, 6]];
+  assert.equal(values.firstHit(grid, 5), '1,1', 'break <label> must find the nested match');
+  assert.equal(values.firstHit(grid, 9), 'none');
+  assert.equal(values.skipRow(grid, 5), 10, 'continue <label> must skip the rest of the outer iteration');
+  const tail = '\nreturn { firstHit, skipRow }';
+  for (const code of [compileNiralScript(source, 'labels.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'labels.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.firstHit(grid, 5), '1,1');
+    assert.equal(api.skipRow(grid, 5), 10);
+  }
+  assert.throws(() => compileStandalone('function bad() { for (;;) { break missing } }', 'labels.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function bad() { label: call() }', 'labels.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function bad() { dup: for (;;) { dup: for (;;) { break } } }', 'labels.nrs', {}), { code: 'NRS072' });
+});
+
+test("NiralScript new.target distinguishes construction from calls across every emitter", async () => {
+  const source = 'export function Widget(): string { if (new.target) { return "constructed" } return "called" }';
+  const output = compileStandalone(source, 'target.nrs', { strictTypes: true });
+  const module = await import('data:text/javascript;base64,' + Buffer.from(output.code).toString('base64'));
+  const values = module.createInstance().values;
+  assert.equal(values.Widget(), 'called', 'new.target is undefined for a plain call');
+  assert.equal(new values.Widget().constructor.name ? 'constructed' : 'called', 'constructed');
+  const tail = '\nreturn { Widget }';
+  for (const code of [compileNiralScript(source, 'target.nrs', { strictTypes: true }).code, lowerNiralScript(source, 'target.nrs', { strictTypes: true })]) {
+    const api = new Function(code + tail)();
+    assert.equal(api.Widget(), 'called');
+    assert.equal(typeof new api.Widget(), 'object', 'new.target is truthy under construction');
+  }
+  assert.equal(parseNiralScript('function f() { return new.target }').body[0].body.body[0].argument.type, 'MetaProperty');
+  assert.throws(() => compileStandalone('const x = new.target', 'target.nrs', {}), { code: 'NRS072' });
+  assert.throws(() => compileStandalone('function f() { return new.foo }', 'target.nrs', {}), { code: 'NRS071' });
+});
+
 test("NiralScript strict contracts cover loops, nested defaults and spread positions", async () => {
   const source = 'function sum(...values: number[]): number { let total: number = 0; for (let index: number = 0; index < values.length; index++) { total += values[index] } return total }\nfunction size(value: string | null): number { while (value !== null) { const count: number = value.length; value = null; return count } return 0 }\nconst { amount = 2 }: { amount?: number } = {}\nconst items: number[] = [3, 4]\nconst result: number = sum(...[amount, ...items]) + size("abc")';
   const output = compileStandalone(source, 'strict.nrs', { strictTypes: true });
@@ -1106,9 +1452,13 @@ test("NiralScript standalone CLI checks copied sources without the framework", (
     const compiledCode = readFileSync(join(project, "entry.mjs"), "utf8");
     assert.match(compiledCode, /sourceMappingURL=entry.mjs.map/);
     assert.deepEqual(JSON.parse(readFileSync(join(project, "entry.mjs.map"), "utf8")).sources, ["base.nrs", "math.nrs", "entry.nrs"]);
-    assert.equal(run("compile", "entry.nrs", "--out", "entry.mjs").status, 1);
+    const existing = run("compile", "entry.nrs", "--out", "entry.mjs", "--json");
+    assert.equal(existing.status, 1);
+    assert.equal(JSON.parse(existing.stdout).diagnostics[0].code, "NRS079");
     assert.equal(readFileSync(join(project, "entry.mjs"), "utf8"), compiledCode);
-    assert.equal(run("compile", "entry.nrs", "--out", "../escape.mjs").status, 1);
+    const escaped = run("compile", "entry.nrs", "--out", "../escape.mjs", "--json");
+    assert.equal(escaped.status, 1);
+    assert.equal(JSON.parse(escaped.stdout).diagnostics[0].code, "NRS079");
     assert.equal(run("compile", "entry.nrs", "--out", "missing/output.mjs").status, 1);
     assert.equal(run("compile", "entry.nrs").status, 2);
     writeFileSync(join(project, "trace.nrs"), 'import { fail } from "./fail.nrs"\nfunction run() { return fail() }');
@@ -1244,6 +1594,66 @@ test("NiralScript links isolated modules with transitive semantic checks", async
   files.set("./base.nrs", "export const base = ping()\nexport function twice(value) { return value * base }");
   assert.throws(() => compileNiralScript(source, "entry.nrs", { resolveModule, globals: ["ping"] }), { code: "NIRAL073" });
   assert.throws(() => compileNiralScript(source), { code: "NIRAL078" });
+});
+
+test("NiralScript re-exports module members across every emitter", async () => {
+  const library = "export const base = 5\nexport const twice = value => value * 2";
+  const resolveModule = () => ({ filename: "math.nrs", source: library });
+  const entry = 'export { twice, base as initial } from "./math.nrs"\nconst total = twice(initial)';
+
+  const parsed = parseNiralScript(entry, "entry.nrs");
+  assert.equal(parsed.body[0].type, "ExportNamedDeclaration");
+  assert.equal(parsed.body[0].source.value, "./math.nrs");
+  assert.deepEqual(parsed.body[0].specifiers.map(({ imported, local }) => [imported.name, local.name]), [["twice", "twice"], ["base", "initial"]]);
+
+  const standalone = compileStandalone(entry, "entry.nrs", { resolveModule });
+  const values = (await import("data:text/javascript;base64," + Buffer.from(standalone.code).toString("base64"))).createInstance().values;
+  const runtime = { signal: value => ({ get: () => value, set() {} }), derived: compute => ({ get: compute }) };
+  const direct = new Function("__n", compileNiralScript(entry, "entry.nrs", { resolveModule }).code + "\nreturn { total, twice, initial };")(runtime);
+  const legacy = new Function("__n", lowerNiralScript(entry, "entry.nrs", { resolveModule }) + "\nreturn { total, twice, initial };")(runtime);
+  for (const api of [values, direct, legacy]) {
+    assert.equal(api.total, 10);
+    assert.equal(api.initial, 5);
+    assert.equal(typeof api.twice, "function");
+    assert.equal(api.twice(4), 8);
+  }
+
+  const chain = new Map([
+    ["./b.nrs", 'export { value } from "./c.nrs"'],
+    ["./c.nrs", "export const value = 42"],
+  ]);
+  const resolveChain = specifier => ({ filename: specifier, source: chain.get(specifier) });
+  const chained = compileStandalone('import { value } from "./b.nrs"\nconst answer = value', "entry.nrs", { resolveModule: resolveChain });
+  const chainedValues = (await import("data:text/javascript;base64," + Buffer.from(chained.code).toString("base64"))).createInstance().values;
+  assert.equal(chainedValues.answer, 42);
+
+  assert.throws(() => compileStandalone('export { missing } from "./math.nrs"', "entry.nrs", { resolveModule }), { code: "NRS078" });
+  assert.throws(() => compileStandalone('export { base } from "./math.nrs"\nconst base = 1', "entry.nrs", { resolveModule }), { code: "NRS070" });
+});
+
+test("NiralScript permits strict property access on known host globals across every emitter", () => {
+  const programs = [
+    "const x = Promise.resolve(1)",
+    "const x = Promise.resolve(1).then(value => value)",
+    "const x = new Map()",
+    "const x = new Set().add(1)",
+    "const x = JSON.stringify({})",
+    "const x = Math.max(1, 2)",
+    "const x = Object.keys({})",
+    "const x = Array.isArray([])",
+    "const x = Date.now()",
+    "const x = Number.isFinite(1)",
+  ];
+  const globals = ["Promise", "Map", "Set", "JSON", "Math", "Object", "Array", "Date", "Number"];
+  for (const source of programs) {
+    assert.doesNotThrow(() => compileStandalone(source, "entry.nrs", { strictTypes: true, globals }), source);
+    assert.doesNotThrow(() => compileNiralScript(source, "entry.nrs", { strictTypes: true }), source);
+    assert.doesNotThrow(() => lowerNiralScript(source, "entry.nrs", { strictTypes: true }), source);
+  }
+  // genuinely unknown receivers are still rejected under strict typing
+  assert.throws(() => compileStandalone("function read(value) { return value.missing }", "entry.nrs", { strictTypes: true }), { code: "NRS080" });
+  // process stays server-only even though it is a known global
+  assert.throws(() => compileNiralScript("const x = process.env", "entry.nrs", {}), { code: "NIRAL044" });
 });
 
 test("NiralScript parses named module imports and exported declarations", () => {
@@ -1663,10 +2073,10 @@ test("NiralScript decodes literals and parses nested template interpolations", (
 
 test("NiralScript rejects malformed literals and syntax outside the expression subset", () => {
   for (const expression of [
-    "a == b", "a != b", "a ** b", "a ??", "a?.", "a & b", "a, b", "a += 1",
+    "a == b", "a != b", "a ??", "a?.", "a, b", "a += 1",
     "++a", "[1,,2]", "[...]", "{...}", "{[key]: 1}", "{get x() {}}",
     "{true}", "{x:}", "{__proto__: null, '__proto__': null}", "fn(,)", "fn(1 2)",
-    "record[]", "record.", "a ? b", "a ? : b", "(1, 2)", "1e+", "01", "0x10",
+    "record[]", "record.", "a ? b", "a ? : b", "(1, 2)", "1e+", "01", "0b", "0x", "0o9",
     '"\\xGG"', '"\\uXYZW"', '"\\u{110000}"', '"\\1"', '"\\08"', "`bad ${1 +}`",
     "/pattern/", "await", "typeof",
     "1 + () => 2", "!() => 1", "() => {}()", "fn(...)",
@@ -1690,6 +2100,27 @@ test("NiralScript rejects malformed literals and syntax outside the expression s
     assert.equal(component.slice(error.start, error.end), "*");
     return true;
   });
+});
+
+test("NiralScript scanner reports unterminated strings, templates and block comments", () => {
+  const cases = [
+    { code: "NRS012", message: "String literal is never closed", source: 'state label = "open', open: '"' },
+    { code: "NRS013", message: "Template literal is never closed", source: "state label = `open", open: "`" },
+    { code: "NRS014", message: "Block comment is never closed", source: "state count = 1 /* open", open: "/*" },
+  ];
+  for (const { code, message, source, open } of cases) {
+    assert.throws(() => parseNiralScript(source, "open.nrs"), error => {
+      assert.equal(error.code, code);
+      assert.equal(error.message, message);
+      assert.equal(error.filename, "open.nrs");
+      assert.equal(error.source, source);
+      assert.equal(error.start, source.indexOf(open));
+      return true;
+    }, source);
+    const niralCode = code.replace("NRS", "NIRAL");
+    assert.throws(() => lowerNiralScript(source, "open.niral"), { code: niralCode }, source);
+  }
+  assert.doesNotThrow(() => parseNiralScript('state ok = "closed"\nstate done = `t${1}` /* shut */', "ok.nrs"));
 });
 
 test("NiralScript handles comments, quoted delimiters and multiline initializers", () => {

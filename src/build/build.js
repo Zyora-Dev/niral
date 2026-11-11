@@ -18,7 +18,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync,
-  cpSync, renameSync, rmSync, mkdtempSync, lstatSync,
+  cpSync, renameSync, rmSync, mkdtempSync, lstatSync, chownSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve, dirname, relative, sep } from "node:path";
@@ -280,6 +280,10 @@ export function build({ root = ".", out } = {}) {
   }
   release = destination;
 
+  // A sudo build makes the release root-owned; the service user then can't read
+  // it and crash-loops on EACCES. Match the release to the dist dir's owner.
+  adoptOwner(distDir, destination);
+
   activateRelease(distDir, hash);
 
   /* ── keep the last 5 releases for instant rollback ── */
@@ -295,6 +299,31 @@ export function build({ root = ".", out } = {}) {
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
+}
+
+/**
+ * Recursively chown a freshly built release to match the owner of the dist
+ * directory (the service user). A no-op on Windows, when already matching, or
+ * when the process can't chown (non-root without ownership) — a plain
+ * non-sudo build already produces correctly owned files.
+ */
+function adoptOwner(distDir, release) {
+  if (process.platform === "win32") return;
+  let target;
+  try {
+    target = statSync(distDir);
+  } catch {
+    return;
+  }
+  const self = statSync(release);
+  if (self.uid === target.uid && self.gid === target.gid) return;
+  const walk = (abs) => {
+    try { chownSync(abs, target.uid, target.gid); }
+    catch { return; }
+    const entry = lstatSync(abs);
+    if (entry.isDirectory()) for (const name of readdirSync(abs)) walk(join(abs, name));
+  };
+  walk(release);
 }
 
 /** Project files copied verbatim (everything except routes/dist/node_modules/hidden). */

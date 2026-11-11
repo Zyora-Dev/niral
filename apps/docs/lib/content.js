@@ -4,13 +4,489 @@
 
 export const GROUPS = [
   { name: "Start", slugs: ["getting-started", "components", "reactivity"] },
-  { name: "Build", slugs: ["routing", "styling", "typescript"] },
+  { name: "Build", slugs: ["routing", "styling", "typescript", "niralscript"] },
+  { name: "Frameworks", slugs: ["use-in-react", "use-in-vite", "use-in-nextjs"] },
   { name: "Server", slugs: ["server", "api-routes", "database", "auth", "validation", "realtime"] },
   { name: "Capabilities", slugs: ["ai", "jobs", "utilities", "images"] },
   { name: "Ship", slugs: ["deployment", "zhost", "scaling", "security", "cli", "benchmarks"] },
 ];
 
 export const PAGES = {
+  "niralscript": {
+    title: "NiralScript",
+    seoTitle: "NiralScript Compiler, CLI and Runtime | Niral Docs",
+    description: "Install NiralScript, check and compile .nrs files, use compiler APIs and standalone reactive modules, and understand runtime behavior and licensing.",
+    body: `
+NiralScript is an independent, experimental language with its own zero-dependency
+compiler. Niral is its first framework integration. The language uses
+\`.nrs\` files; Niral components still use \`.niral\`.
+
+## Install the standalone compiler
+
+Requires Node.js 22 or newer. In a standalone project:
+
+\`\`\`sh
+npm install --save-dev niralscript
+npx nrs --help
+\`\`\`
+
+For a one-off command without installing into your project:
+
+\`\`\`sh
+npx --package niralscript nrs --help
+\`\`\`
+
+The package is named \`niralscript\`; the executable is \`nrs\`. Niral itself
+vendors the compiler and does not need an additional runtime dependency.
+
+## Check and compile a module
+
+Save this as \`counter.nrs\`:
+
+\`\`\`text
+input initial: number
+state count: number = initial
+derive doubled: number = count * 2
+
+export function increment(): number {
+  count += 1
+  return doubled
+}
+\`\`\`
+
+\`\`\`sh
+npx nrs check counter.nrs --strict
+npx nrs compile counter.nrs --strict --out counter.mjs
+\`\`\`
+
+Compilation emits \`counter.mjs\` and \`counter.mjs.map\`. Neither command executes
+your source. The compiled module embeds the reactive primitives it needs; there
+is no separate runtime package to install.
+
+Save this consumer as \`consumer.mjs\`:
+
+\`\`\`js
+import { createInstance } from "./counter.mjs";
+
+const counter = createInstance({ initial: 2 });
+console.log(counter.values.count);       // 2
+console.log(counter.values.increment()); // 6
+counter.updateInputs({ initial: 8 });
+console.log(counter.values.initial);     // 8
+console.log(counter.values.count);       // 3
+\`\`\`
+
+\`\`\`sh
+node --enable-source-maps consumer.mjs
+\`\`\`
+
+## Command reference
+
+\`\`\`text
+nrs check <file.nrs>... [--root <directory>] [--global <name>] [--strict] [--json]
+nrs compile <file.nrs> --out <file.mjs> [--root <directory>] [--global <name>] [--strict] [--json]
+\`\`\`
+
+- \`check\` accepts one or more entry files and checks their imported module graphs.
+- \`compile\` accepts exactly one entry and requires \`--out\` ending in \`.mjs\`.
+- \`--root\` selects an existing project directory; input/output paths are relative
+  to it. The default is the current directory.
+- \`--strict\` requires narrowing of unknown and nullable values before typed use.
+- Repeat \`--global name\` to allow explicit host identifiers. Supply actual values
+  in the second argument of \`createInstance\`; the option does not inject them.
+- \`--json\` emits \`{ ok, entries, diagnostics }\` with original-source locations.
+- \`--help\` or \`-h\` shows usage. \`--\` treats subsequent arguments as entry paths.
+
+Exit codes: 0 success, 1 source/file errors, 2 invalid arguments. Imports must use
+explicit relative \`.nrs\` paths and stay inside the root. Source symlinks are
+rejected. Output parent directories must already exist. Existing output files
+are never overwritten. There is no watch mode or \`nrs build\` command.
+
+## Compiler APIs
+
+\`\`\`js
+import { parseNiralScript } from "niralscript";
+import { checkNiralScript } from "niralscript/check";
+import { compileNiralScript } from "niralscript/compile";
+
+const source = "state count: number = 1\\n derive doubled = count * 2";
+const program = parseNiralScript(source, "counter.nrs");
+checkNiralScript(source, "counter.nrs", { strictTypes: true });
+const { code, map, topLevelAwait } = compileNiralScript(source, "counter.nrs", {
+  strictTypes: true, file: "counter.mjs",
+});
+\`\`\`
+
+APIs do not read/write files or execute source. For imports, hosts provide
+\`resolveModule(specifier, importer, location)\`, returning \`{ filename, source }\`.
+The host owns filesystem policy. Source maps include original source text;
+do not expose them publicly when source must remain private.
+
+## Runtime behavior
+
+Each \`createInstance(inputs, globals, runtime?)\` initializes independent state
+and imported module scopes. \`values\` exposes entry bindings; state values are
+writable, while inputs and derives are readonly. \`updateInputs\` updates known
+inputs without resetting state or rerunning ordinary initializers.
+
+The embedded runtime is pull-based. Derives are read on demand, using
+instance-wide revision invalidation where caching is needed; simple derives can
+be inlined. Object/array reactivity is shallow: replace a binding to invalidate
+dependent values. Nested mutations do not automatically trigger updates.
+There are no subscriptions or DOM rendering in the default runtime.
+
+Top-level await makes the factory asynchronous; await \`createInstance\` before
+reading its values. Hosts can inject a runtime providing
+\`signal(initial) -> { get, set }\` and \`derived(compute) -> { get }\` as the third
+argument. Host integration must preserve immediate reads and instance isolation.
+
+## Types and external data
+
+Gradual annotations check primitives, unions, records, arrays, aliases,
+interfaces, function signatures, generics and recursive types. Annotations are
+erased: they do not validate external data at runtime.
+
+\`\`\`text
+type Order = { quantity: number, note?: string }
+
+export function readOrder(candidate: unknown): Order {
+  return contract<Order>(candidate)
+}
+\`\`\`
+
+Explicit contracts copy valid data and throw NRS081 with a field path on invalid
+data. They do not coerce values. Recursive, class, function, promise and unknown
+schemas cannot become runtime contracts.
+
+## Integrations and license
+
+Niral is the first-class framework integration, and you can also consume compiled
+\`.nrs\` modules in existing React, Vite and Next.js projects through the official
+adapters: [Use in React](/docs/use-in-react), [Use with Vite](/docs/use-in-vite)
+and [Use in Next.js](/docs/use-in-nextjs). Full JavaScript/TypeScript source
+compatibility is not a goal — \`.nrs\` files hold reactive logic. The published
+[Niral VS Code extension](https://marketplace.visualstudio.com/items?itemName=zyoralabs.niral-vscode)
+supports standalone files; language-server features require \`niral lsp\`.
+
+NiralScript is **Apache-2.0 with a Runtime Library Exception**. Emitted runtime
+code and compiled output may be distributed under your own terms; the compiler
+remains Apache-2.0. The Niral framework is separately MIT-licensed.
+
+[Full license](https://github.com/Zyora-Dev/niralscript/blob/main/LICENSE) |
+[Language reference](https://github.com/Zyora-Dev/niralscript/blob/main/NIRALSCRIPT.md) |
+[Standalone source](https://github.com/Zyora-Dev/niralscript) |
+[NiralScript overview and playground](/niralscript)
+`,
+  },
+  "use-in-react": {
+    title: "Use NiralScript in React",
+    seoTitle: "Use NiralScript in React with @niral/react | Niral Docs",
+    description: "Consume compiled NiralScript (.nrs) modules as idiomatic React with the @niral/react adapter: useNrs, bindNrs, live reactive reads, RPCs and prop flow.",
+    body: `
+\`.nrs\` files hold reactive logic — \`input\`, \`state\`, \`derive\` and exported
+functions — with no markup. In a React app, **React owns the markup** and the
+\`@niral/react\` adapter turns a compiled \`.nrs\` module into live reactive values
+and callable functions through the \`useNrs\` hook.
+
+The adapter is peer-only: it declares \`react\` as a peer dependency and ships no
+bundler or runtime of its own, so your app stays in control of its dependencies.
+
+## Install
+
+Requires Node.js 22 or newer and React 18 or newer. You also need a bundler
+step that can import \`.nrs\` files — see [Use with Vite](/docs/use-in-vite) or
+[Use in Next.js](/docs/use-in-nextjs).
+
+\`\`\`sh
+npm install @niral/react
+\`\`\`
+
+## Write a component
+
+Save the reactive logic as \`counter.nrs\`:
+
+\`\`\`text
+input initial: number
+state count: number = initial
+derive doubled: number = count * 2
+derive parity: string = count % 2 === 0 ? "even" : "odd"
+
+export function increment(): number {
+  count += 1
+  return count
+}
+
+export function reset(): void {
+  count = initial
+}
+\`\`\`
+
+Then render it with React. The \`.nrs\` import is resolved by the bundler loader;
+\`useNrs\` returns a live view — reactive reads stay current, exported functions
+are stable callbacks:
+
+\`\`\`jsx
+import * as counter from "./counter.nrs";
+import { useNrs } from "@niral/react";
+
+export function Counter({ initial = 0 }) {
+  const c = useNrs(counter, { initial });
+  return (
+    <div>
+      <p>{c.count} (x2 = {c.doubled}, {c.parity})</p>
+      <button onClick={c.increment}>increment</button>
+      <button onClick={c.reset}>reset</button>
+    </div>
+  );
+}
+\`\`\`
+
+## How useNrs works
+
+\`useNrs(module, props, globals?)\` creates exactly **one** NiralScript instance
+for the lifetime of the mounted component. It subscribes React to the module's
+reactive revision through \`useSyncExternalStore\`, so a state change re-renders
+only components that read it. Changed \`props\` are pushed into the module's
+\`input\` signals after each commit via the module's \`updateInputs\`.
+
+- Reactive bindings (\`state\`, \`derive\`, \`input\`) are read through live getters —
+  access \`c.count\` during render and you always get the current value.
+- Exported functions are returned as stable callbacks you can pass to \`onClick\`.
+- One instance per component means two \`<Counter />\` mounts hold independent state.
+
+\`useNrs\` is synchronous and does **not** support \`.nrs\` modules that use
+top-level \`await\` (an async factory). Keep awaited work out of module top level,
+or resolve it in your React data layer and pass the result in as an \`input\`.
+
+## Bind a whole component
+
+When a component is just "render this module", \`bindNrs\` wraps the hook and a
+render callback into a standalone component:
+
+\`\`\`jsx
+import * as counter from "./counter.nrs";
+import { bindNrs } from "@niral/react";
+
+export default bindNrs(counter, (c) => (
+  <button onClick={c.increment}>{c.count} / {c.doubled}</button>
+));
+\`\`\`
+
+## Strict types and globals
+
+Enable NiralScript strict checking in your bundler loader (the
+[Vite](/docs/use-in-vite) and [Next.js](/docs/use-in-nextjs) adapters both take
+\`{ strictTypes: true }\`). If your module declares host globals, pass their values
+as the third argument: \`useNrs(module, props, { now: Date.now() })\`.
+
+## Server-side rendering
+
+\`useNrs\` reads the module's initial revision as its SSR snapshot, so
+\`react-dom/server\` renders the initial state deterministically; the client then
+hydrates and takes over reactivity. This is what the Next.js adapter relies on
+for Client Components.
+
+[Use with Vite](/docs/use-in-vite) |
+[Use in Next.js](/docs/use-in-nextjs) |
+[NiralScript language](/docs/niralscript)
+`,
+  },
+  "use-in-vite": {
+    title: "Use NiralScript with Vite",
+    seoTitle: "Use NiralScript with Vite via @niral/vite | Niral Docs",
+    description: "Import NiralScript (.nrs) files directly in a Vite app with the @niral/vite plugin: zero-config transform, HMR, strict types and diagnostics.",
+    body: `
+The \`@niral/vite\` plugin lets you \`import\` a \`.nrs\` file like any other module
+in a Vite project. It compiles each \`.nrs\` source to the standalone ES module
+that \`nrs compile\` emits — exporting \`createInstance\` plus your top-level
+exports — and hands Vite the code and source map. Pair it with
+[\`@niral/react\`](/docs/use-in-react) to render the result.
+
+\`niralscript\` (the compiler) is a dependency of the plugin; \`vite\` is a peer
+dependency, so the plugin adds no bundler of its own.
+
+## Install
+
+Requires Node.js 22 or newer and Vite 5 or newer.
+
+\`\`\`sh
+npm install -D @niral/vite
+npm install @niral/react react react-dom
+\`\`\`
+
+## Configure Vite
+
+Register the plugin with \`enforce: "pre"\` handled for you. Put it before your
+framework plugin:
+
+\`\`\`js
+// vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import niralscript from "@niral/vite";
+
+export default defineConfig({
+  plugins: [niralscript(), react()],
+});
+\`\`\`
+
+## Import a .nrs file
+
+With the plugin registered, import the module and feed it to \`useNrs\`:
+
+\`\`\`jsx
+// src/App.jsx
+import * as counter from "./counter.nrs";
+import { useNrs } from "@niral/react";
+
+export default function App() {
+  const c = useNrs(counter, { initial: 2 });
+  return <button onClick={c.increment}>{c.count} / {c.doubled}</button>;
+}
+\`\`\`
+
+Run the dev server:
+
+\`\`\`sh
+npm run dev
+\`\`\`
+
+## Hot module replacement
+
+In \`vite dev\`, the plugin injects HMR glue so editing a \`.nrs\` file swaps the
+compiled module in place without a full reload. Modules that use top-level
+\`await\` are skipped for HMR (they can't be hot-swapped safely) and trigger a
+normal reload instead.
+
+## Options
+
+\`niralscript(options)\` accepts:
+
+\`\`\`text
+strictTypes   boolean   Enable NiralScript strict type checking (default false).
+hmr           boolean   Inject HMR glue (default: true during "vite dev").
+\`\`\`
+
+\`\`\`js
+niralscript({ strictTypes: true });
+\`\`\`
+
+## Diagnostics
+
+Compile errors surface as real Vite build/transform errors with the original
+\`.nrs\` file, line and column — for example a reactive cycle or a type error —
+so they appear in the terminal and the dev overlay. Fix the \`.nrs\` source and
+the module recompiles.
+
+[Use in React](/docs/use-in-react) |
+[Use in Next.js](/docs/use-in-nextjs) |
+[NiralScript language](/docs/niralscript)
+`,
+  },
+  "use-in-nextjs": {
+    title: "Use NiralScript in Next.js",
+    seoTitle: "Use NiralScript in Next.js with @niral/next | Niral Docs",
+    description: "Compile NiralScript (.nrs) files in a Next.js App Router app with @niral/next: withNiral config, webpack and Turbopack support, and Client Components.",
+    body: `
+The \`@niral/next\` adapter wraps your Next.js config so \`.nrs\` files compile
+through the NiralScript compiler, then you consume them as **Client Components**
+with [\`@niral/react\`](/docs/use-in-react). It targets the App Router and works in
+both \`next dev\` and \`next build\`.
+
+A compiled \`.nrs\` module is reactive client logic, so the loader marks its output
+\`"use client"\`. The module naturally sits on the Client Component side of the
+App Router boundary; your Server Components can import and render the wrapping
+client component normally.
+
+## Install
+
+Requires Node.js 22 or newer, Next.js 14 or newer and React 18 or newer.
+
+\`\`\`sh
+npm install @niral/next @niral/react
+\`\`\`
+
+## Wrap your Next config
+
+\`\`\`js
+// next.config.mjs
+import { withNiral } from "@niral/next";
+
+export default withNiral({
+  reactStrictMode: true,
+});
+\`\`\`
+
+\`withNiral\` registers the webpack loader for \`.nrs\` and mirrors it in Turbopack
+rules, and preserves any existing \`webpack\` hook and \`experimental\` options in
+your config. Pass compiler options as the second argument:
+
+\`\`\`js
+export default withNiral({ reactStrictMode: true }, { strictTypes: true });
+\`\`\`
+
+## Create a Client Component
+
+The component that uses \`useNrs\` must be a Client Component — add the
+\`"use client"\` directive at the top:
+
+\`\`\`jsx
+// app/counter.jsx
+"use client";
+import * as counter from "./counter.nrs";
+import { useNrs } from "@niral/react";
+
+export default function Counter({ initial = 0 }) {
+  const c = useNrs(counter, { initial });
+  return (
+    <button onClick={c.increment}>
+      {c.count} (x2 = {c.doubled})
+    </button>
+  );
+}
+\`\`\`
+
+## Render it from a Server Component
+
+A Server Component (the default in the App Router) can import and render the
+client component directly:
+
+\`\`\`jsx
+// app/page.jsx
+import Counter from "./counter";
+
+export default function Page() {
+  return (
+    <main>
+      <h1>NiralScript in Next.js</h1>
+      <Counter initial={5} />
+    </main>
+  );
+}
+\`\`\`
+
+Run the app:
+
+\`\`\`sh
+npm run dev      # development
+npm run build    # production build
+\`\`\`
+
+## Notes
+
+- Keep the \`"use client"\` directive on files that call \`useNrs\`; the \`.nrs\`
+  module itself is already compiled as client code.
+- \`withNiral\` sets Turbopack rules under \`experimental.turbo\` so it stays quiet
+  on Next 14. On Next 15 you can additionally opt into the stable top-level
+  \`turbopack.rules\` key if you prefer.
+- Compile errors (type errors, reactive cycles) surface as build errors with the
+  original \`.nrs\` file, line and column.
+
+[Use in React](/docs/use-in-react) |
+[Use with Vite](/docs/use-in-vite) |
+[NiralScript language](/docs/niralscript)
+`,
+  },
   "api-routes": {
     title: "HTTP API routes",
     seoTitle: "HTTP API Routes and Webhooks | Niral Docs",

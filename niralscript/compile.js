@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { checkNiralScript } from "./check.js";
 import { decoratorExpressions } from "./analysis.js";
 import { sourceLocation } from "./errors.js";
@@ -165,11 +167,18 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
         write(identifier(binding) + (references.has(node) && reactive(binding) ? ".get()" : ""), node);
         break;
       }
-      case "Literal": write(typeof node.value === "number" ? `(${String(node.value)})` : JSON.stringify(node.value), node); break;
+      case "Literal": write(typeof node.value === "number" ? `(${String(node.value)})` : typeof node.value === "bigint" ? `(${String(node.value)}n)` : JSON.stringify(node.value), node); break;
       case "Program": joined(node.body, "\n"); break;
       case "ImportDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration": break;
+      case "ExportNamedDeclaration":
+        node.specifiers.forEach((specifier, index) => {
+          if (index) write("\n");
+          const local = analysis.bindings.find(binding => binding.id === specifier.local);
+          write(`const ${identifier(local)} = ${identifier(analysis.imports.get(specifier).binding)};`);
+        });
+        break;
       case "InputDeclaration":
         write("const ", node); emit(node.id); write(` = __runtime.signal(__inputs[${JSON.stringify(node.id.name)}]);\n`);
         write(`__inputCells[${JSON.stringify(node.id.name)}] = `); emit(node.id); write(";"); break;
@@ -234,8 +243,11 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
         write("for (", node); emit(node.init, false); write("; "); emit(node.test); write("; "); emit(node.update, false); write(") "); emit(node.body); break;
       case "WhileStatement":
         write("while (", node); emit(node.test); write(") "); emit(node.body); break;
-      case "BreakStatement": write("break;", node); break;
-      case "ContinueStatement": write("continue;", node); break;
+      case "DoWhileStatement":
+        write("do ", node); emit(node.body); write(" while ("); emit(node.test); write(");"); break;
+      case "LabeledStatement": write(`${node.label.name}: `, node); emit(node.body); break;
+      case "BreakStatement": write(node.label ? `break ${node.label.name};` : "break;", node); break;
+      case "ContinueStatement": write(node.label ? `continue ${node.label.name};` : "continue;", node); break;
       case "IfStatement":
         write("if (", node); emit(node.test); write(") "); emit(node.consequent);
         if (node.alternate) { write(" else "); emit(node.alternate); } break;
@@ -289,6 +301,7 @@ export function compileNiralScript(source, filename = "entry.nrs", options = {})
       case "ContractExpression": write(analysis.contracts.get(node), node); write("("); emit(node.argument); write(")"); break;
       case "CastExpression": emit(node.expression); break;
       case "NewExpression": write("new (", node); emit(node.callee); write(")("); joined(node.arguments); write(")"); break;
+      case "MetaProperty": write("new.target", node); break;
       case "ArrayExpression":
       case "ArrayPattern": write("[", node); joined(node.elements); if (node.elements.at(-1) === null) write(","); write("]"); break;
       case "ObjectExpression":

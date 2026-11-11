@@ -1,15 +1,22 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { Scanner, RESERVED_WORDS } from "./scanner.js";
 import { StatementParser } from "./parser.js";
 import { readType, readTypeParameters } from "./types.js";
 
 const PRECEDENCE = new Map([
-  ["??", 1], ["||", 1], ["&&", 2], ["===", 3], ["!==", 3],
-  ["<", 4], ["<=", 4], [">", 4], [">=", 4], ["instanceof", 4],
-  ["+", 5], ["-", 5], ["*", 6], ["/", 6], ["%", 6],
+  ["??", 1], ["||", 1], ["&&", 2],
+  ["|", 3], ["^", 4], ["&", 5],
+  ["===", 6], ["!==", 6],
+  ["<", 7], ["<=", 7], [">", 7], [">=", 7], ["instanceof", 7],
+  ["<<", 8], [">>", 8], [">>>", 8],
+  ["+", 9], ["-", 9], ["*", 10], ["/", 10], ["%", 10],
+  ["**", 11],
 ]);
+const RIGHT_ASSOCIATIVE = new Set(["**"]);
 const IDENTIFIER = /[A-Za-z_$][\w$]*/y;
-const NUMBER = /(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
-const SYMBOL = /===|!==|==|!=|<=|>=|&&|\|\||\+\+|--|\*\*|=>|\?\?|\?\.|[+\-*/%!=<>]=?|[()[\]{},.;:?`|#@]/y;
+const NUMBER = /0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*n?|0[bB][01](?:_?[01])*n?|0[oO][0-7](?:_?[0-7])*n?|(?:0|[1-9](?:_?\d)*)n|(?:(?:0|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?/y;
+const SYMBOL = />>>=?|<<=?|>>=?|===|!==|==|!=|<=|>=|&&|\|\||\*\*=?|\+\+|--|=>|\?\?|\?\.|[&|^]=?|~|[+\-*/%!=<>]=?|[()[\]{},.;:?`|#@]/y;
 
 export function parseExpression(source, filename, start, end) {
   const parser = new ExpressionParser(source, filename, start, end);
@@ -76,7 +83,9 @@ export class ExpressionParser {
       if (!scanner.eat(quote)) this.error("Expected closing quote", start);
     } else if ((code >= 48 && code <= 57) || (char === "." && scanner.src.charCodeAt(start + 1) >= 48 && scanner.src.charCodeAt(start + 1) <= 57)) {
       kind = "number";
-      value = Number(scanner.read(NUMBER));
+      const raw = scanner.read(NUMBER);
+      if (raw.endsWith("n")) value = BigInt(raw.slice(0, -1).replace(/_/g, ""));
+      else value = Number(raw.replace(/_/g, ""));
     } else if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || code === 36) {
       kind = "identifier";
       value = scanner.read(IDENTIFIER);
@@ -108,6 +117,18 @@ export class ExpressionParser {
     const token = this.peek();
     if (token.kind !== kind) this.error(`Expected '${kind}', found '${token.value ?? token.kind}'`, token.start);
     return this.take();
+  }
+
+  // Closes a type-argument list. A `>>` or `>>>` token (shift operators) is split so
+  // the leading `>` closes this list and the remaining `>` tokens stay for outer lists.
+  expectClose() {
+    const token = this.peek();
+    if (token.kind === ">>" || token.kind === ">>>") {
+      this.current = null;
+      this.scanner.pos = token.start + 1;
+      return { kind: ">", value: ">", start: token.start, end: token.start + 1 };
+    }
+    return this.expect(">");
   }
 
   annotation() {
@@ -238,7 +259,7 @@ export class ExpressionParser {
     while ((PRECEDENCE.get(this.peek().kind === "identifier" ? this.peek().value : this.peek().kind) ?? 0) >= minimum) {
       const token = this.take();
       const operator = token.kind === "identifier" ? token.value : token.kind;
-      const right = this.binary(PRECEDENCE.get(operator) + 1);
+      const right = this.binary(PRECEDENCE.get(operator) + (RIGHT_ASSOCIATIVE.has(operator) ? 0 : 1));
       if (left.type === "ArrowFunctionExpression" || right.type === "ArrowFunctionExpression") this.error("Arrow operands require parentheses", left.start);
       for (const operand of [left, right]) if (operand.type === "LogicalExpression" && (operator === "??" ? ["&&", "||"].includes(operand.operator) : ["&&", "||"].includes(operator) && operand.operator === "??")) this.error("Mixing ?? with && or || requires parentheses", operand.start);
       left = {
@@ -262,7 +283,7 @@ export class ExpressionParser {
       if (argument.type === "ArrowFunctionExpression") this.error("Arrow operands require parentheses", token.start);
       return { type: "AwaitExpression", argument, start: token.start, end: argument.end };
     }
-    if (["!", "+", "-"].includes(this.peek().kind)) {
+    if (["!", "+", "-", "~"].includes(this.peek().kind)) {
       const token = this.take();
       const argument = this.unary();
       if (argument.type === "ArrowFunctionExpression") this.error("Arrow operands require parentheses", token.start);
@@ -293,7 +314,7 @@ export class ExpressionParser {
           const opening = this.take();
           const values = [];
           do { values.push(readType(this).value); } while (this.eat(","));
-          const close = this.expect(">");
+          const close = this.expectClose();
           if (this.peek().kind === "(") typeArguments = { type: "TypeAnnotation", value: { kind: "arguments", values }, start: opening.start, end: close.end };
         } catch (error) { if (error.name !== "NiralScriptError") throw error; }
         if (!typeArguments) { this.scanner.pos = position; this.current = current; return expression; }
@@ -324,7 +345,7 @@ export class ExpressionParser {
         this.expect("<");
         const typeStart = this.peek().start;
         const typeAnnotation = { type: "TypeAnnotation", start: typeStart, ...readType(this) };
-        this.expect(">");
+        this.expectClose();
         this.expect("(");
         const argument = this.expression();
         const close = this.expect(")");
@@ -332,6 +353,12 @@ export class ExpressionParser {
       }
       if (value === "this" || value === "super") return { type: value === "this" ? "ThisExpression" : "Super", start, end };
       if (value === "new") {
+        if (this.peek().kind === ".") {
+          this.take();
+          const property = this.expect("identifier");
+          if (property.value !== "target") this.error("Only new.target is a valid meta-property", property.start);
+          return { type: "MetaProperty", meta: "new", property: "target", start, end: property.end };
+        }
         const constructed = this.postfix(this.primary(), true);
         if (constructed.type !== "NewExpression" || constructed.optional) this.error("Invalid constructor expression", start);
         return { ...constructed, start };

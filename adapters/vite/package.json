@@ -1,0 +1,30 @@
+{
+  "name": "@niral/vite",
+  "version": "0.1.0",
+  "description": "Vite plugin to import NiralScript (.nrs) files directly in React, Vue, or any Vite app.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "niralscript": ">=0.1.0"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "keywords": [
+    "niralscript",
+    "vite",
+    "vite-plugin",
+    "react",
+    "loader"
+  ]
+}

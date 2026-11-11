@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 export function sourceLocation(program, node) {
   const owner = program.sources?.find(source => node.start >= source.start && node.start <= source.end);
   return owner

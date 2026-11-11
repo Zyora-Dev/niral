@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { NiralScriptError, sourceLocation } from "./errors.js";
 import { ExpressionParser, patternBindings, patternExpressions } from "./expressions.js";
 import { checkTypes } from "./types.js";
@@ -26,7 +28,7 @@ export function decoratorExpressions(node) {
   return own.length || members.length ? [...own, ...members].map(decorator => decorator.expression) : EMPTY_CHILDREN;
 }
 
-export function analyzeNiralScript(program, { globals = [], moduleGlobals = globals, reserved = [], pureGlobals = [], pureMethods = {}, strictTypes = false, topLevelAwait = false } = {}) {
+export function analyzeNiralScript(program, { globals = [], moduleGlobals = globals, reserved = [], pureGlobals = [], pureMethods = {}, strictTypes = false, topLevelAwait = false, taintSources = [], taintExportedParams = false } = {}) {
   const bindings = [];
   const references = [];
   const resolved = new WeakMap();
@@ -55,6 +57,14 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
 
   function declare(pattern, kind, scope, end = pattern.end, declaration = null) {
     for (const { id, shorthand, path } of patternBindings(pattern)) declareName(id, kind, scope, end, declaration, shorthand, path);
+  }
+
+  // A module exports a name when it declares it with `export`, or re-exports it from
+  // another module; re-exports are followed to the binding that holds the real value.
+  function resolveExport(target, name) {
+    const binding = target.bindings.get(name);
+    if (!binding || !declarations.get(binding)?.exported || binding.scope !== target) return null;
+    return binding.reexport ?? binding;
   }
 
   function declareName(id, kind, scope, end, declaration, shorthand, path) {
@@ -126,6 +136,10 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       }
       return;
     }
+    if (node.type === "MetaProperty") {
+      if (!scope.depth && !scope.receiver) fail("NRS072", "new.target is only valid inside a function", node);
+      return;
+    }
     if (node.type === "Identifier") return reference(node, scope, deferred, shorthand);
     if (node.type === "MemberExpression") {
       if (!node.computed && node.property.name.startsWith("#")) {
@@ -147,12 +161,27 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       if (node.id && !["ForOfStatement", "ForInStatement", "TypeAliasDeclaration", "InterfaceDeclaration"].includes(node.type)) declare(node.id, node.kind ?? ({ InputDeclaration: "input", StateDeclaration: "state", DerivedDeclaration: "derive", FunctionDeclaration: "function", ClassDeclaration: "class" })[node.type], scope, node.end, node);
     }
     for (const node of nodes) {
+      if (node.type === "ExportNamedDeclaration" && node.source) {
+        const target = modules.get(node.target);
+        if (!target) fail("NRS078", "Module re-exports must be linked before analysis", node);
+        for (const specifier of node.specifiers) {
+          const source = resolveExport(target, specifier.imported.name);
+          if (!source) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
+          if (scope.bindings.has(specifier.local.name) || (scope === root && reservedNames.has(specifier.local.name))) fail("NRS073", `Duplicate binding '${specifier.local.name}'`, specifier.local);
+          const binding = { name: specifier.local.name, kind: "const", id: specifier.local, path: [], scope, end: specifier.local.end, index: bindings.length, reexport: source };
+          bindings.push(binding);
+          scope.bindings.set(specifier.local.name, binding);
+          declarations.set(binding, { exported: true });
+          imports.set(specifier, { binding: source, scope });
+        }
+        continue;
+      }
       if (node.type !== "ImportDeclaration" || node.typeOnly) continue;
       const target = modules.get(node.target);
       if (!target) fail("NRS078", "Module imports must be linked before analysis", node);
       for (const specifier of node.specifiers) {
-        const binding = target.bindings.get(specifier.imported.name);
-        if (!binding || !declarations.get(binding)?.exported || binding.scope !== target) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
+        const binding = resolveExport(target, specifier.imported.name);
+        if (!binding) fail("NRS078", `Module does not export '${specifier.imported.name}'`, specifier.imported);
         if (scope.bindings.has(specifier.local.name) || (scope === root && reservedNames.has(specifier.local.name))) fail("NRS073", `Duplicate binding '${specifier.local.name}'`, specifier.local);
         scope.bindings.set(specifier.local.name, binding);
         imports.set(specifier, { binding, scope });
@@ -195,6 +224,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         if (scope !== root) fail("NRS072", "Inputs are only valid at component top level", node);
         break;
       case "ImportDeclaration":
+      case "ExportNamedDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration":
       case "BreakStatement":
@@ -241,7 +271,7 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
                 states = construction(node.left, states, nested);
                 return new Set([...states, ...construction(node.right, states, nested)]);
               }
-              if (["ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "TryStatement"].includes(node.type)) {
+              if (["ForStatement", "ForOfStatement", "ForInStatement", "WhileStatement", "DoWhileStatement", "TryStatement"].includes(node.type)) {
                 for (const child of children(node)) construction(child, states, true);
                 return states;
               }
@@ -278,8 +308,12 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
         break;
       }
       case "WhileStatement":
+      case "DoWhileStatement":
         expression(node.test, scope, false);
         block(node.body, scope);
+        break;
+      case "LabeledStatement":
+        statement(node.body, scope);
         break;
       case "IfStatement":
         expression(node.test, scope, false);
@@ -342,9 +376,11 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "Identifier":
       case "ThisExpression":
       case "Super":
+      case "MetaProperty":
       case "Literal":
       case "TemplateElement":
       case "ImportDeclaration":
+      case "ExportNamedDeclaration":
       case "TypeAliasDeclaration":
       case "InterfaceDeclaration":
       case "InputDeclaration":
@@ -399,7 +435,10 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
       case "ForStatement":
         return [node.init, node.test, node.body, node.update].filter(Boolean);
       case "WhileStatement":
+      case "DoWhileStatement":
         return [node.test, node.body];
+      case "LabeledStatement":
+        return [node.body];
       case "MemberExpression":
         return node.computed ? [node.object, node.property] : [node.object];
       case "CallExpression":
@@ -436,12 +475,13 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     }
     if (node?.type === "ArrowFunctionExpression") return node;
     if (node?.type !== "Identifier") return null;
-    const binding = resolved.get(node);
+    let binding = resolved.get(node);
+    while (binding?.reexport) binding = binding.reexport;
     if (!binding || seen.has(binding)) return null;
     seen.add(binding);
     const declaration = declarations.get(binding);
     if (binding.kind === "function") return declaration;
-    if (binding.kind === "const" && !binding.path.length) return callable(declaration.init, seen);
+    if (binding.kind === "const" && !binding.path?.length) return callable(declaration.init, seen);
     if (binding.kind === "parameter" && !binding.path.length) {
       const values = sources.get(binding) ?? [];
       const targets = values.map(value => callable(value, new Set(seen)));
@@ -917,6 +957,6 @@ export function analyzeNiralScript(program, { globals = [], moduleGlobals = glob
     for (const node of module.body) initialized(node, node.start);
   }
   const analysis = { bindings, references, root, imports, arrows, resolved, declarations, classes, classContexts, classOf, memberOf, constructorOf, baseOf, isStaticReceiver, topLevelAwait: awaited };
-  checkTypes(program, analysis, { strictTypes });
+  checkTypes(program, analysis, { strictTypes, taintSources, taintExportedParams });
   return analysis;
 }

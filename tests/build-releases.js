@@ -80,6 +80,18 @@ export function registerBuildReleaseTests(test) {
     assert.deepEqual(fs.readdirSync(join(root, "dist")).sort(), ["current", "releases"]);
   }));
 
+  test("release: files are owned by the dist dir owner so a sudo build never crash-loops on EACCES", () => fixture(root => {
+    const { release } = build({ root });
+    const dist = fs.statSync(join(root, "dist"));
+    const walk = (abs) => {
+      const self = fs.lstatSync(abs);
+      assert.equal(self.uid, dist.uid, `${abs} uid matches dist`);
+      assert.equal(self.gid, dist.gid, `${abs} gid matches dist`);
+      if (self.isDirectory()) for (const name of fs.readdirSync(abs)) walk(join(abs, name));
+    };
+    walk(release);
+  }));
+
   test("release: mid-write failure preserves active files and cleans staging", () => fixture(root => {
     const first = build({ root });
     const before = hashRelease(first.release);

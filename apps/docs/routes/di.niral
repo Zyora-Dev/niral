@@ -47,7 +47,7 @@
   <title>Niral DI | Developer Intelligence in Your Terminal</title>
   <meta name="description" content="Explore Niral DI, the developer intelligence CLI. Choose your AI provider and model, understand code and review workspace changes with per-tool approval." />
   <meta name="robots" content="index, follow, max-image-preview:large" />
-  <meta name="theme-color" content="#090909" />
+  <meta name="theme-color" content="#15092a" />
   <link rel="canonical" href="https://niral.site/di" />
   <link rel="icon" href="/favicon.png" type="image/png" />
   <meta property="og:type" content="website" />
@@ -132,16 +132,16 @@
 
 <style>
   :global(html) { color-scheme: dark; }
-  :global(body) { margin: 0; background: #090909; color: #fafafa; }
-  :global(::selection) { background: #f2b544; color: #090909; }
+  :global(body) { margin: 0; background: #15092a; color: #fafafa; }
+  :global(::selection) { background: #f2b544; color: #15092a; }
   *, *::before, *::after { box-sizing: border-box; }
   h1, h2, h3, p, figure, ol, dl, dd { margin: 0; }
   a { color: inherit; text-decoration: none; }
   button { font: inherit; }
   a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
-  .di-page { --gold: #f2b544; --line: #424247; color: #f6f6f7; background: #101012; font: 15px/1.75 "Geist", sans-serif; letter-spacing: 0; }
+  .di-page { --gold: #f2b544; --line: #4a3570; color: #f6f6f7; background: #15092a; font: 15px/1.75 "Geist", sans-serif; letter-spacing: 0; }
   .wrap { width: min(1200px, calc(100% - 64px)); margin-inline: auto; }
-  .skip-link { position: absolute; top: -80px; left: 20px; padding: 12px 20px; background: var(--gold); color: #101010; z-index: 60; }
+  .skip-link { position: absolute; top: -80px; left: 20px; padding: 12px 20px; background: var(--gold); color: #15092a; z-index: 60; }
   .skip-link:focus { top: 12px; }
   .intro { padding: 64px 0 0; background-image: linear-gradient(90deg, #ffffff04 1px, transparent 1px), linear-gradient(#ffffff04 1px, transparent 1px); background-size: 64px 64px; border-bottom: 1px solid var(--line); }
   .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--gold); font: 12px/1.6 "Geist Mono", monospace; }
@@ -152,7 +152,7 @@
   .intro-description { max-width: 640px; margin-top: 22px; font-size: 16px; }
   .intro-actions { display: flex; align-items: center; gap: 28px; margin-top: 28px; }
   .primary-link, .text-link { display: inline-flex; align-items: center; gap: 14px; font-size: 14px; font-weight: 550; }
-  .primary-link { background: var(--gold); color: #101010; padding: 12px 20px; border-radius: 5px; }
+  .primary-link { background: var(--gold); color: #15092a; padding: 12px 20px; border-radius: 5px; }
   .primary-link:hover { background: #ffd184; }
   .text-link img, .facts img, .flow-top img, figcaption img, .boundary img, .terminal img, .copy img, .write-flow img, summary img { filter: invert(1); }
   .text-link:hover { color: var(--gold); }
@@ -165,25 +165,25 @@
   .section-heading > p:last-child:not(.eyebrow) { margin-top: 20px; }
   h3 { font-size: 17px; font-weight: 550; line-height: 1.5; }
   .flow-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .flow-grid li { padding: 26px; position: relative; border-right: 1px solid var(--line); background: #19191c; }
-  .flow-grid li:last-child { border: 0; background: #242426; }
-  .flow-grid li:nth-child(3) { background: #302719; }
+  .flow-grid li { padding: 26px; position: relative; border-right: 1px solid var(--line); background: #1d0f38; }
+  .flow-grid li:last-child { border: 0; background: #2b1850; }
+  .flow-grid li:nth-child(3) { background: #3a2a12; }
   .flow-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
   .flow-top span { color: var(--gold); font: 14px "Geist Mono", monospace; }
   .flow-grid p { font-size: 13px; margin-top: 12px; }
   .flow-figure figcaption { display: flex; align-items: center; gap: 12px; font-size: 13px; margin-top: 16px; }
-  .boundary { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 28px; border-top: 1px dashed #77777b; padding-top: 32px; margin-top: 40px; }
+  .boundary { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 28px; border-top: 1px dashed #7a5fb0; padding-top: 32px; margin-top: 40px; }
   .small-label { font: 12px/1.7 "Geist Mono", monospace; color: var(--gold); }
   .boundary h3 { margin: 8px 0 12px; }
   .boundary p { font-size: 13px; }
   .boundary-crossing { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center; font-size: 12px; }
-  .setup-band { background: #18181b; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
+  .setup-band { background: #241444; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
   .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
   .setup-steps { list-style: none; padding: 0; display: grid; gap: 28px; }
   .setup-steps li { display: flex; align-items: start; gap: 20px; }
   .setup-steps li > span { font: 13px/2 "Geist Mono", monospace; color: var(--gold); }
   .setup-steps p { margin-top: 8px; font-size: 14px; }
-  .terminal { min-width: 0; border: 1px solid #65656b; border-radius: 6px; background: #0c0c0e; }
+  .terminal { min-width: 0; border: 1px solid #6d53a0; border-radius: 6px; background: #130826; }
   .terminal-heading { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--line); font: 12px "Geist Mono", monospace; }
   .terminal-body { padding: 24px; }
   code { font: 13px/1.8 "Geist Mono", monospace; overflow-wrap: anywhere; }
@@ -194,12 +194,12 @@
   .terminal-foot code { font-size: 12px; }
   .code-row { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
   .code-row code { min-width: 0; }
-  .copy { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid #626269; border-radius: 4px; background: transparent; cursor: pointer; }
-  .copy:hover { background: #37373c; }
+  .copy { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid #6d53a0; border-radius: 4px; background: transparent; cursor: pointer; }
+  .copy:hover { background: #3d2a60; }
   .provider-section { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 32px; }
   .provider-tabs { display: flex; gap: 8px; margin-top: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-  .provider-tabs button { padding: 10px 20px; min-height: 44px; color: #fafafa; background: transparent; border: 1px solid #626269; border-radius: 4px; cursor: pointer; font-size: 13px; }
-  .provider-tabs button[aria-pressed="true"] { color: #101010; background: var(--gold); border-color: var(--gold); }
+  .provider-tabs button { padding: 10px 20px; min-height: 44px; color: #fafafa; background: transparent; border: 1px solid #6d53a0; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .provider-tabs button[aria-pressed="true"] { color: #15092a; background: var(--gold); border-color: var(--gold); }
   .provider-detail { padding-block: 26px; min-height: 240px; }
   .provider-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; }
   dt { font-size: 12px; color: #f6f6f7; margin-bottom: 8px; }
@@ -210,9 +210,9 @@
   .command-row { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; padding-block: 28px; border-top: 1px solid var(--line); }
   .command-row h3 { margin-top: 8px; }
   .command-content p { font-size: 13px; margin-top: 16px; max-width: 720px; }
-  .command-content .code-row { padding: 14px 16px; background: #202023; border-left: 2px solid var(--gold); }
+  .command-content .code-row { padding: 14px 16px; background: #2e1a55; border-left: 2px solid var(--gold); }
   .copy-status { min-height: 28px; margin-top: 16px; font-size: 13px; color: var(--gold); }
-  .safety-band { background: #19191c; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
+  .safety-band { background: #1d0f38; border-block: 1px solid var(--line); scroll-margin-top: 76px; }
   .tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
   .tool-grid article { padding: 24px 0; border-top: 2px solid var(--gold); }
   .tool-limit { color: var(--gold); font: 26px/1.4 "Geist Mono", monospace; }
@@ -223,7 +223,7 @@
   .write-flow figcaption { font: 12px "Geist Mono", monospace; color: var(--gold); }
   .write-flow ol { list-style: none; padding: 28px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 28px; }
   .write-flow li { display: flex; flex-direction: column; gap: 10px; position: relative; }
-  .write-flow li:not(:last-child)::after { content: ""; position: absolute; top: 11px; left: 44px; right: 0; border-top: 1px dashed #949499; }
+  .write-flow li:not(:last-child)::after { content: ""; position: absolute; top: 11px; left: 44px; right: 0; border-top: 1px dashed #8d72c4; }
   .write-flow strong { font-size: 15px; font-weight: 500; }
   .write-flow li span { font-size: 12px; }
   .safety-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 36px; }
@@ -240,7 +240,7 @@
   details[open] summary img { transform: rotate(45deg); }
   .questions details > div { padding: 0 0 28px; max-width: 880px; font-size: 14px; }
   .questions p + p { margin-top: 16px; }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 18px; background: #202023; border-left: 2px solid var(--gold); }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 18px; background: #2e1a55; border-left: 2px solid var(--gold); }
   .closing { display: flex; align-items: center; gap: 28px; margin-top: 56px; padding-top: 32px; }
   .closing p { font-size: 13px; margin-top: 8px; }
   .closing .text-link { margin-left: auto; white-space: nowrap; }
@@ -275,7 +275,7 @@
     .tool-grid { grid-template-columns: 1fr; gap: 0; }
     .write-flow ol { grid-template-columns: 1fr; gap: 24px; }
     .write-flow li { display: grid; grid-template-columns: 28px 80px minmax(0, 1fr); align-items: center; gap: 14px; }
-    .write-flow li:not(:last-child)::after { top: 32px; bottom: -16px; left: 11px; right: auto; border-top: 0; border-left: 1px dashed #949499; }
+    .write-flow li:not(:last-child)::after { top: 32px; bottom: -16px; left: 11px; right: auto; border-top: 0; border-left: 1px dashed #8d72c4; }
     .budget { grid-template-columns: 1fr 1fr; gap: 28px; }
     .closing { flex-wrap: wrap; gap: 20px; }
     .closing > div { flex: 1 1 220px; }

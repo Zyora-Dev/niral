@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { parseNiralScript } from "./parser.js";
 import { NiralScriptError } from "./errors.js";
 
 export function linkNiralScript(program, resolveModule) {
-  if (!program.body.some(node => node.type === "ImportDeclaration")) return program;
+  if (!program.body.some(node => node.type === "ImportDeclaration" || node.type === "ExportNamedDeclaration")) return program;
   const loaded = new Map([[program.filename, program]]);
   const visiting = new Set();
   const visited = new Set();
@@ -14,10 +16,10 @@ export function linkNiralScript(program, resolveModule) {
   function visit(owner) {
     visiting.add(owner.filename);
     for (const node of owner.body) {
-      if (owner !== program && !["ImportDeclaration", "FunctionDeclaration", "TypeAliasDeclaration", "InterfaceDeclaration", "ClassDeclaration"].includes(node.type) && !(node.type === "VariableDeclaration" && node.kind === "const")) {
+      if (owner !== program && !["ImportDeclaration", "ExportNamedDeclaration", "FunctionDeclaration", "TypeAliasDeclaration", "InterfaceDeclaration", "ClassDeclaration"].includes(node.type) && !(node.type === "VariableDeclaration" && node.kind === "const")) {
         fail("Library modules may only contain imports, constants, functions, classes and type aliases", owner, node);
       }
-      if (node.type !== "ImportDeclaration") continue;
+      if (node.type !== "ImportDeclaration" && node.type !== "ExportNamedDeclaration") continue;
       if (!resolveModule) fail("Module imports require a module resolver", owner, node);
       const input = resolveModule(node.source.value, owner.filename, { source: owner.source, filename: owner.filename, start: node.source.start, end: node.source.end });
       if (!input || typeof input.filename !== "string" || typeof input.source !== "string") fail("Module resolver must return a filename and source", owner, node.source);

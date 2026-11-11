@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 ZyoraLabs. Runtime Library Exception applies — see LICENSE.
 import { Scanner, readExpressionStatement, RESERVED_WORDS } from "./scanner.js";
 import { parseExpression, ExpressionParser, patternBindings } from "./expressions.js";
 import { readType, readTypeParameters, typeReadCount } from "./types.js";
@@ -19,6 +21,7 @@ export class StatementParser {
   constructor(code, filename) {
     this.scanner = new Scanner(code, filename);
     this.loopDepth = 0;
+    this.labels = [];
   }
 
   trivia() {
@@ -111,9 +114,12 @@ export class StatementParser {
     }
     params.forEach(collectNames);
     const outerLoopDepth = this.loopDepth;
+    const outerLabels = this.labels;
     this.loopDepth = 0;
+    this.labels = [];
     const body = this.block(depth + 1, parameterNames);
     this.loopDepth = outerLoopDepth;
+    this.labels = outerLabels;
     return { type, ...(async ? { async: true } : {}), ...(returnType ? { returnType } : {}), ...(typeParameters ? { typeParameters } : {}), id, params, body, start, end: body.end };
   }
 
@@ -151,7 +157,7 @@ export class StatementParser {
         const opening = parser.take();
         const values = [];
         do { values.push(readType(parser).value); } while (parser.eat(","));
-        const close = parser.expect(">");
+        const close = parser.expectClose();
         superTypeArguments = { type: "TypeAnnotation", value: { kind: "arguments", values }, start: opening.start, end: close.end };
       }
     }
@@ -172,9 +178,12 @@ export class StatementParser {
           if (decorators.length) parser.error("Static initialization blocks cannot be decorated", memberStart);
           scanner.pos = parser.peek().start;
           const outerLoopDepth = this.loopDepth;
+          const outerLabels = this.labels;
           this.loopDepth = 0;
+          this.labels = [];
           const body = this.block(depth + 1);
           this.loopDepth = outerLoopDepth;
+          this.labels = outerLabels;
           members.push({ type: "StaticBlock", static: true, body, start: memberStart, end: body.end });
           parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
           continue;
@@ -213,9 +222,12 @@ export class StatementParser {
         if (kind === "constructor" && returnType) parser.error("Constructors cannot declare a return type", returnType.start);
         scanner.pos = parser.peek().start;
         const outerLoopDepth = this.loopDepth;
+        const outerLabels = this.labels;
         this.loopDepth = 0;
+        this.labels = [];
         const body = this.block(depth + 1, new Set(params.flatMap(patternBindings).map(binding => binding.id.name)));
         this.loopDepth = outerLoopDepth;
+        this.labels = outerLabels;
         members.push({ type: "MethodDefinition", key: memberKey, static: isStatic, kind, async, params, returnType, typeParameters: methodTypes, ...(decorators.length ? { decorators } : {}), body, start: memberStart, end: body.end });
         parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
       } else {
@@ -248,6 +260,24 @@ export class StatementParser {
       return { ...declaration, decorators, start };
     }
     let kind = scanner.read(IDENTIFIER);
+    if (kind && !RESERVED_WORDS.has(kind)) {
+      const afterLabel = scanner.pos;
+      this.trivia();
+      if (scanner.peek() === ":" && scanner.src[scanner.pos + 1] !== ":") {
+        scanner.pos++;
+        this.trivia();
+        const labelStart = scanner.pos;
+        const target = scanner.read(IDENTIFIER);
+        scanner.pos = labelStart;
+        if (!["for", "while", "do"].includes(target)) scanner.error("NRS072", "Labels may only prefix a loop", { start });
+        if (this.labels.includes(kind)) scanner.error("NRS072", `Duplicate label '${kind}'`, { start });
+        this.labels.push(kind);
+        const body = this.statement(false, depth, names);
+        this.labels.pop();
+        return { type: "LabeledStatement", label: { type: "Identifier", name: kind, start, end: afterLabel }, body, start, end: body.end };
+      }
+      scanner.pos = afterLabel;
+    }
     let async = false;
     if (kind === "async") {
       const afterAsync = scanner.pos;
@@ -300,6 +330,42 @@ export class StatementParser {
     if (kind === "export") {
       if (!topLevel) scanner.error("NRS078", "Exports are only valid at top level", { start });
       this.trivia();
+      if (scanner.peek() === "{") {
+        scanner.expect("{", "NRS078", "Expected named re-exports in braces");
+        const specifiers = [];
+        this.trivia();
+        while (scanner.peek() !== "}") {
+          const importedStart = scanner.pos;
+          const importedName = scanner.read(IDENTIFIER);
+          if (!importedName || RESERVED_WORDS.has(importedName)) scanner.error("NRS070", "Expected a non-reserved NiralScript identifier", { start: importedStart });
+          const imported = { type: "Identifier", name: importedName, start: importedStart, end: scanner.pos };
+          let local = imported;
+          this.trivia();
+          const afterName = scanner.pos;
+          if (scanner.read(IDENTIFIER) === "as") local = this.name(names, scanner.pos);
+          else {
+            scanner.pos = afterName;
+            if (names.has(imported.name)) scanner.error("NRS070", `Duplicate declaration '${imported.name}'`, { start: imported.start });
+            names.add(imported.name);
+          }
+          specifiers.push({ type: "ExportSpecifier", imported, local, start: imported.start, end: local.end });
+          this.trivia();
+          if (!scanner.eat(",")) break;
+          this.trivia();
+        }
+        scanner.expect("}", "NRS078", "Expected '}' after named re-exports");
+        this.trivia();
+        if (scanner.read(IDENTIFIER) !== "from") scanner.error("NRS078", "Re-exports must name a module with 'from'", { start });
+        this.trivia();
+        const moduleParser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+        const token = moduleParser.take();
+        if (token.kind !== "string") scanner.error("NRS078", "Expected a quoted module specifier", { start });
+        scanner.pos = token.end;
+        this.trivia();
+        const terminated = scanner.eat(";");
+        if (!terminated && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(token.end, scanner.pos))) scanner.error("NRS078", "Expected a semicolon or newline after re-export", { start: token.end });
+        return { type: "ExportNamedDeclaration", specifiers, source: { type: "Literal", value: token.value, start: token.start, end: token.end }, exported: true, start, end: terminated ? scanner.pos : token.end };
+      }
       const declarationStart = scanner.pos;
       const declarationKind = scanner.read(IDENTIFIER);
       if (!["const", "function", "async", "type", "interface", "class"].includes(declarationKind)) scanner.error("NRS078", "Only constants, functions, classes and types can be exported", { start });
@@ -449,12 +515,38 @@ export class StatementParser {
       this.loopDepth--;
       return { type: "WhileStatement", test, body, start, end: body.end };
     }
+    if (kind === "do") {
+      this.trivia();
+      this.loopDepth++;
+      const body = this.block(depth);
+      this.loopDepth--;
+      this.trivia();
+      if (scanner.read(IDENTIFIER) !== "while") scanner.error("NRS072", "Expected 'while' after do block", { start });
+      this.trivia();
+      scanner.expect("(", "NRS072", "Expected '(' after while");
+      const parser = new ExpressionParser(scanner.src, scanner.filename, scanner.pos, scanner.src.length);
+      const test = parser.expression();
+      parser.expect(")");
+      scanner.pos = parser.scanner.pos;
+      this.trivia();
+      scanner.eat(";");
+      return { type: "DoWhileStatement", test, body, start, end: scanner.pos };
+    }
     if (kind === "break" || kind === "continue") {
       if (!this.loopDepth) scanner.error("NRS072", `${kind} is only valid inside a loop`, { start });
       const keywordEnd = scanner.pos;
       this.trivia();
-      if (!scanner.eat(";") && scanner.peek() !== "}" && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(keywordEnd, scanner.pos))) scanner.error("NRS072", "Loop labels are not supported", { start });
-      return { type: kind === "break" ? "BreakStatement" : "ContinueStatement", start, end: scanner.pos };
+      let label = null;
+      const sameLine = !/[\r\n]/.test(scanner.src.slice(keywordEnd, scanner.pos));
+      const labelStart = scanner.pos;
+      const candidate = sameLine ? scanner.read(IDENTIFIER) : "";
+      if (candidate && !RESERVED_WORDS.has(candidate)) {
+        if (!this.labels.includes(candidate)) scanner.error("NRS072", `Undefined label '${candidate}'`, { start: labelStart });
+        label = { type: "Identifier", name: candidate, start: labelStart, end: scanner.pos };
+        this.trivia();
+      } else scanner.pos = labelStart;
+      if (!scanner.eat(";") && scanner.peek() !== "}" && !scanner.eof() && !/[\r\n]/.test(scanner.src.slice(label?.end ?? keywordEnd, scanner.pos))) scanner.error("NRS072", "Expected a semicolon or newline after " + kind, { start });
+      return { type: kind === "break" ? "BreakStatement" : "ContinueStatement", ...(label ? { label } : {}), start, end: scanner.pos };
     }
     if (kind === "if") {
       this.trivia();
@@ -536,7 +628,7 @@ export class StatementParser {
     const expression = parser.expression();
     const operator = prefix ?? parser.peek();
     let statement;
-    if (["=", "+=", "-=", "*=", "/=", "%=", "++", "--"].includes(operator.kind)) {
+    if (["=", "+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "&=", "|=", "^=", "++", "--"].includes(operator.kind)) {
       if (!prefix) parser.take();
       if (!["Identifier", "MemberExpression"].includes(expression.type)) scanner.error("NRS072", "Invalid assignment target", { start });
       for (let target = expression; target && ["MemberExpression", "CallExpression"].includes(target.type); target = target.object ?? target.callee) if (target.optional) scanner.error("NRS072", "Optional chains cannot be assignment targets", { start });

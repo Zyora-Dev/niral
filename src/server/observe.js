@@ -74,10 +74,12 @@ export function logError(err, req) {
 const bootedAt = Date.now();
 
 /** GET /@niral/health payload — cheap, no secrets. */
-export function healthPayload({ release = null } = {}) {
+export function healthPayload({ release = null, builtAt = null, prevRelease = null } = {}) {
   return {
     ok: true,
     release,
+    prev_release: prevRelease,
+    built_at: builtAt,
     uptime_s: Math.round((Date.now() - bootedAt) / 1000),
     pid: process.pid,
     now: new Date().toISOString(),

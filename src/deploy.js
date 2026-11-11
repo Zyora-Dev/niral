@@ -39,17 +39,45 @@ ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js snapshot \$APP_DIR" || true
 # snapshot off-box. The server loads secrets itself; deploy never reads them.
 ssh "\$SERVER" "set -a; . \$APP_DIR/app.env; set +a; if [ -n \"\${NIRAL_SNAPSHOT_REMOTE_URL:-}\" ]; then node \$NIRAL_DIR/bin/niral.js snapshot push latest \$APP_DIR; fi" || true
 
+# the release \`current\` points at now — our rollback target if the new one fails
+PREV=\$(ssh "\$SERVER" "basename \\"\$(readlink -f \$APP_DIR/dist/current 2>/dev/null)\\"" 2>/dev/null || echo "")
+
 echo "→ building release on the server (atomic — a failed build changes nothing)"
-ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js build \$APP_DIR"
+# build runs the chown-to-service-user step itself, so a sudo build still leaves
+# the release readable by the app; a failed build never flips \`current\`.
+NEW=\$(ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js build \$APP_DIR" | grep -oE 'release [0-9a-f]+' | awk '{print \$2}')
+[ -n "\$NEW" ] || { echo "! build produced no release hash"; exit 1; }
+echo "  built \$NEW (was \${PREV:-none})"
 
 echo "→ restarting"
-ssh "\$SERVER" "sudo systemctl restart ${name} && sleep 1 && systemctl is-active ${name}"
+ssh "\$SERVER" "sudo systemctl restart ${name}"
 ssh "\$SERVER" "sudo systemctl restart ${name}-watchdog" || true  # guardian picks up new framework code
 
-echo "→ health check"
-# node is the one tool GUARANTEED on a niral server — curl/wget may not exist
-ssh "\$SERVER" "node -e 'fetch(\\"http://localhost:8199/@niral/health\\").then(r=>{if(!r.ok)process.exit(1);return r.text()}).then(t=>console.log(t))'"
-echo "✓ deployed"
+echo "→ health gate — waiting for the NEW release to actually listen"
+# the app's listen port, read from the systemd unit (not hardcoded)
+PORT=\$(ssh "\$SERVER" "grep -oE '\\-p [0-9]+' /etc/systemd/system/${name}.service | grep -oE '[0-9]+' | head -1" 2>/dev/null)
+PORT=\${PORT:-8199}
+# node is the one tool GUARANTEED on a niral server — curl/wget may not exist.
+# Gate on release match + ok:true, NOT systemd 'active' (which is true mid-crash-loop).
+OK=\$(ssh "\$SERVER" "node -e '
+  const want=process.argv[1], port=process.argv[2];
+  let n=0; const tick=()=>{
+    fetch(\\"http://localhost:\\"+port+\\"/@niral/health\\").then(r=>r.json()).then(h=>{
+      if(h.ok && h.release===want){console.log(\\"OK\\");process.exit(0)}
+      if(++n>30){console.log(\\"TIMEOUT\\");process.exit(0)} setTimeout(tick,1000);
+    }).catch(()=>{ if(++n>30){console.log(\\"TIMEOUT\\");process.exit(0)} setTimeout(tick,1000); });
+  }; tick();
+' \$NEW \$PORT")
+
+if [ "\$OK" != "OK" ]; then
+  echo "! new release \$NEW did not come up healthy — rolling back to \${PREV:-previous}"
+  if [ -n "\$PREV" ]; then
+    ssh "\$SERVER" "node \$NIRAL_DIR/bin/niral.js rollback \$APP_DIR --to \$PREV || node \$NIRAL_DIR/bin/niral.js rollback \$APP_DIR" || true
+    ssh "\$SERVER" "sudo systemctl restart ${name}" || true
+  fi
+  exit 1
+fi
+echo "✓ deployed \$NEW"
 `;
 
 const SETUP_SH = (name) => `#!/usr/bin/env bash
