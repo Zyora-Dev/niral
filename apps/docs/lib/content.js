@@ -2562,12 +2562,20 @@ LSP-capable editor can use.
 
   benchmarks: {
     title: "Benchmarks",
-    seoTitle: "SSR and Hydration Performance Benchmarks | Niral Docs",
-    description: "Compare Niral SSR throughput and hydration with other web frameworks. Review test conditions, measured results and reproducible benchmark methodology.",
+    seoTitle: "Niral Framework and NiralScript Performance Benchmarks | Niral Docs",
+    description: "Full benchmarks for the Niral framework (SSR throughput, hydration, server rendering) and the NiralScript language (JS/TS/NRS per-call execution). Measured results, test conditions and reproducible methodology.",
     body: `
+Two independent benchmark suites. First the **Niral framework** — SSR
+throughput, hydration and server rendering against other web frameworks. Then
+**NiralScript** — the language's per-call execution measured directly against
+JavaScript and TypeScript. Every number below is measured; nothing is
+estimated. Methodology lives in the repo under \`bench/\` — run it yourself.
+
+# Niral framework
+
 Identical 1000-row SSR'd apps per framework, same machine, alternating-order
-runs, medians reported. Full methodology lives in the repo under
-\`bench/hydration/\` and \`bench/e2e/\` — run them yourself.
+runs, medians reported. Full methodology lives under \`bench/hydration/\` and
+\`bench/e2e/\`.
 
 ## End-to-end — real production servers
 
@@ -2583,6 +2591,16 @@ every framework.
 | sveltekit 2 | ~599 | 137 ms | ~1.1 s | 2.9 s |
 | next 16 | ~303 | 305 ms | ~2.3 s | 3.9 s |
 
+Relative throughput, niral as the baseline (higher is faster):
+
+| Framework | req/s | vs niral |
+|-----------|------:|---------:|
+| **niral** | **~2,374** | **1.00×** |
+| solidstart 1 | ~1,885 | 0.79× |
+| astro 5 | ~698 | 0.29× |
+| sveltekit 2 | ~599 | 0.25× |
+| next 16 | ~303 | 0.13× |
+
 niral leads every JS meta-framework on throughput — ~1.3× SolidStart (the
 closest rival), ~3.4× Astro, ~4× SvelteKit, ~7.8× Next.js — with the **best tail
 latency** (p99 81 ms while every other exceeds 150 ms) and the lowest memory.
@@ -2595,6 +2613,9 @@ latency** (p99 81 ms while every other exceeds 150 ms) and the lowest memory.
 | svelte 5 | 6.4 ms | 15.8 ms | 51.1 KB (min) |
 | react 19 | 20.3 ms | 22.5 ms | 189.0 KB (min) |
 
+Niral and Svelte hydrate in the same ~6.5 ms band; niral ships the **least
+JavaScript** of the three — 29.7 KB versus 51.1 KB (Svelte) and 189.0 KB (React).
+
 ## Server rendering (renders/second, same page)
 
 | Framework | ms/render | renders/sec |
@@ -2606,8 +2627,45 @@ latency** (p99 81 ms while every other exceeds 150 ms) and the lowest memory.
 Niral compiles a second, string-concatenation renderer per component — server
 output is byte-identical to what hydration expects, with none of the tree cost.
 
+# NiralScript
+
+NiralScript compiles to JavaScript and runs on the same V8 engine as JavaScript
+and TypeScript, so the question is whether that compilation adds overhead.
+GitHub Actions ran **identical function bodies** in JS, TS and NRS across four
+workloads; all correctness checks passed. These are direct language tests — no
+components, no reactive operations.
+
+## Per-call execution — JS vs TS vs NRS
+
+Microseconds per complete function call. Median of three process medians; lower
+is faster.
+
+| Runner / workload | JS | TS | NRS |
+|-------------------|----:|----:|----:|
+| Node 22 / 10,000 numbers | 9.436 | 9.442 | 9.430 |
+| Node 22 / 1,000 records | 1.310 | 1.303 | 1.313 |
+| Node 22 / 1,000 strings | 37.066 | 37.346 | 37.632 |
+| Node 22 / 100 awaits | 7.186 | 6.708 | 6.646 |
+| Node 24 / 10,000 numbers | 7.476 | 7.469 | 7.420 |
+| Node 24 / 1,000 records | 1.165 | 1.235 | 1.154 |
+| Node 24 / 1,000 strings | 35.306 | 35.336 | 35.523 |
+| Node 24 / 100 awaits | 5.716 | 5.779 | 5.768 |
+
+Across every workload NRS lands within run-to-run noise of hand-written
+JavaScript — the compiler adds no measurable execution cost. Ubuntu 24.04 x64,
+TypeScript 5.7.3, 30 warmups and 12 rotated rounds per process. Compilation,
+module loading and instance setup are excluded from execution timings. The
+Node 22 runner used AMD EPYC 7763; Node 24 used AMD EPYC 9V74 — compare
+languages within each runner, not Node versions.
+
+Two findings repeat across every local run: class construction with a private
+counter and accessor is consistently faster in NiralScript than in either JS or
+TS, and NiralScript matches JavaScript on decorators while TypeScript's
+decorator emit stays measurably slower. These four workloads establish neither a
+universal speed winner nor full TypeScript type-system parity.
+
 Numbers vary with hardware and load; compare within one session and prefer
-medians. The bench is deliberately reproducible — we'd rather you check.
+medians. Both suites are deliberately reproducible — we'd rather you check.
 `,
   },
 };
